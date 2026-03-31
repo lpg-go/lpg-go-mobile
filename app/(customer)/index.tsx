@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,7 +13,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useCart } from '../../lib/cartStore';
 import supabase from '../../lib/supabase';
 
 type Brand = {
@@ -25,9 +23,7 @@ type Brand = {
 
 export default function CustomerHomeScreen() {
   const insets = useSafeAreaInsets();
-  const { totalItems } = useCart();
 
-  const [firstName, setFirstName] = useState('');
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,24 +34,10 @@ export default function CustomerHomeScreen() {
   }, []);
 
   async function fetchData() {
-    await Promise.all([fetchProfile(), fetchBrands()]);
+    await fetchBrands();
     setLoading(false);
   }
 
-  async function fetchProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .single();
-
-    if (data?.full_name) {
-      setFirstName(data.full_name.split(' ')[0]);
-    }
-  }
 
   async function fetchBrands() {
     const { data: brandRows } = await supabase
@@ -97,38 +79,6 @@ export default function CustomerHomeScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Logo banner */}
-      <View style={styles.logoBanner}>
-        <Image
-          source={require('../../assets/images/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
-
-      {/* Top header row */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.appName}>LPG Go</Text>
-          {firstName ? (
-            <Text style={styles.greeting}>Hello, {firstName}</Text>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          style={styles.cartButton}
-          hitSlop={8}
-          onPress={() => router.push('/(customer)/cart')}
-        >
-          <View style={styles.cartIconWrap}>
-            <Feather name="shopping-cart" size={22} color={PRIMARY} />
-            {totalItems > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{totalItems > 99 ? '99+' : totalItems}</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-      </View>
 
       <ScrollView
         style={styles.scroll}
@@ -234,56 +184,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
 
-  // Logo banner
-  logoBanner: {
-    backgroundColor: '#F0FDF4',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#DCFCE7',
-  },
-  logo: {
-    width: 80,
-    height: 40,
-  },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  appName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  greeting: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 1,
-  },
-  cartButton: {
-    padding: 4,
-  },
-  cartIconWrap: { position: 'relative' },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   // Scroll
   scroll: { flex: 1 },

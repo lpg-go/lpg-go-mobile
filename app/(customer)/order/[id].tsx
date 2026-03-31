@@ -1,9 +1,12 @@
 import { Feather } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import LiveMap from '../../../components/LiveMap';
 import supabase from '../../../lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -29,6 +33,8 @@ type Order = {
   status: OrderStatus;
   payment_method: string;
   delivery_address: string;
+  delivery_lat: number | null;
+  delivery_lng: number | null;
   total_amount: number;
   admin_fee: number;
   selected_provider_id: string | null;
@@ -48,6 +54,7 @@ type Acceptance = {
   id: string;
   provider_id: string;
   accepted_at: string;
+  provider_total: number;
   provider: {
     full_name: string;
     business_name: string | null;
@@ -61,6 +68,8 @@ type ProviderProfile = {
   business_name: string | null;
   phone: string;
 };
+
+type LatLng = { lat: number; lng: number };
 
 // ─── Status config ───────────────────────────────────────────────────────────
 
@@ -76,26 +85,6 @@ const STATUS_CONFIG: Record<
   cancelled:                 { label: 'Cancelled',         color: '#DC2626', bg: '#FEE2E2' },
 };
 
-const TIMELINE_STEPS: { key: OrderStatus; label: string }[] = [
-  { key: 'pending',                   label: 'Order Placed' },
-  { key: 'awaiting_dealer_selection', label: 'Provider Found' },
-  { key: 'in_transit',                label: 'In Transit' },
-  { key: 'awaiting_confirmation',     label: 'Awaiting Confirmation' },
-  { key: 'delivered',                 label: 'Delivered' },
-];
-
-const STEP_ORDER: OrderStatus[] = [
-  'pending',
-  'awaiting_dealer_selection',
-  'in_transit',
-  'awaiting_confirmation',
-  'delivered',
-];
-
-function stepIndex(status: OrderStatus) {
-  const idx = STEP_ORDER.indexOf(status);
-  return idx === -1 ? -1 : idx; // -1 for cancelled
-}
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -112,20 +101,108 @@ export default function OrderTrackingScreen() {
   const [loading, setLoading] = useState(true);
   const [selectingProvider, setSelectingProvider] = useState<string | null>(null); // provider_id being confirmed
   const [cancelling, setCancelling] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [dots, setDots] = useState('');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [newMsgBanner, setNewMsgBanner] = useState<string | null>(null);
 
-  const orderChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const acceptanceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Location tracking
+  const [providerLocation, setProviderLocation] = useState<LatLng | null>(null);
+  const [customerLocation, setCustomerLocation] = useState<LatLng | null>(null);
+  const [mapVisible, setMapVisible] = useState(false);
+
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchAll();
-    subscribeToOrder();
-    subscribeToAcceptances();
+
+    const channel = supabase
+      .channel(`order-${id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
+        (payload) => {
+          console.log('[Realtime] orders change:', payload);
+          if (payload.new) {
+            setOrder((prev) => prev ? { ...prev, ...(payload.new as Partial<Order>) } : null);
+          }
+          fetchOrderAcceptances();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] channel status:', status);
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
+
+  // Poll order_acceptances every 5s while order is pending/awaiting_dealer_selection
+  useEffect(() => {
+    const status = order?.status;
+    if (status !== 'pending' && status !== 'awaiting_dealer_selection') {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
+    pollIntervalRef.current = setInterval(() => {
+      fetchOrderAcceptances();
+    }, 5000);
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [order?.status]);
+
+  // Animated dots for "Waiting for providers..." text
+  useEffect(() => {
+    if (order?.status !== 'awaiting_dealer_selection') {
+      setDots('');
+      return;
+    }
+    const interval = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
+    }, 500);
+    return () => clearInterval(interval);
+  }, [order?.status]);
+
+  // Fetch current user id once on mount
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
+  }, []);
+
+  // Subscribe to incoming messages for unread badge + banner
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const channel = supabase
+      .channel(`order-messages-${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `order_id=eq.${id}` },
+        (payload) => {
+          const msg = payload.new as { sender_id: string };
+          if (msg.sender_id === currentUserId) return;
+
+          setUnreadCount((prev) => prev + 1);
+
+          const senderName = selectedProvider?.full_name ?? 'Provider';
+          setNewMsgBanner(`New message from ${senderName}`);
+          if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+          bannerTimerRef.current = setTimeout(() => setNewMsgBanner(null), 3000);
+        }
+      )
+      .subscribe();
 
     return () => {
-      orderChannelRef.current?.unsubscribe();
-      acceptanceChannelRef.current?.unsubscribe();
+      supabase.removeChannel(channel);
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
-  }, [id]);
+  }, [currentUserId, id]);
 
   // Re-fetch provider profile whenever selected_provider_id changes
   useEffect(() => {
@@ -136,17 +213,66 @@ export default function OrderTrackingScreen() {
     }
   }, [order?.selected_provider_id]);
 
+  // Subscribe to provider location updates (real-time) when in_transit
+  useEffect(() => {
+    const providerId = order?.selected_provider_id;
+    if (!providerId || order?.status !== 'in_transit') return;
+
+    // Fetch initial location
+    supabase
+      .from('provider_locations')
+      .select('lat, lng')
+      .eq('provider_id', providerId)
+      .single()
+      .then(({ data }) => {
+        if (data) setProviderLocation({ lat: Number(data.lat), lng: Number(data.lng) });
+      });
+
+    const channel = supabase
+      .channel(`provider-loc-${providerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'provider_locations',
+          filter: `provider_id=eq.${providerId}`,
+        },
+        (payload) => {
+          const row = payload.new as { lat: number; lng: number };
+          if (row?.lat != null) setProviderLocation({ lat: Number(row.lat), lng: Number(row.lng) });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [order?.selected_provider_id, order?.status]);
+
+  // Set customer marker from stored GPS coords; fall back to geocoding if absent
+  useEffect(() => {
+    if (!order) return;
+    if (order.delivery_lat != null && order.delivery_lng != null) {
+      setCustomerLocation({ lat: order.delivery_lat, lng: order.delivery_lng });
+    } else if (order.delivery_address) {
+      Location.geocodeAsync(order.delivery_address).then((results) => {
+        if (results.length > 0) {
+          setCustomerLocation({ lat: results[0].latitude, lng: results[0].longitude });
+        }
+      }).catch(() => {});
+    }
+  }, [order?.id]);
+
   // ── Data fetching ────────────────────────────────────────────────────────
 
   async function fetchAll() {
-    await Promise.all([fetchOrder(), fetchItems(), fetchAcceptances()]);
+    await Promise.all([fetchOrder(), fetchItems(), fetchOrderAcceptances()]);
     setLoading(false);
   }
 
   async function fetchOrder() {
     const { data } = await supabase
       .from('orders')
-      .select('id, status, payment_method, delivery_address, total_amount, admin_fee, selected_provider_id, created_at, expires_at')
+      .select('id, status, payment_method, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, selected_provider_id, created_at, expires_at')
       .eq('id', id)
       .single();
     if (data) setOrder(data as Order);
@@ -160,13 +286,58 @@ export default function OrderTrackingScreen() {
     if (data) setItems(data as unknown as OrderItem[]);
   }
 
-  async function fetchAcceptances() {
-    const { data } = await supabase
+  async function fetchOrderAcceptances() {
+    const { data: acceptanceRows } = await supabase
       .from('order_acceptances')
       .select('id, provider_id, accepted_at, provider:profiles(full_name, business_name, phone)')
       .eq('order_id', id)
       .is('withdrawn_at', null);
-    if (data) setAcceptances(data as unknown as Acceptance[]);
+    console.log('[fetchOrderAcceptances] data:', acceptanceRows);
+
+    if (!acceptanceRows || acceptanceRows.length === 0) {
+      setAcceptances([]);
+      return;
+    }
+
+    // Fetch order items with product_id for price calculation
+    const { data: orderItemRows } = await supabase
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', id);
+
+    const productIds = (orderItemRows ?? []).map((i) => i.product_id);
+    const providerIds = acceptanceRows.map((a) => a.provider_id);
+
+    // Fetch provider_products for all providers × all products in this order
+    const { data: providerProductRows } = await supabase
+      .from('provider_products')
+      .select('provider_id, product_id, price')
+      .in('provider_id', providerIds)
+      .in('product_id', productIds);
+
+    // Build price lookup: providerPrices[provider_id][product_id] = price
+    const providerPrices: Record<string, Record<string, number>> = {};
+    for (const pp of providerProductRows ?? []) {
+      if (!providerPrices[pp.provider_id]) providerPrices[pp.provider_id] = {};
+      providerPrices[pp.provider_id][pp.product_id] = Number(pp.price);
+    }
+
+    const result: Acceptance[] = acceptanceRows.map((row) => {
+      let provider_total = 0;
+      for (const item of orderItemRows ?? []) {
+        const price = providerPrices[row.provider_id]?.[item.product_id];
+        if (price !== undefined) provider_total += price * item.quantity;
+      }
+      return {
+        id: row.id,
+        provider_id: row.provider_id,
+        accepted_at: row.accepted_at,
+        provider: row.provider as Acceptance['provider'],
+        provider_total,
+      };
+    });
+
+    setAcceptances(result);
   }
 
   async function fetchSelectedProvider(providerId: string) {
@@ -176,36 +347,6 @@ export default function OrderTrackingScreen() {
       .eq('id', providerId)
       .single();
     if (data) setSelectedProvider(data as ProviderProfile);
-  }
-
-  // ── Realtime ─────────────────────────────────────────────────────────────
-
-  function subscribeToOrder() {
-    orderChannelRef.current = supabase
-      .channel(`order:${id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
-        (payload) => {
-          const updated = payload.new as Partial<Order>;
-          setOrder((prev) => prev ? { ...prev, ...updated } : prev);
-        }
-      )
-      .subscribe();
-  }
-
-  function subscribeToAcceptances() {
-    acceptanceChannelRef.current = supabase
-      .channel(`acceptances:${id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'order_acceptances', filter: `order_id=eq.${id}` },
-        () => {
-          // Re-fetch full acceptance list (with joined provider profile) on any change
-          fetchAcceptances();
-        }
-      )
-      .subscribe();
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -255,6 +396,47 @@ export default function OrderTrackingScreen() {
     ]);
   }
 
+  function promptConfirmDelivery() {
+    Alert.alert(
+      'Confirm Delivery',
+      'Confirm that you received your order?',
+      [
+        { text: 'Not Yet', style: 'cancel' },
+        { text: 'Yes, Received!', onPress: confirmDelivery },
+      ]
+    );
+  }
+
+  async function confirmDelivery() {
+    setConfirming(true);
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'delivered' })
+      .eq('id', id);
+    setConfirming(false);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    setOrder((prev) => prev ? { ...prev, status: 'delivered' } : prev);
+    Alert.alert('Thank you!', 'Order completed. Enjoy your LPG!');
+  }
+
+  function handleChat() {
+    setUnreadCount(0);
+    router.push({ pathname: '/(customer)/chat/[orderId]', params: { orderId: id } });
+  }
+
+  function handleCall() {
+    const phone = selectedProvider?.phone;
+    if (!phone) return;
+    Linking.openURL(`tel:${phone}`).catch(() =>
+      Alert.alert('Error', 'Unable to open phone app.')
+    );
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -274,7 +456,6 @@ export default function OrderTrackingScreen() {
   }
 
   const statusCfg = STATUS_CONFIG[order.status];
-  const currentStep = stepIndex(order.status);
   const canCancel = order.status === 'pending' || order.status === 'awaiting_dealer_selection';
   const shortId = order.id.slice(-8).toUpperCase();
   const placedAt = new Date(order.created_at).toLocaleString('en-PH', {
@@ -282,7 +463,9 @@ export default function OrderTrackingScreen() {
   });
 
   const showAcceptances =
-    order.status === 'awaiting_dealer_selection' && !order.selected_provider_id;
+    (order.status === 'awaiting_dealer_selection' || acceptances.length > 0) &&
+    !order.selected_provider_id &&
+    order.status !== 'cancelled';
   const showSelectedProvider =
     order.selected_provider_id !== null &&
     order.status !== 'cancelled';
@@ -291,12 +474,21 @@ export default function OrderTrackingScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+        <TouchableOpacity onPress={() => router.replace('/(customer)/orders')} style={styles.backButton} hitSlop={8}>
           <Feather name="chevron-left" size={26} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Status</Text>
         <View style={{ width: 34 }} />
       </View>
+
+      {/* New message banner */}
+      {newMsgBanner && (
+        <TouchableOpacity style={styles.msgBanner} onPress={handleChat} activeOpacity={0.85}>
+          <Feather name="message-circle" size={14} color="#fff" />
+          <Text style={styles.msgBannerText} numberOfLines={1}>{newMsgBanner}</Text>
+          <Feather name="chevron-right" size={14} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -318,55 +510,39 @@ export default function OrderTrackingScreen() {
           </View>
         </View>
 
-        {/* Timeline */}
-        {order.status !== 'cancelled' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Tracking</Text>
-            <View style={styles.timeline}>
-              {TIMELINE_STEPS.map((step, index) => {
-                const done = currentStep > index;
-                const active = currentStep === index;
-                const isLast = index === TIMELINE_STEPS.length - 1;
-
-                return (
-                  <View key={step.key} style={styles.timelineRow}>
-                    {/* Left column: dot + connector */}
-                    <View style={styles.timelineLeft}>
-                      <View
-                        style={[
-                          styles.timelineDot,
-                          done && styles.timelineDotDone,
-                          active && styles.timelineDotActive,
-                        ]}
-                      >
-                        {done && <Feather name="check" size={10} color="#fff" />}
-                        {active && <View style={styles.timelinePulse} />}
-                      </View>
-                      {!isLast && (
-                        <View style={[styles.timelineConnector, done && styles.timelineConnectorDone]} />
-                      )}
-                    </View>
-                    {/* Label */}
-                    <Text
-                      style={[
-                        styles.timelineLabel,
-                        done && styles.timelineLabelDone,
-                        active && styles.timelineLabelActive,
-                      ]}
-                    >
-                      {step.label}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
+        {/* Confirm delivery — shown prominently when provider has marked as delivered */}
+        {order.status === 'awaiting_confirmation' && (
+          <View style={styles.confirmCard}>
+            <Feather name="check-circle" size={32} color={PRIMARY} />
+            <Text style={styles.confirmCardTitle}>Your order has been delivered!</Text>
+            <Text style={styles.confirmCardSubtitle}>
+              Please confirm that you received your order so the provider can be paid.
+            </Text>
+            <TouchableOpacity
+              style={[styles.confirmBtn, confirming && { opacity: 0.6 }]}
+              onPress={promptConfirmDelivery}
+              disabled={confirming}
+            >
+              {confirming ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.confirmBtnText}>Confirm Delivery</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.reportBtn} onPress={() => Alert.alert('Report Issue', 'Please contact support.')}>
+              <Text style={styles.reportBtnText}>Report an Issue</Text>
+            </TouchableOpacity>
           </View>
         )}
+
 
         {/* Provider acceptances */}
         {showAcceptances && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Providers Ready to Deliver</Text>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>Providers Ready to Deliver</Text>
+              <Text style={styles.waitingText}>Waiting for providers{dots}</Text>
+            </View>
             {acceptances.length === 0 ? (
               <View style={styles.emptyProviders}>
                 <ActivityIndicator size="small" color={PRIMARY} />
@@ -399,14 +575,15 @@ export default function OrderTrackingScreen() {
                   <Text style={styles.providerBusiness}>{selectedProvider.business_name}</Text>
                 )}
               </View>
-              <View style={styles.providerActions}>
-                <TouchableOpacity style={styles.providerActionBtn} hitSlop={8}>
-                  <Feather name="phone" size={18} color={PRIMARY} />
+              {order.status === 'in_transit' && (
+                <TouchableOpacity
+                  style={styles.providerActionBtn}
+                  hitSlop={8}
+                  onPress={() => setMapVisible(true)}
+                >
+                  <Feather name="map-pin" size={18} color={PRIMARY} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.providerActionBtn} hitSlop={8}>
-                  <Feather name="message-circle" size={18} color={PRIMARY} />
-                </TouchableOpacity>
-              </View>
+              )}
             </View>
           </View>
         )}
@@ -449,6 +626,22 @@ export default function OrderTrackingScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Map modal */}
+      <Modal visible={mapVisible} animationType="slide" onRequestClose={() => setMapVisible(false)}>
+        <View style={[styles.modalScreen, { paddingTop: insets.top }]}>
+          <LiveMap
+            providerLocation={providerLocation}
+            customerLocation={customerLocation}
+            providerName={selectedProvider?.full_name}
+            businessName={selectedProvider?.business_name ?? undefined}
+            deliveryAddress={order?.delivery_address}
+            onBack={() => setMapVisible(false)}
+            onChat={() => { setMapVisible(false); handleChat(); }}
+            onCall={selectedProvider?.phone ? handleCall : undefined}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -475,6 +668,11 @@ function ProviderCard({
         <Text style={styles.providerName}>{provider?.full_name ?? '—'}</Text>
         {provider?.business_name && (
           <Text style={styles.providerBusiness}>{provider.business_name}</Text>
+        )}
+        {acceptance.provider_total > 0 && (
+          <Text style={styles.providerTotal}>
+            ₱{acceptance.provider_total.toLocaleString()}
+          </Text>
         )}
       </View>
       <TouchableOpacity
@@ -545,58 +743,53 @@ const styles = StyleSheet.create({
   },
   addressText: { fontSize: 13, color: '#6B7280', flex: 1, textAlign: 'center' },
 
+  // Confirm delivery card
+  confirmCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 10,
+  },
+  confirmCardTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  confirmCardSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  confirmBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 4,
+  },
+  confirmBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  reportBtn: { paddingVertical: 6 },
+  reportBtnText: { fontSize: 13, color: '#9CA3AF' },
+
   // Section
   section: { marginBottom: 16 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
-
-  // Timeline
-  timeline: { paddingLeft: 4 },
-  timelineRow: {
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  sectionTitleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  timelineLeft: { alignItems: 'center', width: 24, marginRight: 14 },
-  timelineDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#E5E7EB',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  timelineDotDone: {
-    backgroundColor: PRIMARY,
-    borderColor: PRIMARY,
-  },
-  timelineDotActive: {
-    backgroundColor: '#fff',
-    borderColor: PRIMARY,
-    borderWidth: 2,
-  },
-  timelinePulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: PRIMARY,
-  },
-  timelineConnector: {
-    width: 2,
-    height: 32,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 2,
-  },
-  timelineConnectorDone: { backgroundColor: PRIMARY },
-  timelineLabel: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    paddingTop: 2,
-    paddingBottom: 24,
-    flex: 1,
-  },
-  timelineLabelDone: { color: '#6B7280' },
-  timelineLabelActive: { color: '#111827', fontWeight: '600' },
+  waitingText: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
+
 
   // Provider acceptances
   emptyProviders: {
@@ -641,6 +834,34 @@ const styles = StyleSheet.create({
   providerInfo: { flex: 1 },
   providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
   providerBusiness: { fontSize: 12, color: '#6B7280', marginTop: 1 },
+  providerTotal: { fontSize: 13, fontWeight: '700', color: PRIMARY, marginTop: 3 },
+  // Message banner
+  msgBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: PRIMARY,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  msgBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#fff' },
+
+  // Chat button badge
+  chatBtnWrapper: { position: 'relative' },
+  unreadBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  unreadBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
+
   providerActions: { flexDirection: 'row', gap: 8 },
   providerActionBtn: {
     width: 36,
@@ -704,4 +925,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonDisabled: { opacity: 0.5 },
   cancelButtonText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+
+  // Map modal
+  modalScreen: { flex: 1, backgroundColor: '#000' },
 });

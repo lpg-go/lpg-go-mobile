@@ -17,8 +17,8 @@ export default function ProviderLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Orders',
-          tabBarIcon: ({ color, size }) => <Feather name="package" color={color} size={size} />,
+          title: 'Incoming',
+          tabBarIcon: ({ color, size }) => <Feather name="inbox" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -43,6 +43,14 @@ export default function ProviderLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <Feather name="user" color={color} size={size} />,
         }}
+      />
+      <Tabs.Screen
+        name="active/[id]"
+        options={{ href: null, tabBarStyle: { display: 'none' } }}
+      />
+      <Tabs.Screen
+        name="chat/[orderId]"
+        options={{ href: null, tabBarStyle: { display: 'none' } }}
       />
     </Tabs>
   );

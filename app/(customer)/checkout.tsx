@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCart } from '../../lib/cartStore';
@@ -42,8 +43,11 @@ export default function CheckoutScreen() {
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
 
+  const mapRef = useRef<MapView>(null);
+
   useEffect(() => {
     fetchSettings();
+    autoGetLocation();
   }, []);
 
   async function fetchSettings() {
@@ -60,6 +64,22 @@ export default function CheckoutScreen() {
     }
   }
 
+  async function autoGetLocation() {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return;
+
+    setLocationLoading(true);
+    try {
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = position.coords;
+      applyLocation(latitude, longitude);
+    } catch {
+      // Silent fail on auto-load
+    } finally {
+      setLocationLoading(false);
+    }
+  }
+
   async function handleUseLocation() {
     setLocationError('');
     setLocationLoading(true);
@@ -71,11 +91,22 @@ export default function CheckoutScreen() {
       return;
     }
 
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    try {
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = position.coords;
+      await applyLocation(latitude, longitude);
+      mapRef.current?.animateToRegion(
+        { latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 },
+        400
+      );
+    } catch {
+      setLocationError('Could not get location. Please try again or enter address manually.');
+    } finally {
+      setLocationLoading(false);
+    }
+  }
 
-    const { latitude, longitude } = position.coords;
+  async function applyLocation(latitude: number, longitude: number) {
     setLat(latitude);
     setLng(longitude);
 
@@ -90,8 +121,28 @@ export default function CheckoutScreen() {
       ].filter(Boolean);
       setAddress(parts.join(', '));
     }
+  }
 
-    setLocationLoading(false);
+  async function handlePinDrag(coordinate: { latitude: number; longitude: number }) {
+    const { latitude, longitude } = coordinate;
+    setLat(latitude);
+    setLng(longitude);
+
+    try {
+      const [result] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (result) {
+        const parts = [
+          result.streetNumber,
+          result.street,
+          result.district,
+          result.city,
+          result.region,
+        ].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+    } catch {
+      // Reverse geocoding failed — keep existing address text
+    }
   }
 
   async function handlePlaceOrder() {
@@ -222,10 +273,37 @@ export default function CheckoutScreen() {
           </TouchableOpacity>
 
           {locationError ? <Text style={styles.fieldError}>{locationError}</Text> : null}
-          {lat !== null && (
-            <Text style={styles.coordsHint}>
-              📍 GPS: {lat.toFixed(5)}, {lng!.toFixed(5)}
-            </Text>
+
+          {/* Map pin preview */}
+          {lat !== null && lng !== null && (
+            <View style={styles.mapPreview}>
+              <MapView
+                ref={mapRef}
+                style={styles.mapPreviewMap}
+                initialRegion={{
+                  latitude: lat,
+                  longitude: lng,
+                  latitudeDelta: 0.005,
+                  longitudeDelta: 0.005,
+                }}
+                showsUserLocation={false}
+                showsMyLocationButton={false}
+              >
+                <Marker
+                  coordinate={{ latitude: lat, longitude: lng }}
+                  draggable
+                  onDragEnd={(e) => handlePinDrag(e.nativeEvent.coordinate)}
+                >
+                  <View style={styles.deliveryPin}>
+                    <Feather name="map-pin" size={18} color="#fff" />
+                  </View>
+                </Marker>
+              </MapView>
+              <View style={styles.mapPreviewHint}>
+                <Feather name="move" size={12} color="#6B7280" />
+                <Text style={styles.mapPreviewHintText}>Drag pin to adjust exact location</Text>
+              </View>
+            </View>
           )}
         </View>
 
@@ -400,7 +478,42 @@ const styles = StyleSheet.create({
   locationButtonDisabled: { borderColor: '#D1D5DB' },
   locationButtonText: { fontSize: 13, fontWeight: '500', color: PRIMARY },
   fieldError: { fontSize: 12, color: '#EF4444', marginTop: 6 },
-  coordsHint: { fontSize: 11, color: '#9CA3AF', marginTop: 6 },
+
+  // Map preview
+  mapPreview: {
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  mapPreviewMap: { height: 180 },
+  mapPreviewHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  mapPreviewHintText: { fontSize: 12, color: '#6B7280' },
+  deliveryPin: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
+  },
 
   // Summary card
   summaryCard: {
