@@ -187,7 +187,8 @@ export default function OrderTrackingScreen() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
         (payload) => {
-          setOrder((prev) => prev ? { ...prev, ...(payload.new as Partial<Order>) } : prev);
+          const updated = payload.new as Partial<Order>;
+          setOrder((prev) => prev ? { ...prev, ...updated } : prev);
         }
       )
       .subscribe();
@@ -240,7 +241,18 @@ export default function OrderTrackingScreen() {
       .update({ status: 'cancelled', cancelled_by: 'customer' })
       .eq('id', id);
     setCancelling(false);
-    if (error) Alert.alert('Error', error.message);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    // Update local state immediately in case Realtime is slow
+    setOrder((prev) => prev ? { ...prev, status: 'cancelled', selected_provider_id: null } : prev);
+
+    Alert.alert('Order Cancelled', 'Your order has been cancelled.', [
+      { text: 'OK', onPress: () => router.replace('/(customer)/orders') },
+    ]);
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
