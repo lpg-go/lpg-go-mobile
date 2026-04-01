@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,7 +8,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -28,7 +27,6 @@ type ProviderProduct = {
   brand_name: string;
   price: number;
   stock: number;
-  is_available: boolean;
 };
 
 type EditState = {
@@ -54,7 +52,8 @@ export default function ProviderProductsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
+  const collapsedInitialized = useRef(false);
 
   useEffect(() => {
     fetchProducts().then(() => setLoading(false));
@@ -93,10 +92,16 @@ export default function ProviderProductsScreen() {
       brand_name: row.product.brand.name,
       price: Number(row.price),
       stock: row.stock,
-      is_available: row.is_available,
     }));
 
     setProducts(rows);
+
+    // On first load: open only the first brand, collapse the rest
+    if (!collapsedInitialized.current && rows.length > 0) {
+      const sortedBrands = [...new Set(rows.map((r) => r.brand_name))].sort();
+      setCollapsedBrands(new Set(sortedBrands.slice(1)));
+      collapsedInitialized.current = true;
+    }
 
     // Rebuild edit map preserving any unsaved changes when refreshing
     setEditMap((prev) => {
@@ -174,25 +179,24 @@ export default function ProviderProductsScreen() {
 
     setSaving(true);
 
-    const updates = await Promise.all(
-      changed.map((p) =>
-        supabase
-          .from('provider_products')
-          .update({
-            price: parseFloat(editMap[p.id].price),
-            stock: parseInt(editMap[p.id].stock, 10),
-          })
-          .eq('id', p.id)
-      )
-    );
+    // Run sequentially to avoid overwhelming React Native's fetch
+    for (const p of changed) {
+      const { error } = await supabase
+        .from('provider_products')
+        .update({
+          price: parseFloat(editMap[p.id].price),
+          stock: parseInt(editMap[p.id].stock, 10),
+        })
+        .eq('id', p.id);
+
+      if (error) {
+        setSaving(false);
+        Alert.alert('Save Error', error.message);
+        return;
+      }
+    }
 
     setSaving(false);
-
-    const firstError = updates.find((r) => r.error)?.error;
-    if (firstError) {
-      Alert.alert('Save Error', firstError.message);
-      return;
-    }
 
     // Apply locally so UI updates without a full refetch
     setProducts((prev) =>
@@ -210,21 +214,13 @@ export default function ProviderProductsScreen() {
     setEditMode(false);
   }
 
-  // ── Toggle availability ───────────────────────────────────────────────────
-
-  async function handleToggleAvailable(id: string, value: boolean) {
-    setTogglingId(id);
-    const { error } = await supabase
-      .from('provider_products')
-      .update({ is_available: value })
-      .eq('id', id);
-    setTogglingId(null);
-
-    if (error) { Alert.alert('Error', error.message); return; }
-
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, is_available: value } : p))
-    );
+  function toggleBrand(brandName: string) {
+    setCollapsedBrands((prev) => {
+      const next = new Set(prev);
+      if (next.has(brandName)) next.delete(brandName);
+      else next.add(brandName);
+      return next;
+    });
   }
 
   // ── Group by brand ────────────────────────────────────────────────────────
@@ -271,13 +267,16 @@ export default function ProviderProductsScreen() {
         </View>
 
         {products.length === 0 ? (
-          <View style={styles.emptyState}>
+          <ScrollView
+            contentContainerStyle={styles.emptyState}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PRIMARY} colors={[PRIMARY]} />
+            }
+          >
             <Feather name="box" size={48} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No products assigned yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Contact admin to add products to your account
-            </Text>
-          </View>
+            <Text style={styles.emptyTitle}>No products available</Text>
+            <Text style={styles.emptySubtitle}>Pull down to refresh.</Text>
+          </ScrollView>
         ) : (
           <>
             <ScrollView
@@ -297,26 +296,40 @@ export default function ProviderProductsScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              {brandGroups.map((group) => (
-                <View key={group.brand_name} style={styles.brandSection}>
-                  <Text style={styles.brandHeader}>{group.brand_name}</Text>
-                  <View style={styles.brandCard}>
-                    {group.products.map((product, index) => (
-                      <ProductRow
-                        key={product.id}
-                        product={product}
-                        editState={editMap[product.id]}
-                        editMode={editMode}
-                        isLast={index === group.products.length - 1}
-                        toggling={togglingId === product.id}
-                        onToggleAvailable={(val) => handleToggleAvailable(product.id, val)}
-                        onChangePrice={(val) => setField(product.id, 'price', val)}
-                        onChangeStock={(val) => setField(product.id, 'stock', val)}
+              {brandGroups.map((group) => {
+                const collapsed = collapsedBrands.has(group.brand_name);
+                return (
+                  <View key={group.brand_name} style={styles.brandSection}>
+                    <TouchableOpacity
+                      style={styles.brandHeaderRow}
+                      onPress={() => toggleBrand(group.brand_name)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.brandHeader}>{group.brand_name}</Text>
+                      <Feather
+                        name={collapsed ? 'chevron-down' : 'chevron-up'}
+                        size={16}
+                        color="#9CA3AF"
                       />
-                    ))}
+                    </TouchableOpacity>
+                    {!collapsed && (
+                      <View style={styles.brandCard}>
+                        {group.products.map((product, index) => (
+                          <ProductRow
+                            key={product.id}
+                            product={product}
+                            editState={editMap[product.id]}
+                            editMode={editMode}
+                            isLast={index === group.products.length - 1}
+                            onChangePrice={(val) => setField(product.id, 'price', val)}
+                            onChangeStock={(val) => setField(product.id, 'stock', val)}
+                          />
+                        ))}
+                      </View>
+                    )}
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
 
             {/* Save bar */}
@@ -349,8 +362,6 @@ function ProductRow({
   editState,
   editMode,
   isLast,
-  toggling,
-  onToggleAvailable,
   onChangePrice,
   onChangeStock,
 }: {
@@ -358,8 +369,6 @@ function ProductRow({
   editState: EditState | undefined;
   editMode: boolean;
   isLast: boolean;
-  toggling: boolean;
-  onToggleAvailable: (val: boolean) => void;
   onChangePrice: (val: string) => void;
   onChangeStock: (val: string) => void;
 }) {
@@ -399,27 +408,19 @@ function ProductRow({
           </View>
         </View>
       ) : (
-        /* View mode: price + stock labels */
+        /* View mode: price + stock */
         <View style={styles.viewFields}>
           <Text style={styles.priceText}>₱{product.price.toLocaleString()}</Text>
-          <Text style={styles.stockText}>{product.stock} left</Text>
+          <Text style={[
+            styles.stockText,
+            product.stock === 0 ? styles.stockRed :
+            product.stock <= 10 ? styles.stockOrange :
+            styles.stockGreen,
+          ]}>
+            {product.stock === 0 ? 'Out of Stock' : product.stock <= 10 ? `Only ${product.stock} left` : `${product.stock} in stock`}
+          </Text>
         </View>
       )}
-
-      {/* Available toggle */}
-      <View style={styles.toggleWrap}>
-        {toggling ? (
-          <ActivityIndicator size="small" color={PRIMARY} />
-        ) : (
-          <Switch
-            value={product.is_available}
-            onValueChange={onToggleAvailable}
-            trackColor={{ false: '#D1D5DB', true: '#86EFAC' }}
-            thumbColor={product.is_available ? PRIMARY : '#fff'}
-            disabled={editMode}
-          />
-        )}
-      </View>
     </View>
   );
 }
@@ -453,13 +454,19 @@ const styles = StyleSheet.create({
 
   // Brand section
   brandSection: { marginBottom: 20 },
+  brandHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingVertical: 2,
+  },
   brandHeader: {
     fontSize: 13,
     fontWeight: '700',
     color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
   },
   brandCard: {
     backgroundColor: '#fff',
@@ -487,7 +494,10 @@ const styles = StyleSheet.create({
   // View mode fields
   viewFields: { alignItems: 'flex-end', marginRight: 12 },
   priceText: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  stockText: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  stockText: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  stockGreen: { color: '#16A34A' },
+  stockOrange: { color: '#D97706' },
+  stockRed: { color: '#EF4444' },
 
   // Edit mode fields
   editFields: {
@@ -527,9 +537,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Toggle
-  toggleWrap: { width: 52, alignItems: 'center' },
-
   // Save bar
   saveBar: {
     position: 'absolute',
@@ -553,7 +560,7 @@ const styles = StyleSheet.create({
 
   // Empty state
   emptyState: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,

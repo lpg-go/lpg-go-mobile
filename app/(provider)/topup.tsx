@@ -84,7 +84,7 @@ export default function TopUpScreen() {
     const amount = getAmount();
 
     if (!amount || amount < 50) {
-      Alert.alert('Invalid Amount', 'Minimum top-up amount is ₱50.');
+      Alert.alert('Invalid Amount', 'Minimum top-up amount is 50.');
       return;
     }
 
@@ -94,7 +94,7 @@ export default function TopUpScreen() {
 
     Alert.alert(
       'Confirm Top Up',
-      `Top up ₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} via ${methodLabel}?`,
+      `Top up ${amount.toLocaleString('en-PH', { minimumFractionDigits: 0 })} via ${methodLabel}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Confirm', onPress: () => processTopUp(amount) },
@@ -178,17 +178,17 @@ export default function TopUpScreen() {
             <Text style={styles.orLabel}>or enter custom amount</Text>
 
             <View style={[styles.customInputWrap, customAmount.length > 0 && styles.customInputWrapActive]}>
-              <Text style={styles.pesoSign}>₱</Text>
+              <Text style={styles.pesoSign}>PHP</Text>
               <TextInput
                 style={styles.customInput}
                 value={customAmount}
                 onChangeText={handleCustomAmountChange}
-                placeholder="0.00"
+                placeholder="0"
                 placeholderTextColor="#9CA3AF"
                 keyboardType="decimal-pad"
               />
             </View>
-            <Text style={styles.minNote}>Minimum top-up: ₱50.00</Text>
+            <Text style={styles.minNote}>Minimum top-up: 50</Text>
           </View>
 
           {/* Payment method */}
@@ -218,14 +218,13 @@ export default function TopUpScreen() {
           <View style={styles.infoBox}>
             <Feather name="info" size={14} color="#6B7280" style={{ marginTop: 1 }} />
             <Text style={styles.infoText}>
-              Your balance is used to accept orders. Admin fees are automatically deducted after each successful delivery.
+              Your balance is used to accept orders. Admin fees are automatically deducted after each successful delivery. ₱1 is equal to 1 credit.
             </Text>
           </View>
         </ScrollView>
 
         {/* Bottom bar */}
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          <Text style={styles.paymongoNote}>PayMongo integration coming soon</Text>
           <TouchableOpacity
             style={[styles.proceedBtn, (!isValidAmount || processing) && styles.proceedBtnDisabled]}
             onPress={handleProceed}
@@ -238,7 +237,7 @@ export default function TopUpScreen() {
               <>
                 <Text style={styles.proceedBtnText}>
                   {isValidAmount
-                    ? `Top Up ₱${amount!.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                    ? `Top Up ${amount!.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`
                     : 'Proceed to Payment'}
                 </Text>
               </>
@@ -400,7 +399,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
-  paymongoNote: { fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginBottom: 8 },
   proceedBtn: {
     backgroundColor: PRIMARY,
     borderRadius: 12,

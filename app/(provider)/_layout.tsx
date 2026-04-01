@@ -24,9 +24,9 @@ export default function ProviderLayout() {
       <Tabs.Screen
         name="earnings"
         options={{
-          title: 'Earnings',
+          title: 'Credit',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="dollar-sign" color={color} size={size} />
+            <Feather name="credit-card" color={color} size={size} />
           ),
         }}
       />

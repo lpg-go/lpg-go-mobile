@@ -850,9 +850,9 @@ function ProviderCard({
         <Feather name="user" size={20} color={PRIMARY} />
       </View>
       <View style={styles.providerInfo}>
-        {provider?.business_name && (
-          <Text style={styles.providerName}>{provider.business_name}</Text>
-        )}
+        <Text style={styles.providerName}>
+          {provider?.business_name || provider?.full_name || 'Provider'}
+        </Text>
         <View style={styles.ratingRow}>
           {acceptance.avgRating !== null ? (
             <>
@@ -863,7 +863,7 @@ function ProviderCard({
               </Text>
             </>
           ) : (
-            <Text style={styles.ratingNew}>New provider</Text>
+            <Text style={styles.ratingNew}>New</Text>
           )}
           {acceptance.avgDeliveryMinutes !== null && (
             <>

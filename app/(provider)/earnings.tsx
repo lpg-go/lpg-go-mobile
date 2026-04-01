@@ -171,7 +171,7 @@ export default function ProviderEarningsScreen() {
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Current Balance</Text>
           <Text style={styles.balanceAmount}>
-            ₱{balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+            {balance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
           </Text>
           <TouchableOpacity
             style={styles.topUpBtn}
@@ -189,7 +189,7 @@ export default function ProviderEarningsScreen() {
             <Feather name="alert-triangle" size={16} color="#92400E" />
             <Text style={styles.lowBalanceText}>
               Your balance is below the minimum of{' '}
-              ₱{minBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}.
+              {minBalance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}.
               Top up to keep receiving orders.
             </Text>
           </View>
@@ -199,7 +199,7 @@ export default function ProviderEarningsScreen() {
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { flex: 1 }]}>
             <Text style={styles.statValue}>
-              ₱{monthlyFees.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              {monthlyFees.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
             </Text>
             <Text style={styles.statLabel}>This Month</Text>
           </View>
@@ -209,7 +209,7 @@ export default function ProviderEarningsScreen() {
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
             <Text style={styles.statValue}>
-              ₱{allTimeFees.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
+              {allTimeFees.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
             </Text>
             <Text style={styles.statLabel}>All Time</Text>
           </View>
@@ -270,7 +270,7 @@ function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
         <Text style={styles.txDate}>{date}</Text>
       </View>
       <Text style={[styles.txAmount, { color: isTopUp ? PRIMARY : '#DC2626' }]}>
-        {isTopUp ? '+' : '-'}₱{Number(tx.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+        {isTopUp ? '+' : '-'}{Number(tx.amount).toLocaleString('en-PH', { minimumFractionDigits: 0 })}
       </Text>
     </View>
   );

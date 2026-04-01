@@ -88,6 +88,15 @@ export default function ProviderIncomingOrdersScreen() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
+          const isDelete = payload.eventType === 'DELETE';
+          const isCancelled = payload.eventType === 'UPDATE' && (payload.new as any)?.status === 'cancelled';
+
+          if (isDelete || isCancelled) {
+            const removedId = isDelete ? (payload.old as any).id : (payload.new as any).id;
+            setOrders((prev) => prev.filter((o) => o.id !== removedId));
+            return;
+          }
+
           const updated = payload.new as { status?: string; selected_provider_id?: string } | undefined;
           if (
             updated?.status === 'delivered' &&
@@ -98,6 +107,7 @@ export default function ProviderIncomingOrdersScreen() {
             if (uid) fetchProfile(uid);
             fetchRecentOrders();
           }
+
           fetchOrders();
           fetchActiveOrders();
         }

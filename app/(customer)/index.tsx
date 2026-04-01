@@ -1,14 +1,15 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,31 +19,54 @@ import supabase from '../../lib/supabase';
 type Brand = {
   id: string;
   name: string;
+  logo_url: string | null;
   productCount: number;
 };
 
+const PRIMARY = '#16A34A';
+const H_PADDING = 20;
+const GRID_GAP = 10;
+const COLS = 3;
+
+const AVATAR_COLORS = ['#16A34A', '#2563EB', '#D97706', '#7C3AED', '#DC2626', '#0891B2'];
+
+function getBrandColor(name: string): string {
+  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+}
+
 export default function CustomerHomeScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const cardWidth = (width - H_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS;
 
-  async function fetchData() {
-    await fetchBrands();
-    setLoading(false);
-  }
+  // Refetch brands on every screen focus so logo updates and new brands appear immediately
+  useFocusEffect(
+    useCallback(() => {
+      fetchBrands().then(() => setLoading(false));
+      return () => {};
+    }, [])
+  );
 
 
   async function fetchBrands() {
     const { data: brandRows } = await supabase
       .from('brands')
-      .select('id, name')
+      .select('id, name, logo_url')
       .eq('is_active', true)
       .order('name');
 
@@ -62,6 +86,7 @@ export default function CustomerHomeScreen() {
       brandRows.map((b) => ({
         id: b.id,
         name: b.name,
+        logo_url: b.logo_url ?? null,
         productCount: countByBrand[b.id] ?? 0,
       }))
     );
@@ -69,7 +94,7 @@ export default function CustomerHomeScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await fetchData();
+    await fetchBrands();
     setRefreshing(false);
   }
 
@@ -79,7 +104,6 @@ export default function CustomerHomeScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -92,6 +116,7 @@ export default function CustomerHomeScreen() {
             colors={[PRIMARY]}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
         {/* Search */}
         <View style={styles.searchRow}>
@@ -110,87 +135,90 @@ export default function CustomerHomeScreen() {
         <Text style={styles.sectionTitle}>Available Brands</Text>
 
         {loading ? (
-          <SkeletonList />
+          <SkeletonGrid cardWidth={cardWidth} />
         ) : filtered.length === 0 ? (
           <View style={styles.emptyState}>
             <Feather name="inbox" size={40} color="#D1D5DB" />
             <Text style={styles.emptyText}>No brands available</Text>
           </View>
         ) : (
-          filtered.map((brand) => (
-            <BrandCard
-              key={brand.id}
-              brand={brand}
-              onPress={() =>
-                router.push({
-                  pathname: '/(customer)/brand/[id]',
-                  params: { id: brand.id, name: brand.name },
-                })
-              }
-            />
-          ))
+          <View style={styles.grid}>
+            {filtered.map((brand) => (
+              <BrandGridCard
+                key={brand.id}
+                brand={brand}
+                cardWidth={cardWidth}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(customer)/brand/[id]',
+                    params: { id: brand.id, name: brand.name },
+                  })
+                }
+              />
+            ))}
+          </View>
         )}
       </ScrollView>
     </View>
   );
 }
 
-function BrandCard({
+// ─── Brand grid card ──────────────────────────────────────────────────────────
+
+function BrandGridCard({
   brand,
+  cardWidth,
   onPress,
 }: {
   brand: Brand;
+  cardWidth: number;
   onPress: () => void;
 }) {
   return (
-    <View style={styles.card}>
-      <View style={styles.cardBody}>
-        <Text style={styles.brandName}>{brand.name}</Text>
-        <Text style={styles.productCount}>
-          {brand.productCount} {brand.productCount === 1 ? 'product' : 'products'} available
-        </Text>
+    <TouchableOpacity
+      style={[styles.gridCard, { width: cardWidth }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <View style={styles.logoWrap}>
+        {brand.logo_url ? (
+          <Image
+            source={{ uri: brand.logo_url }}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+        ) : (
+          <View style={[styles.logoFallback, { backgroundColor: getBrandColor(brand.name) }]}>
+            <Text style={styles.logoInitials}>{getInitials(brand.name)}</Text>
+          </View>
+        )}
       </View>
-      <TouchableOpacity style={styles.orderButton} onPress={onPress}>
-        <Text style={styles.orderButtonText}>Order Now</Text>
-      </TouchableOpacity>
-      <Feather name="chevron-right" size={20} color="#D1D5DB" style={styles.chevron} />
+      <Text style={styles.gridBrandName} numberOfLines={2}>{brand.name}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function SkeletonGrid({ cardWidth }: { cardWidth: number }) {
+  return (
+    <View style={styles.grid}>
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <View key={i} style={[styles.gridCard, styles.skeletonCard, { width: cardWidth }]}>
+          <View style={styles.skeletonLogo} />
+          <View style={styles.skeletonName} />
+        </View>
+      ))}
     </View>
   );
 }
 
-function SkeletonList() {
-  return (
-    <>
-      {[1, 2, 3, 4].map((i) => (
-        <View key={i} style={styles.skeletonCard}>
-          <View style={styles.skeletonTitle} />
-          <View style={styles.skeletonSubtitle} />
-          <ActivityIndicator
-            size="small"
-            color="#E5E7EB"
-            style={styles.skeletonSpinner}
-          />
-        </View>
-      ))}
-    </>
-  );
-}
-
-const PRIMARY = '#16A34A';
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-
-
-  // Scroll
+  screen: { flex: 1, backgroundColor: '#fff' },
   scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingBottom: 32 },
 
   // Search
   searchRow: {
@@ -206,93 +234,64 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   searchIcon: { marginRight: 8 },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    padding: 0,
-  },
+  searchInput: { flex: 1, fontSize: 15, color: '#111827', padding: 0 },
 
-  // Section
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 12,
-  },
+  // Section title
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 12 },
 
-  // Brand card
-  card: {
+  // Grid container
+  grid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
+  },
+
+  // Grid card
+  gridCard: {
+    height: 100,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  cardBody: { flex: 1 },
-  brandName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 3,
+
+  // Logo
+  logoWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  logoImage: { width: 48, height: 48 },
+  logoFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  productCount: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  orderButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginRight: 8,
-  },
-  orderButtonText: {
-    fontSize: 13,
+  logoInitials: { fontSize: 16, fontWeight: '700', color: '#fff' },
+
+  // Brand name
+  gridBrandName: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#fff',
+    color: '#374151',
+    textAlign: 'center',
+    lineHeight: 15,
   },
-  chevron: { marginLeft: 2 },
 
   // Skeleton
-  skeletonCard: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    backgroundColor: '#F9FAFB',
-  },
-  skeletonTitle: {
-    height: 16,
-    width: '50%',
-    backgroundColor: '#E5E7EB',
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  skeletonSubtitle: {
-    height: 12,
-    width: '35%',
-    backgroundColor: '#E5E7EB',
-    borderRadius: 6,
-  },
-  skeletonSpinner: {
-    position: 'absolute',
-    right: 16,
-    top: '50%',
-  },
+  skeletonCard: { backgroundColor: '#F9FAFB', borderColor: '#F3F4F6' },
+  skeletonLogo: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' },
+  skeletonName: { width: '60%', height: 10, borderRadius: 5, backgroundColor: '#E5E7EB' },
 
   // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: '#9CA3AF',
-  },
+  emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },
+  emptyText: { fontSize: 15, color: '#9CA3AF' },
 });

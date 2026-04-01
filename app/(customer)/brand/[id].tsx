@@ -1,9 +1,10 @@
 import { Feather } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,9 +20,11 @@ type Product = {
   id: string;
   name: string;
   size_kg: number;
+  image_url: string | null;
   minPrice: number | null;
   maxPrice: number | null;
   cheapestProviderProductId: string | null;
+  lowestStock: number | null;
 };
 
 const COLUMN_GAP = 12;
@@ -36,14 +39,18 @@ export default function BrandProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  // Refetch whenever the screen comes into focus (e.g. returning from cart)
+  useFocusEffect(
+    useCallback(() => {
+      fetchProducts();
+      return () => {};
+    }, [id])
+  );
 
   async function fetchProducts() {
     const { data: productRows } = await supabase
       .from('products')
-      .select('id, name, size_kg')
+      .select('id, name, size_kg, image_url')
       .eq('brand_id', id)
       .eq('is_active', true)
       .order('size_kg');
@@ -55,32 +62,36 @@ export default function BrandProductsScreen() {
 
     const productIds = productRows.map((p) => p.id);
 
+    // Note: Realtime on provider_products requires the table to be added to the
+    // supabase_realtime publication. Until then, useFocusEffect handles refresh on focus.
     const { data: priceRows } = await supabase
       .from('provider_products')
-      .select('id, product_id, price')
+      .select('id, product_id, price, stock')
       .in('product_id', productIds)
-      .eq('is_available', true);
+      .gt('stock', 0);
 
-    const entriesByProduct: Record<string, { id: string; price: number }[]> = {};
+    const entriesByProduct: Record<string, { id: string; price: number; stock: number }[]> = {};
     for (const row of priceRows ?? []) {
       if (!entriesByProduct[row.product_id]) entriesByProduct[row.product_id] = [];
-      entriesByProduct[row.product_id].push({ id: row.id, price: Number(row.price) });
+      entriesByProduct[row.product_id].push({ id: row.id, price: Number(row.price), stock: Number(row.stock) });
     }
 
     setProducts(
       productRows.map((p) => {
         const entries = entriesByProduct[p.id];
         if (!entries || entries.length === 0) {
-          return { id: p.id, name: p.name, size_kg: p.size_kg, minPrice: null, maxPrice: null, cheapestProviderProductId: null };
+          return { id: p.id, name: p.name, size_kg: p.size_kg, image_url: p.image_url ?? null, minPrice: null, maxPrice: null, cheapestProviderProductId: null, lowestStock: null };
         }
         entries.sort((a, b) => a.price - b.price);
         return {
           id: p.id,
           name: p.name,
           size_kg: p.size_kg,
+          image_url: p.image_url ?? null,
           minPrice: entries[0].price,
           maxPrice: entries[entries.length - 1].price,
           cheapestProviderProductId: entries[0].id,
+          lowestStock: entries[0].stock,
         };
       })
     );
@@ -169,33 +180,53 @@ function ProductCard({
   quantity: number;
   onAddToCart: () => void;
 }) {
-  const hasPrice = product.minPrice !== null;
+  const inStock = product.minPrice !== null;
   const samePrice = product.minPrice === product.maxPrice;
+  const showLowStock = inStock && product.lowestStock !== null && product.lowestStock <= 5;
 
   return (
     <View style={styles.card}>
-      <Text style={styles.sizeLabel}>{product.size_kg}kg</Text>
-      <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
+      {/* Image */}
+      <View style={styles.imageWrap}>
+        {product.image_url ? (
+          <Image source={{ uri: product.image_url }} style={styles.image} resizeMode="cover" />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Feather name="package" size={28} color="#16A34A" />
+          </View>
+        )}
+        {!inStock && (
+          <View style={styles.outOfStockOverlay}>
+            <Text style={styles.outOfStockOverlayText}>Out of Stock</Text>
+          </View>
+        )}
+      </View>
 
-      {hasPrice ? (
-        <Text style={styles.price}>
-          {samePrice
-            ? `₱${product.minPrice!.toLocaleString()}`
-            : `₱${product.minPrice!.toLocaleString()} – ₱${product.maxPrice!.toLocaleString()}`}
-        </Text>
-      ) : (
-        <Text style={styles.unavailable}>Unavailable</Text>
-      )}
+      {/* Info */}
+      <View style={styles.cardBody}>
+        <View style={styles.sizeRow}>
+          <Text style={styles.sizeLabel}>{product.size_kg}kg</Text>
+          {inStock && (
+            <Text style={styles.price}>
+              {samePrice
+                ? `₱${product.minPrice!.toLocaleString()}`
+                : `₱${product.minPrice!.toLocaleString()} – ₱${product.maxPrice!.toLocaleString()}`}
+            </Text>
+          )}
+        </View>
 
-      <TouchableOpacity
-        style={[styles.addButton, !hasPrice && styles.addButtonDisabled]}
-        onPress={onAddToCart}
-        disabled={!hasPrice}
-      >
-        <Text style={styles.addButtonText}>
-          {quantity > 0 ? `In Cart (${quantity})` : 'Add to Cart'}
-        </Text>
-      </TouchableOpacity>
+        {showLowStock && (
+          <Text style={styles.lowStock}>Only {product.lowestStock} left!</Text>
+        )}
+
+        <TouchableOpacity
+          style={[styles.addButton, !inStock && styles.addButtonDisabled]}
+          onPress={onAddToCart}
+          disabled={!inStock}
+        >
+          <Text style={styles.addButtonText}>Add to Cart</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -249,22 +280,49 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
     backgroundColor: '#fff',
+    overflow: 'hidden',
   },
-  sizeLabel: { fontSize: 28, fontWeight: '800', color: '#111827', marginBottom: 2 },
-  productName: { fontSize: 13, color: '#6B7280', marginBottom: 8, minHeight: 34 },
-  price: { fontSize: 13, fontWeight: '600', color: PRIMARY, marginBottom: 10 },
-  unavailable: { fontSize: 13, fontWeight: '600', color: '#EF4444', marginBottom: 10 },
+  imageWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    position: 'relative',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outOfStockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outOfStockOverlayText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+  cardBody: { padding: 8, gap: 4 },
+  sizeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sizeLabel: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  price: { fontSize: 12, fontWeight: '600', color: PRIMARY },
+  outOfStock: { fontSize: 11, fontWeight: '600', color: '#EF4444' },
+  lowStock: { fontSize: 10, color: '#D97706', fontWeight: '600' },
   addButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 6,
+    height: 32,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
   },
   addButtonDisabled: { backgroundColor: '#E5E7EB' },
-  addButtonText: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  addButtonText: { fontSize: 12, fontWeight: '600', color: '#fff' },
 
   // Floating cart bar
   floatingBar: {
