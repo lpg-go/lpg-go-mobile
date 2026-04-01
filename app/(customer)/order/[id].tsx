@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -55,6 +56,9 @@ type Acceptance = {
   provider_id: string;
   accepted_at: string;
   provider_total: number;
+  avgRating: number | null;
+  reviewCount: number;
+  avgDeliveryMinutes: number | null;
   provider: {
     full_name: string;
     business_name: string | null;
@@ -101,8 +105,24 @@ export default function OrderTrackingScreen() {
   const [loading, setLoading] = useState(true);
   const [selectingProvider, setSelectingProvider] = useState<string | null>(null); // provider_id being confirmed
   const [cancelling, setCancelling] = useState(false);
+  const [sortBy, setSortBy] = useState<'price' | 'distance'>('price');
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [dots, setDots] = useState('');
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewDone, setReviewDone] = useState(false);
+  const [existingRating, setExistingRating] = useState<number | null>(null);
+  const [existingComment, setExistingComment] = useState<string | null>(null);
+
+  // Bug 1 — Reset review state when order id changes
+  useEffect(() => {
+    setReviewRating(0);
+    setReviewComment('');
+    setReviewDone(false);
+    setExistingRating(null);
+    setExistingComment(null);
+  }, [id]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [newMsgBanner, setNewMsgBanner] = useState<string | null>(null);
@@ -156,17 +176,6 @@ export default function OrderTrackingScreen() {
     };
   }, [order?.status]);
 
-  // Animated dots for "Waiting for providers..." text
-  useEffect(() => {
-    if (order?.status !== 'awaiting_dealer_selection') {
-      setDots('');
-      return;
-    }
-    const interval = setInterval(() => {
-      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
-    }, 500);
-    return () => clearInterval(interval);
-  }, [order?.status]);
 
   // Fetch current user id once on mount
   useEffect(() => {
@@ -203,6 +212,13 @@ export default function OrderTrackingScreen() {
       if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
   }, [currentUserId, id]);
+
+  // Check for existing review only once order is delivered
+  useEffect(() => {
+    if (order?.status === 'delivered') {
+      checkReview();
+    }
+  }, [order?.status]);
 
   // Re-fetch provider profile whenever selected_provider_id changes
   useEffect(() => {
@@ -265,8 +281,28 @@ export default function OrderTrackingScreen() {
   // ── Data fetching ────────────────────────────────────────────────────────
 
   async function fetchAll() {
-    await Promise.all([fetchOrder(), fetchItems(), fetchOrderAcceptances()]);
+    await Promise.all([fetchOrder(), fetchItems(), fetchOrderAcceptances(), checkReview()]);
     setLoading(false);
+  }
+
+  async function checkReview() {
+    const { data } = await supabase
+      .from('reviews')
+      .select('rating, comment')
+      .eq('order_id', id)
+      .maybeSingle();
+    if (data) {
+      setExistingRating(data.rating);
+      setExistingComment(data.comment ?? null);
+      setReviewRating(data.rating);
+      setReviewComment(data.comment ?? '');
+      setReviewDone(true);
+    } else {
+      // No review yet — ensure form is shown fresh
+      setReviewDone(false);
+      setExistingRating(null);
+      setExistingComment(null);
+    }
   }
 
   async function fetchOrder() {
@@ -315,6 +351,31 @@ export default function OrderTrackingScreen() {
       .in('provider_id', providerIds)
       .in('product_id', productIds);
 
+    // Fetch reviews for all providers to compute avg rating
+    const { data: reviewRows } = await supabase
+      .from('reviews')
+      .select('provider_id, rating')
+      .in('provider_id', providerIds);
+
+    // Fetch avg delivery time for all providers
+    const { data: providerStatsRows } = await supabase
+      .from('profiles')
+      .select('id, avg_delivery_minutes')
+      .in('id', providerIds);
+
+    const deliveryStats: Record<string, number | null> = {};
+    for (const p of providerStatsRows ?? []) {
+      deliveryStats[p.id] = p.avg_delivery_minutes != null ? Number(p.avg_delivery_minutes) : null;
+    }
+
+    // Build review stats: reviewStats[provider_id] = { sum, count }
+    const reviewStats: Record<string, { sum: number; count: number }> = {};
+    for (const r of reviewRows ?? []) {
+      if (!reviewStats[r.provider_id]) reviewStats[r.provider_id] = { sum: 0, count: 0 };
+      reviewStats[r.provider_id].sum += r.rating;
+      reviewStats[r.provider_id].count += 1;
+    }
+
     // Build price lookup: providerPrices[provider_id][product_id] = price
     const providerPrices: Record<string, Record<string, number>> = {};
     for (const pp of providerProductRows ?? []) {
@@ -328,12 +389,16 @@ export default function OrderTrackingScreen() {
         const price = providerPrices[row.provider_id]?.[item.product_id];
         if (price !== undefined) provider_total += price * item.quantity;
       }
+      const stats = reviewStats[row.provider_id];
       return {
         id: row.id,
         provider_id: row.provider_id,
         accepted_at: row.accepted_at,
         provider: row.provider as Acceptance['provider'],
         provider_total,
+        avgRating: stats ? stats.sum / stats.count : null,
+        reviewCount: stats?.count ?? 0,
+        avgDeliveryMinutes: deliveryStats[row.provider_id] ?? null,
       };
     });
 
@@ -421,7 +486,30 @@ export default function OrderTrackingScreen() {
     }
 
     setOrder((prev) => prev ? { ...prev, status: 'delivered' } : prev);
-    Alert.alert('Thank you!', 'Order completed. Enjoy your LPG!');
+  }
+
+  async function submitReview() {
+    if (reviewRating === 0) {
+      Alert.alert('Select a rating', 'Please tap a star to rate your delivery.');
+      return;
+    }
+    if (!order?.selected_provider_id || !currentUserId) return;
+    setSubmittingReview(true);
+
+    const { error } = await supabase.from('reviews').insert({
+      order_id: id,
+      customer_id: currentUserId,
+      provider_id: order.selected_provider_id,
+      rating: reviewRating,
+      comment: reviewComment.trim() || null,
+    });
+
+    setSubmittingReview(false);
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+    await checkReview();
   }
 
   function handleChat() {
@@ -540,8 +628,37 @@ export default function OrderTrackingScreen() {
         {showAcceptances && (
           <View style={styles.section}>
             <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>Providers Ready to Deliver</Text>
-              <Text style={styles.waitingText}>Waiting for providers{dots}</Text>
+              <Text style={styles.sectionTitle}>Providers</Text>
+              {acceptances.length > 0 && (
+                <View>
+                  <TouchableOpacity
+                    style={styles.sortDropdownBtn}
+                    onPress={() => setSortDropdownOpen((v) => !v)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.sortDropdownBtnText}>
+                      {sortBy === 'price' ? 'Price' : 'Distance'}
+                    </Text>
+                    <Feather name={sortDropdownOpen ? 'chevron-up' : 'chevron-down'} size={14} color={PRIMARY} />
+                  </TouchableOpacity>
+                  {sortDropdownOpen && (
+                    <View style={styles.sortDropdownMenu}>
+                      {(['price', 'distance'] as const).map((key) => (
+                        <TouchableOpacity
+                          key={key}
+                          style={[styles.sortDropdownItem, sortBy === key && styles.sortDropdownItemActive]}
+                          onPress={() => { setSortBy(key); setSortDropdownOpen(false); }}
+                        >
+                          <Text style={[styles.sortDropdownItemText, sortBy === key && styles.sortDropdownItemTextActive]}>
+                            {key === 'price' ? 'Price' : 'Distance'}
+                          </Text>
+                          {sortBy === key && <Feather name="check" size={13} color={PRIMARY} />}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
             {acceptances.length === 0 ? (
               <View style={styles.emptyProviders}>
@@ -549,14 +666,23 @@ export default function OrderTrackingScreen() {
                 <Text style={styles.emptyProvidersText}>Waiting for providers to accept...</Text>
               </View>
             ) : (
-              acceptances.map((acc) => (
-                <ProviderCard
-                  key={acc.id}
-                  acceptance={acc}
-                  selecting={selectingProvider === acc.provider_id}
-                  onSelect={() => handleSelectProvider(acc.provider_id)}
-                />
-              ))
+              [...acceptances]
+                .sort((a, b) => {
+                  if (sortBy === 'price') return a.provider_total - b.provider_total;
+                  // distance: sort by avgRating descending as proxy (no distance data available)
+                  if (a.avgRating == null && b.avgRating == null) return 0;
+                  if (a.avgRating == null) return 1;
+                  if (b.avgRating == null) return -1;
+                  return b.avgRating - a.avgRating;
+                })
+                .map((acc) => (
+                  <ProviderCard
+                    key={acc.id}
+                    acceptance={acc}
+                    selecting={selectingProvider === acc.provider_id}
+                    onSelect={() => handleSelectProvider(acc.provider_id)}
+                  />
+                ))
             )}
           </View>
         )}
@@ -610,6 +736,65 @@ export default function OrderTrackingScreen() {
             </View>
           </View>
         </View>
+
+        {/* Review card — shown after delivery */}
+        {order.status === 'delivered' && selectedProvider && (
+          <View style={styles.reviewCard}>
+            {reviewDone ? (
+              <View style={styles.reviewDoneWrap}>
+                <Feather name="check-circle" size={20} color={PRIMARY} />
+                <Text style={styles.reviewDoneTitle}>Thank you for your review!</Text>
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Feather key={s} name="star" size={16} color={s <= (existingRating ?? 0) ? '#FBBF24' : '#E5E7EB'} />
+                  ))}
+                </View>
+                {existingComment ? (
+                  <Text style={styles.reviewDoneComment}>"{existingComment}"</Text>
+                ) : null}
+              </View>
+            ) : (
+              <>
+                <Text style={styles.reviewTitle}>Rate your delivery</Text>
+                <View style={styles.reviewProviderRow}>
+                  <View style={styles.reviewAvatar}>
+                    <Feather name="user" size={14} color={PRIMARY} />
+                  </View>
+                  <Text style={styles.reviewProviderName}>{selectedProvider.full_name}</Text>
+                </View>
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <TouchableOpacity key={s} onPress={() => setReviewRating(s)} hitSlop={6}>
+                      <Feather name="star" size={26} color={s <= reviewRating ? '#FBBF24' : '#E5E7EB'} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.reviewInput}
+                  placeholder="Share your experience (optional)"
+                  placeholderTextColor="#9CA3AF"
+                  value={reviewComment}
+                  onChangeText={setReviewComment}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+                <TouchableOpacity
+                  style={[styles.reviewSubmitBtn, submittingReview && { opacity: 0.6 }]}
+                  onPress={submitReview}
+                  disabled={submittingReview}
+                >
+                  {submittingReview
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.reviewSubmitText}>Submit Review</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.reviewSkipBtn} onPress={() => setReviewDone(true)}>
+                  <Text style={styles.reviewSkipText}>Skip</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Cancel button */}
         {canCancel && (
@@ -665,15 +850,29 @@ function ProviderCard({
         <Feather name="user" size={20} color={PRIMARY} />
       </View>
       <View style={styles.providerInfo}>
-        <Text style={styles.providerName}>{provider?.full_name ?? '—'}</Text>
         {provider?.business_name && (
-          <Text style={styles.providerBusiness}>{provider.business_name}</Text>
+          <Text style={styles.providerName}>{provider.business_name}</Text>
         )}
-        {acceptance.provider_total > 0 && (
-          <Text style={styles.providerTotal}>
-            ₱{acceptance.provider_total.toLocaleString()}
-          </Text>
-        )}
+        <View style={styles.ratingRow}>
+          {acceptance.avgRating !== null ? (
+            <>
+              <Feather name="star" size={12} color="#FBBF24" />
+              <Text style={styles.ratingText}>
+                {acceptance.avgRating.toFixed(1)}
+                <Text style={styles.ratingCount}> ({acceptance.reviewCount})</Text>
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.ratingNew}>New provider</Text>
+          )}
+          {acceptance.avgDeliveryMinutes !== null && (
+            <>
+              <Text style={styles.ratingDot}>·</Text>
+              <Feather name="clock" size={12} color="#9CA3AF" />
+              <Text style={styles.ratingCount}>~{acceptance.avgDeliveryMinutes} mins</Text>
+            </>
+          )}
+        </View>
       </View>
       <TouchableOpacity
         style={[styles.selectBtn, selecting && styles.selectBtnDisabled]}
@@ -683,7 +882,9 @@ function ProviderCard({
         {selecting ? (
           <ActivityIndicator size="small" color="#fff" />
         ) : (
-          <Text style={styles.selectBtnText}>Select</Text>
+          <Text style={styles.selectBtnText}>
+            {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : 'Select'}
+          </Text>
         )}
       </TouchableOpacity>
     </View>
@@ -780,7 +981,7 @@ const styles = StyleSheet.create({
   reportBtnText: { fontSize: 13, color: '#9CA3AF' },
 
   // Section
-  section: { marginBottom: 16 },
+  section: { marginBottom: 16, zIndex: 1 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -788,7 +989,45 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
-  waitingText: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
+  sortDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: PRIMARY,
+    backgroundColor: '#F0FDF4',
+  },
+  sortDropdownBtnText: { fontSize: 12, fontWeight: '600', color: PRIMARY },
+  sortDropdownMenu: {
+    position: 'absolute',
+    top: 34,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 100,
+    minWidth: 130,
+    overflow: 'hidden',
+  },
+  sortDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  sortDropdownItemActive: { backgroundColor: '#F0FDF4' },
+  sortDropdownItemText: { fontSize: 13, fontWeight: '500', color: '#374151' },
+  sortDropdownItemTextActive: { color: PRIMARY, fontWeight: '600' },
 
 
   // Provider acceptances
@@ -835,6 +1074,11 @@ const styles = StyleSheet.create({
   providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
   providerBusiness: { fontSize: 12, color: '#6B7280', marginTop: 1 },
   providerTotal: { fontSize: 13, fontWeight: '700', color: PRIMARY, marginTop: 3 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3, flexWrap: 'wrap' },
+  ratingText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  ratingCount: { fontSize: 11, fontWeight: '400', color: '#9CA3AF' },
+  ratingNew: { fontSize: 12, color: '#9CA3AF' },
+  ratingDot: { fontSize: 12, color: '#D1D5DB' },
   // Message banner
   msgBanner: {
     flexDirection: 'row',
@@ -925,6 +1169,55 @@ const styles = StyleSheet.create({
   },
   cancelButtonDisabled: { opacity: 0.5 },
   cancelButtonText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+
+  // Review card
+  reviewCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 14,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  reviewTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  reviewProviderRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reviewAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewProviderName: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  starsRow: { flexDirection: 'row', gap: 6 },
+  reviewInput: {
+    width: '100%',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#111827',
+    minHeight: 56,
+  },
+  reviewSubmitBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 10,
+    paddingVertical: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  reviewSubmitText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  reviewSkipBtn: { paddingVertical: 2 },
+  reviewSkipText: { fontSize: 12, color: '#9CA3AF' },
+  reviewDoneWrap: { alignItems: 'center', gap: 6 },
+  reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  reviewDoneComment: { fontSize: 12, color: '#6B7280', textAlign: 'center', fontStyle: 'italic' },
 
   // Map modal
   modalScreen: { flex: 1, backgroundColor: '#000' },

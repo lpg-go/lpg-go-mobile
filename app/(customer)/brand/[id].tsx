@@ -112,18 +112,7 @@ export default function BrandProductsScreen() {
 
         <Text style={styles.headerTitle} numberOfLines={1}>{name}</Text>
 
-        <TouchableOpacity
-          style={styles.cartIconWrap}
-          onPress={() => router.push('/(customer)/cart')}
-          hitSlop={8}
-        >
-          <Feather name="shopping-cart" size={22} color={PRIMARY} />
-          {totalItems > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{totalItems > 99 ? '99+' : totalItems}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={{ width: 30 }} />
       </View>
 
       {/* Content */}

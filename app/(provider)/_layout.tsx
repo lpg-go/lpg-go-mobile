@@ -45,6 +45,14 @@ export default function ProviderLayout() {
         }}
       />
       <Tabs.Screen
+        name="topup"
+        options={{ href: null, tabBarStyle: { display: 'none' } }}
+      />
+      <Tabs.Screen
+        name="reviews"
+        options={{ href: null, tabBarStyle: { display: 'none' } }}
+      />
+      <Tabs.Screen
         name="active/[id]"
         options={{ href: null, tabBarStyle: { display: 'none' } }}
       />

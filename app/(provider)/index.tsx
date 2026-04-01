@@ -149,13 +149,28 @@ export default function ProviderIncomingOrdersScreen() {
     const uid = providerIdRef.current;
     if (!uid) return;
 
-    // Fetch pending / awaiting orders
-    const { data: orderRows } = await supabase
+    // Get orders this provider has withdrawn from
+    const { data: withdrawn } = await supabase
+      .from('order_acceptances')
+      .select('order_id')
+      .eq('provider_id', uid)
+      .not('withdrawn_at', 'is', null);
+
+    const withdrawnIds = (withdrawn ?? []).map((r) => r.order_id);
+
+    // Fetch pending / awaiting orders, excluding withdrawn ones
+    let query = supabase
       .from('orders')
       .select('id, status, delivery_address, total_amount, created_at')
       .in('status', ['pending', 'awaiting_dealer_selection'])
       .is('selected_provider_id', null)
       .order('created_at', { ascending: false });
+
+    if (withdrawnIds.length > 0) {
+      query = query.not('id', 'in', `(${withdrawnIds.join(',')})`);
+    }
+
+    const { data: orderRows } = await query;
 
     if (!orderRows || orderRows.length === 0) {
       setOrders([]);

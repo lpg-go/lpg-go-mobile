@@ -75,6 +75,7 @@ export default function ActiveDeliveryScreen() {
   const [marking, setMarking] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [customerReview, setCustomerReview] = useState<{ rating: number; comment: string | null; customerName: string | null } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [newMsgBanner, setNewMsgBanner] = useState<string | null>(null);
 
@@ -87,6 +88,11 @@ export default function ActiveDeliveryScreen() {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
+
+  // Reset review state whenever the order id changes
+  useEffect(() => {
+    setCustomerReview(null);
+  }, [id]);
 
   useEffect(() => {
     fetchAll();
@@ -138,6 +144,41 @@ export default function ActiveDeliveryScreen() {
 
     return () => { stopLocationTracking(); };
   }, [order?.status, currentUserId]);
+
+  // Fetch customer review when order is delivered + listen for new review in realtime
+  useEffect(() => {
+    if (order?.status !== 'delivered') return;
+
+    const orderId = id;
+
+    // Initial fetch for THIS specific order
+    supabase
+      .from('reviews')
+      .select('rating, comment, customer:profiles!customer_id(full_name)')
+      .eq('order_id', orderId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          const customer = data.customer as { full_name: string } | null;
+          setCustomerReview({ rating: data.rating, comment: data.comment, customerName: customer?.full_name ?? null });
+        }
+      });
+
+    // Realtime: update as soon as customer submits review for THIS order
+    const channel = supabase
+      .channel(`review-${orderId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'reviews', filter: `order_id=eq.${orderId}` },
+        (payload) => {
+          const r = payload.new as { rating: number; comment: string | null };
+          setCustomerReview({ rating: r.rating, comment: r.comment, customerName: null });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [order?.status, id]);
 
   // Set customer marker from stored GPS coords; fall back to geocoding if absent
   useEffect(() => {
@@ -256,7 +297,7 @@ export default function ActiveDeliveryScreen() {
     setMarking(true);
     const { error } = await supabase
       .from('orders')
-      .update({ status: 'awaiting_confirmation' })
+      .update({ status: 'awaiting_confirmation', delivery_completed_at: new Date().toISOString() })
       .eq('id', id);
     setMarking(false);
     if (error) Alert.alert('Error', error.message);
@@ -443,6 +484,32 @@ export default function ActiveDeliveryScreen() {
             </View>
           </View>
         </View>
+
+        {/* Customer review */}
+        {order.status === 'delivered' && (
+          <View style={styles.completedCard}>
+            {customerReview ? (
+              <>
+                <Feather name="check-circle" size={20} color={PRIMARY} />
+                <Text style={styles.reviewDoneTitle}>Customer Review</Text>
+                <View style={styles.reviewStarsRow}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Feather key={s} name="star" size={16} color={s <= customerReview.rating ? '#FBBF24' : '#E5E7EB'} />
+                  ))}
+                </View>
+                {customerReview.comment ? (
+                  <Text style={styles.reviewComment}>"{customerReview.comment}"</Text>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Feather name="star" size={20} color="#D1D5DB" />
+                <Text style={styles.reviewDoneTitle}>Customer Review</Text>
+                <Text style={styles.reviewPending}>Waiting for customer review...</Text>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Mark as delivered */}
         {order.status === 'in_transit' && (
@@ -673,6 +740,22 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+
+  // Customer review card
+  completedCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 14,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  reviewStarsRow: { flexDirection: 'row', gap: 6 },
+  reviewComment: { fontSize: 12, color: '#6B7280', textAlign: 'center' },
+  reviewPending: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
 
   // Map modal
   modalScreen: { flex: 1, backgroundColor: '#000' },

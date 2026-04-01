@@ -18,7 +18,7 @@ import supabase from '../../lib/supabase';
 
 type Transaction = {
   id: string;
-  type: 'top_up' | 'fee_deduction';
+  type: 'topup' | 'fee_deduction';
   amount: number;
   order_id: string | null;
   created_at: string;
@@ -34,6 +34,7 @@ export default function ProviderEarningsScreen() {
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
+  const [minBalance, setMinBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [completedOrders, setCompletedOrders] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -77,7 +78,16 @@ export default function ProviderEarningsScreen() {
       fetchBalance(uid),
       fetchTransactions(uid),
       fetchCompletedOrders(uid),
+      fetchMinBalance(),
     ]);
+  }
+
+  async function fetchMinBalance() {
+    const { data } = await supabase
+      .from('platform_settings')
+      .select('min_balance')
+      .single();
+    if (data) setMinBalance(Number(data.min_balance));
   }
 
   async function fetchBalance(uid: string) {
@@ -173,6 +183,18 @@ export default function ProviderEarningsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Low balance warning */}
+        {minBalance > 0 && balance < minBalance && (
+          <View style={styles.lowBalanceWarning}>
+            <Feather name="alert-triangle" size={16} color="#92400E" />
+            <Text style={styles.lowBalanceText}>
+              Your balance is below the minimum of{' '}
+              ₱{minBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}.
+              Top up to keep receiving orders.
+            </Text>
+          </View>
+        )}
+
         {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { flex: 1 }]}>
@@ -222,7 +244,7 @@ export default function ProviderEarningsScreen() {
 // ─── Transaction row ──────────────────────────────────────────────────────────
 
 function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
-  const isTopUp = tx.type === 'top_up';
+  const isTopUp = tx.type === 'topup';
   const date = new Date(tx.created_at).toLocaleString('en-PH', {
     month: 'short',
     day: 'numeric',
@@ -294,6 +316,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   topUpBtnText: { fontSize: 14, fontWeight: '700', color: PRIMARY },
+
+  // Low balance warning
+  lowBalanceWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: 14,
+    marginBottom: 16,
+  },
+  lowBalanceText: { flex: 1, fontSize: 13, color: '#92400E', lineHeight: 18 },
 
   // Stats row
   statsRow: {

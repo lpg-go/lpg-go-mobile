@@ -169,6 +169,27 @@ export default function CheckoutScreen() {
 
     setPlacing(true);
 
+    // Fetch admin_fee for each product and calculate total
+    const productIds = items.map((item) => item.product_id);
+    const { data: productFees, error: feesError } = await supabase
+      .from('products')
+      .select('id, admin_fee')
+      .in('id', productIds);
+
+    if (feesError) {
+      setPlacing(false);
+      setError(feesError.message);
+      return;
+    }
+
+    const feeMap = Object.fromEntries(
+      (productFees ?? []).map((p) => [p.id, Number(p.admin_fee ?? 0)])
+    );
+    const totalAdminFee = items.reduce(
+      (sum, item) => sum + (feeMap[item.product_id] ?? 0) * item.quantity,
+      0
+    );
+
     const expiryMinutes = settings?.order_expiry_minutes ?? 10;
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString();
 
@@ -182,7 +203,7 @@ export default function CheckoutScreen() {
         delivery_lat: lat,
         delivery_lng: lng,
         total_amount: totalAmount,
-        admin_fee: 0,
+        admin_fee: totalAdminFee,
         expires_at: expiresAt,
       })
       .select('id')
