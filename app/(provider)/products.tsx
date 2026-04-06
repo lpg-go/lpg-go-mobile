@@ -1,8 +1,10 @@
 import { Feather } from '@expo/vector-icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
@@ -25,6 +27,8 @@ type ProviderProduct = {
   product_name: string;
   size_kg: number;
   brand_name: string;
+  logo_url: string | null;
+  image_url: string | null;
   price: number;
   stock: number;
 };
@@ -36,8 +40,17 @@ type EditState = {
 
 type BrandGroup = {
   brand_name: string;
+  logo_url: string | null;
   products: ProviderProduct[];
 };
+
+const AVATAR_COLORS = ['#16A34A', '#2563EB', '#D97706', '#7C3AED', '#DC2626', '#0891B2'];
+function getBrandColor(name: string) {
+  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+}
+function getInitials(name: string) {
+  return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+}
 
 const H_PADDING = 20;
 
@@ -55,9 +68,34 @@ export default function ProviderProductsScreen() {
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
   const collapsedInitialized = useRef(false);
 
-  useEffect(() => {
-    fetchProducts().then(() => setLoading(false));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProducts().finally(() => setLoading(false));
+
+      // Realtime: re-fetch when any provider_products row changes for this provider
+      let channel: ReturnType<typeof supabase.channel> | null = null;
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (!user) return;
+        channel = supabase
+          .channel('provider_products_changes')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'provider_products',
+              filter: `provider_id=eq.${user.id}`,
+            },
+            () => fetchProducts()
+          )
+          .subscribe();
+      });
+
+      return () => {
+        if (channel) supabase.removeChannel(channel);
+      };
+    }, [])
+  );
 
   // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -76,7 +114,8 @@ export default function ProviderProductsScreen() {
         product:products (
           name,
           size_kg,
-          brand:brands ( name )
+          image_url,
+          brand:brands ( name, logo_url )
         )
       `)
       .eq('provider_id', user.id)
@@ -84,15 +123,19 @@ export default function ProviderProductsScreen() {
 
     if (error) { Alert.alert('Error', error.message); return; }
 
-    const rows: ProviderProduct[] = (data ?? []).map((row: any) => ({
-      id: row.id,
-      product_id: row.product_id,
-      product_name: row.product.name,
-      size_kg: row.product.size_kg,
-      brand_name: row.product.brand.name,
-      price: Number(row.price),
-      stock: row.stock,
-    }));
+    const rows: ProviderProduct[] = (data ?? [])
+      .filter((row: any) => row.product && row.product.brand)
+      .map((row: any) => ({
+        id: row.id,
+        product_id: row.product_id,
+        product_name: row.product.name,
+        size_kg: row.product.size_kg,
+        brand_name: row.product.brand.name,
+        logo_url: row.product.brand.logo_url ?? null,
+        image_url: row.product.image_url ?? null,
+        price: Number(row.price),
+        stock: row.stock,
+      }));
 
     setProducts(rows);
 
@@ -118,8 +161,7 @@ export default function ProviderProductsScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await fetchProducts();
-    setRefreshing(false);
+    await fetchProducts().finally(() => setRefreshing(false));
   }
 
   // ── Edit helpers ──────────────────────────────────────────────────────────
@@ -231,7 +273,7 @@ export default function ProviderProductsScreen() {
     if (group) {
       group.products.push(p);
     } else {
-      brandGroups.push({ brand_name: p.brand_name, products: [p] });
+      brandGroups.push({ brand_name: p.brand_name, logo_url: p.logo_url, products: [p] });
     }
   }
   brandGroups.sort((a, b) => a.brand_name.localeCompare(b.brand_name));
@@ -305,6 +347,14 @@ export default function ProviderProductsScreen() {
                       onPress={() => toggleBrand(group.brand_name)}
                       activeOpacity={0.7}
                     >
+                      {/* Brand logo */}
+                      {group.logo_url ? (
+                        <Image source={{ uri: group.logo_url }} style={styles.brandLogo} resizeMode="contain" />
+                      ) : (
+                        <View style={styles.brandLogoFallback}>
+                          <Text style={styles.brandLogoInitials}>{getInitials(group.brand_name)}</Text>
+                        </View>
+                      )}
                       <Text style={styles.brandHeader}>{group.brand_name}</Text>
                       <Feather
                         name={collapsed ? 'chevron-down' : 'chevron-up'}
@@ -324,6 +374,7 @@ export default function ProviderProductsScreen() {
                             onChangePrice={(val) => setField(product.id, 'price', val)}
                             onChangeStock={(val) => setField(product.id, 'stock', val)}
                           />
+
                         ))}
                       </View>
                     )}
@@ -374,6 +425,15 @@ function ProductRow({
 }) {
   return (
     <View style={[styles.productRow, !isLast && styles.productRowBorder]}>
+      {/* Thumbnail */}
+      <View style={styles.productThumb}>
+        {product.image_url ? (
+          <Image source={{ uri: product.image_url }} style={styles.productThumbImage} resizeMode="contain" />
+        ) : (
+          <Text style={styles.thumbSizeText}>{product.size_kg}kg</Text>
+        )}
+      </View>
+
       {/* Left: name + size */}
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={1}>{product.product_name}</Text>
@@ -457,11 +517,26 @@ const styles = StyleSheet.create({
   brandHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 8,
     paddingVertical: 2,
   },
+  brandLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+  },
+  brandLogoFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandLogoInitials: { fontSize: 14, fontWeight: '700', color: '#fff' },
   brandHeader: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '700',
     color: '#6B7280',
@@ -481,13 +556,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    gap: 10,
   },
   productRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  productInfo: { flex: 1, marginRight: 8 },
+  productThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  productThumbImage: { width: 40, height: 40 },
+  thumbSizeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  productInfo: { flex: 1 },
   productName: { fontSize: 13, fontWeight: '600', color: '#111827' },
   productSize: { fontSize: 12, color: '#9CA3AF', marginTop: 1 },
 

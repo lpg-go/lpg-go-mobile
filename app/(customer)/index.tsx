@@ -185,10 +185,10 @@ function BrandGridCard({
           <Image
             source={{ uri: brand.logo_url }}
             style={styles.logoImage}
-            resizeMode="contain"
+            resizeMode="cover"
           />
         ) : (
-          <View style={[styles.logoFallback, { backgroundColor: getBrandColor(brand.name) }]}>
+          <View style={styles.logoFallback}>
             <Text style={styles.logoInitials}>{getInitials(brand.name)}</Text>
           </View>
         )}
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
 
   // Grid card
   gridCard: {
-    height: 100,
+    height: 120,
     backgroundColor: '#fff',
     borderRadius: 12,
     borderWidth: 1,
@@ -267,15 +267,16 @@ const styles = StyleSheet.create({
 
   // Logo
   logoWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  logoImage: { width: 48, height: 48 },
+  logoImage: { width: 80, height: 80, borderRadius: 8 },
   logoFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoInitials: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  logoInitials: { fontSize: 22, fontWeight: '700', color: '#fff' },
 
   // Brand name
   gridBrandName: {
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
 
   // Skeleton
   skeletonCard: { backgroundColor: '#F9FAFB', borderColor: '#F3F4F6' },
-  skeletonLogo: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' },
+  skeletonLogo: { width: 80, height: 80, borderRadius: 8, backgroundColor: '#E5E7EB' },
   skeletonName: { width: '60%', height: 10, borderRadius: 5, backgroundColor: '#E5E7EB' },
 
   // Empty state

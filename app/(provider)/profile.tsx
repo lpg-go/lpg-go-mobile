@@ -1,9 +1,12 @@
 import { Feather } from '@expo/vector-icons';
+import { decode } from 'base64-arraybuffer';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +24,7 @@ type Profile = {
   id: string;
   full_name: string;
   phone: string;
+  avatar_url: string | null;
   provider_type: 'dealer' | 'rider';
   business_name: string | null;
   avg_delivery_minutes: number | null;
@@ -60,6 +64,7 @@ export default function ProviderProfileScreen() {
   const [editName, setEditName] = useState('');
   const [editBusiness, setEditBusiness] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avgRating, setAvgRating] = useState<number | null>(null);
   const [reviewCount, setReviewCount] = useState(0);
 
@@ -94,7 +99,7 @@ export default function ProviderProfileScreen() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, provider_type, business_name, avg_delivery_minutes, created_at')
+      .select('id, full_name, phone, avatar_url, provider_type, business_name, avg_delivery_minutes, created_at')
       .eq('id', user.id)
       .single();
 
@@ -105,7 +110,6 @@ export default function ProviderProfileScreen() {
     }
 
     await fetchReviewStats(user.id);
-
     setLoading(false);
   }
 
@@ -122,6 +126,50 @@ export default function ProviderProfileScreen() {
     } else {
       setAvgRating(null);
       setReviewCount(0);
+    }
+  }
+
+  async function handlePickAvatar() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your photo library.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets[0]?.base64) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    setUploadingAvatar(true);
+    try {
+      const path = `avatars/${user.id}/profile.jpg`;
+      const { error } = await supabase.storage
+        .from('images')
+        .upload(path, decode(result.assets[0].base64), {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
+      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
+
+      await supabase.from('profiles').update({ avatar_url: cacheBustedUrl }).eq('id', user.id);
+      setProfile((prev) => prev ? { ...prev, avatar_url: cacheBustedUrl } : prev);
+    } catch (err) {
+      Alert.alert('Upload failed', String(err));
+    } finally {
+      setUploadingAvatar(false);
     }
   }
 
@@ -200,11 +248,26 @@ export default function ProviderProfileScreen() {
       >
         {/* Avatar */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>
-              {profile ? getInitials(profile.full_name) : '?'}
-            </Text>
-          </View>
+          <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
+            <View style={styles.avatarWrap}>
+              {uploadingAvatar ? (
+                <View style={[styles.avatar, { backgroundColor: PRIMARY }]}>
+                  <ActivityIndicator size="large" color="#fff" />
+                </View>
+              ) : profile?.avatar_url ? (
+                <Image key={profile.avatar_url} source={{ uri: profile.avatar_url }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: PRIMARY }]}>
+                  <Text style={styles.avatarInitials}>
+                    {profile ? getInitials(profile.full_name) : '?'}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.cameraOverlay}>
+                <Feather name="camera" size={12} color="#fff" />
+              </View>
+            </View>
+          </TouchableOpacity>
           <Text style={styles.avatarName}>{profile?.full_name}</Text>
           <Text style={styles.avatarSub}>{isDealer ? 'Dealer' : 'Rider'}</Text>
         </View>
@@ -304,7 +367,6 @@ export default function ProviderProfileScreen() {
           )}
         </View>
 
-
         {/* Sign out */}
         <TouchableOpacity style={styles.signOutBtn} onPress={confirmSignOut} activeOpacity={0.8}>
           <Feather name="log-out" size={18} color="#EF4444" />
@@ -351,14 +413,13 @@ const styles = StyleSheet.create({
 
   // Avatar section
   avatarSection: { alignItems: 'center', marginBottom: 28 },
+  avatarWrap: { position: 'relative', marginBottom: 12 },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: PRIMARY,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
@@ -366,6 +427,19 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   avatarInitials: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#F9FAFB',
+  },
   avatarName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 2 },
   avatarSub: { fontSize: 13, color: '#9CA3AF' },
 

@@ -1,8 +1,11 @@
 import { Feather } from '@expo/vector-icons';
+import { decode } from 'base64-arraybuffer';
+import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +23,7 @@ type Profile = {
   id: string;
   full_name: string;
   phone: string;
+  avatar_url: string | null;
   created_at: string;
 };
 
@@ -55,6 +59,7 @@ export default function CustomerProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -66,7 +71,7 @@ export default function CustomerProfileScreen() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, created_at')
+      .select('id, full_name, phone, avatar_url, created_at')
       .eq('id', user.id)
       .single();
 
@@ -75,6 +80,50 @@ export default function CustomerProfileScreen() {
       setEditName(data.full_name);
     }
     setLoading(false);
+  }
+
+  async function handlePickAvatar() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your photo library.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets[0]?.base64) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    setUploadingAvatar(true);
+    try {
+      const path = `avatars/${user.id}/profile.jpg`;
+      const { error } = await supabase.storage
+        .from('images')
+        .upload(path, decode(result.assets[0].base64), {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
+      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
+
+      await supabase.from('profiles').update({ avatar_url: cacheBustedUrl }).eq('id', user.id);
+      setProfile((prev) => prev ? { ...prev, avatar_url: cacheBustedUrl } : prev);
+    } catch (err) {
+      Alert.alert('Upload failed', String(err));
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   function startEditing() {
@@ -141,11 +190,26 @@ export default function CustomerProfileScreen() {
       >
         {/* Avatar */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>
-              {profile ? getInitials(profile.full_name) : '?'}
-            </Text>
-          </View>
+          <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
+            <View style={styles.avatarWrap}>
+              {uploadingAvatar ? (
+                <View style={[styles.avatar, styles.avatarLoading]}>
+                  <ActivityIndicator size="large" color="#fff" />
+                </View>
+              ) : profile?.avatar_url ? (
+                <Image key={profile.avatar_url} source={{ uri: profile.avatar_url }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: PRIMARY }]}>
+                  <Text style={styles.avatarInitials}>
+                    {profile ? getInitials(profile.full_name) : '?'}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.cameraOverlay}>
+                <Feather name="camera" size={12} color="#fff" />
+              </View>
+            </View>
+          </TouchableOpacity>
           <Text style={styles.avatarName}>{profile?.full_name}</Text>
           <Text style={styles.avatarSub}>Customer</Text>
         </View>
@@ -244,21 +308,34 @@ const styles = StyleSheet.create({
 
   // Avatar section
   avatarSection: { alignItems: 'center', marginBottom: 28 },
+  avatarWrap: { position: 'relative', marginBottom: 12 },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: PRIMARY,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 4,
   },
+  avatarLoading: { backgroundColor: PRIMARY },
   avatarInitials: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#F9FAFB',
+  },
   avatarName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 2 },
   avatarSub: { fontSize: 13, color: '#9CA3AF' },
 

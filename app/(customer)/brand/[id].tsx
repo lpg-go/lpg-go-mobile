@@ -4,8 +4,8 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
+  FlatList,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -27,9 +27,11 @@ type Product = {
   lowestStock: number | null;
 };
 
-const COLUMN_GAP = 12;
-const H_PADDING = 20;
-const CARD_WIDTH = (Dimensions.get('window').width - H_PADDING * 2 - COLUMN_GAP) / 2;
+const PRIMARY = '#16A34A';
+const COLS = 3;
+const H_PADDING = 16;
+const GRID_GAP = 8;
+const CARD_WIDTH = (Dimensions.get('window').width - H_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS;
 
 export default function BrandProductsScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
@@ -39,7 +41,6 @@ export default function BrandProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Refetch whenever the screen comes into focus (e.g. returning from cart)
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
@@ -120,9 +121,7 @@ export default function BrandProductsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
           <Feather name="chevron-left" size={26} color="#111827" />
         </TouchableOpacity>
-
         <Text style={styles.headerTitle} numberOfLines={1}>{name}</Text>
-
         <View style={{ width: 30 }} />
       </View>
 
@@ -137,20 +136,22 @@ export default function BrandProductsScreen() {
           <Text style={styles.emptyText}>No products available</Text>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.grid}
+        <FlatList
+          data={products}
+          keyExtractor={(item) => item.id}
+          numColumns={COLS}
+          contentContainerStyle={styles.listContent}
+          columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
-        >
-          {products.map((product) => (
+          ListFooterComponent={totalItems > 0 ? <View style={{ height: 80 }} /> : null}
+          renderItem={({ item: product }) => (
             <ProductCard
-              key={product.id}
               product={product}
               quantity={cartQuantityFor(product.id)}
               onAddToCart={() => handleAddToCart(product)}
             />
-          ))}
-          {totalItems > 0 && <View style={{ height: 80, width: '100%' }} />}
-        </ScrollView>
+          )}
+        />
       )}
 
       {/* Floating View Cart button */}
@@ -192,31 +193,32 @@ function ProductCard({
           <Image source={{ uri: product.image_url }} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Feather name="package" size={28} color="#16A34A" />
+            <Text style={styles.placeholderSizeText}>{product.size_kg}kg</Text>
           </View>
         )}
         {!inStock && (
           <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockOverlayText}>Out of Stock</Text>
+            <Text style={styles.outOfStockOverlayText}>Out of{'\n'}Stock</Text>
           </View>
         )}
       </View>
 
       {/* Info */}
       <View style={styles.cardBody}>
-        <View style={styles.sizeRow}>
-          <Text style={styles.sizeLabel}>{product.size_kg}kg</Text>
-          {inStock && (
-            <Text style={styles.price}>
-              {samePrice
-                ? `₱${product.minPrice!.toLocaleString()}`
-                : `₱${product.minPrice!.toLocaleString()} – ₱${product.maxPrice!.toLocaleString()}`}
-            </Text>
-          )}
-        </View>
+        <Text style={styles.sizeLabel}>{product.size_kg}kg</Text>
+
+        {inStock ? (
+          <Text style={styles.price} numberOfLines={1}>
+            {samePrice
+              ? `₱${product.minPrice!.toLocaleString()}`
+              : `₱${product.minPrice!.toLocaleString()}-₱${product.maxPrice!.toLocaleString()}`}
+          </Text>
+        ) : (
+          <Text style={styles.outOfStockText}>Unavailable</Text>
+        )}
 
         {showLowStock && (
-          <Text style={styles.lowStock}>Only {product.lowestStock} left!</Text>
+          <Text style={styles.lowStock}>{product.lowestStock} left!</Text>
         )}
 
         <TouchableOpacity
@@ -224,14 +226,12 @@ function ProductCard({
           onPress={onAddToCart}
           disabled={!inStock}
         >
-          <Text style={styles.addButtonText}>Add to Cart</Text>
+          <Text style={styles.addButtonText}>Add</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
-
-const PRIMARY = '#16A34A';
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
@@ -240,40 +240,21 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: H_PADDING,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
   backButton: { marginRight: 8 },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111827' },
-  cartIconWrap: { position: 'relative', padding: 4 },
-  badge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   // States
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyText: { fontSize: 15, color: '#9CA3AF' },
 
-  // Grid
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: H_PADDING,
-    paddingTop: 16,
-    gap: COLUMN_GAP,
-  },
+  // List
+  listContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 16 },
+  row: { gap: GRID_GAP, marginBottom: GRID_GAP },
 
   // Product card
   card: {
@@ -283,46 +264,51 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#fff',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
   imageWrap: {
     width: '100%',
     aspectRatio: 1,
     position: 'relative',
   },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
+  image: { width: '100%', height: '100%' },
   imagePlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  placeholderSizeText: { fontSize: 18, fontWeight: '800', color: '#fff' },
   outOfStockOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  outOfStockOverlayText: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  cardBody: { padding: 8, gap: 4 },
-  sizeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sizeLabel: { fontSize: 16, fontWeight: '800', color: '#111827' },
-  price: { fontSize: 12, fontWeight: '600', color: PRIMARY },
-  outOfStock: { fontSize: 11, fontWeight: '600', color: '#EF4444' },
-  lowStock: { fontSize: 10, color: '#D97706', fontWeight: '600' },
+  outOfStockOverlayText: { fontSize: 10, fontWeight: '700', color: '#fff', textAlign: 'center' },
+
+  // Card body
+  cardBody: { padding: 6, gap: 2, alignItems: 'center' },
+  sizeLabel: { fontSize: 15, fontWeight: '800', color: '#111827', textAlign: 'center' },
+  price: { fontSize: 10, fontWeight: '600', color: PRIMARY, textAlign: 'center' },
+  outOfStockText: { fontSize: 10, fontWeight: '600', color: '#9CA3AF' },
+  lowStock: { fontSize: 9, color: '#D97706', fontWeight: '600' },
   addButton: {
     backgroundColor: PRIMARY,
     borderRadius: 6,
-    height: 32,
+    height: 26,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   addButtonDisabled: { backgroundColor: '#E5E7EB' },
-  addButtonText: { fontSize: 12, fontWeight: '600', color: '#fff' },
+  addButtonText: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
   // Floating cart bar
   floatingBar: {
@@ -330,7 +316,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: H_PADDING,
+    paddingHorizontal: 20,
     paddingTop: 12,
     backgroundColor: '#fff',
     borderTopWidth: 1,
