@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import supabase from '../../lib/supabase';
 
@@ -82,10 +83,11 @@ export default function CompleteProfileScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-white"
-    >
+    <SafeAreaView className="flex-1 bg-white">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+      >
       <ScrollView
         contentContainerClassName="flex-grow justify-center px-6 py-10"
         keyboardShouldPersistTaps="handled"
@@ -173,8 +175,17 @@ export default function CompleteProfileScreen() {
             <Text className="text-base font-semibold text-white">Continue</Text>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          className="mt-3 items-center py-3"
+          onPress={() => supabase.auth.signOut()}
+          disabled={loading}
+        >
+          <Text className="text-sm text-gray-400">Sign out</Text>
+        </TouchableOpacity>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

@@ -15,12 +15,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import supabase from '../../lib/supabase';
+import { useAppLogo } from '../../lib/useAppLogo';
 
 type Brand = {
   id: string;
   name: string;
   logo_url: string | null;
   productCount: number;
+  hasActiveProviders: boolean;
 };
 
 const PRIMARY = '#16A34A';
@@ -46,6 +48,7 @@ function getInitials(name: string): string {
 export default function CustomerHomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { logoUrl } = useAppLogo();
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState('');
@@ -82,12 +85,28 @@ export default function CustomerHomeScreen() {
       countByBrand[p.brand_id] = (countByBrand[p.brand_id] ?? 0) + 1;
     }
 
+    const productIds = (productRows ?? []).map((p) => p.id);
+    const { data: activeProviderRows } = await supabase
+      .from('provider_products')
+      .select('product_id, provider:profiles!provider_products_provider_id_fkey(is_online, is_approved)')
+      .in('product_id', productIds.length > 0 ? productIds : [''])
+      .gt('stock', 0);
+
+    const activeBrandIds = new Set<string>();
+    for (const pp of activeProviderRows ?? []) {
+      if (pp.provider?.is_online === true && pp.provider?.is_approved === true) {
+        const product = (productRows ?? []).find((p) => p.id === pp.product_id);
+        if (product) activeBrandIds.add(product.brand_id);
+      }
+    }
+
     setBrands(
       brandRows.map((b) => ({
         id: b.id,
         name: b.name,
         logo_url: b.logo_url ?? null,
         productCount: countByBrand[b.id] ?? 0,
+        hasActiveProviders: activeBrandIds.has(b.id),
       }))
     );
   }
@@ -118,6 +137,21 @@ export default function CustomerHomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Header logo */}
+        {logoUrl ? (
+          <Image
+            source={{ uri: logoUrl }}
+            style={styles.headerLogoDynamic}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        )}
+
         {/* Search */}
         <View style={styles.searchRow}>
           <Feather name="search" size={16} color="#9CA3AF" style={styles.searchIcon} />
@@ -154,6 +188,7 @@ export default function CustomerHomeScreen() {
                     params: { id: brand.id, name: brand.name },
                   })
                 }
+                hasActiveProviders={brand.hasActiveProviders}
               />
             ))}
           </View>
@@ -169,10 +204,12 @@ function BrandGridCard({
   brand,
   cardWidth,
   onPress,
+  hasActiveProviders,
 }: {
   brand: Brand;
   cardWidth: number;
   onPress: () => void;
+  hasActiveProviders: boolean;
 }) {
   return (
     <TouchableOpacity
@@ -192,8 +229,15 @@ function BrandGridCard({
             <Text style={styles.logoInitials}>{getInitials(brand.name)}</Text>
           </View>
         )}
+        {!hasActiveProviders && (
+          <View style={styles.unavailableOverlay}>
+            <Text style={styles.unavailableOverlayText}>Unavailable</Text>
+          </View>
+        )}
       </View>
-      <Text style={styles.gridBrandName} numberOfLines={2}>{brand.name}</Text>
+      <Text style={[styles.gridBrandName, !hasActiveProviders && styles.gridBrandNameUnavailable]} numberOfLines={2}>
+        {brand.name}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -219,6 +263,22 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingBottom: 32 },
+
+  // Header logo
+  headerLogo: {
+    width: 120,
+    height: 48,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  headerLogoDynamic: {
+    width: 200,
+    height: 80,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
 
   // Search
   searchRow: {
@@ -286,6 +346,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 15,
   },
+  gridBrandNameUnavailable: { color: '#9CA3AF' },
+
+  // Unavailable overlay
+  unavailableOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unavailableOverlayText: { fontSize: 9, fontWeight: '700', color: '#fff', textAlign: 'center' },
 
   // Skeleton
   skeletonCard: { backgroundColor: '#F9FAFB', borderColor: '#F3F4F6' },

@@ -38,7 +38,7 @@ export default function RootLayout() {
   async function redirectByRole(userId: string) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, is_approved, document_url, provider_type')
       .eq('id', userId)
       .single();
 
@@ -47,16 +47,27 @@ export default function RootLayout() {
       return;
     }
 
-    if (profile.role === 'customer') router.replace('/(customer)');
-    else if (profile.role === 'provider') router.replace('/(provider)');
-    else if (profile.role === 'admin') router.replace('/(admin)');
-    else router.replace('/(auth)/complete-profile');
+    if (profile.role === 'customer') {
+      router.replace('/(customer)');
+    } else if (profile.role === 'provider') {
+      if (!profile.document_url) {
+        router.replace('/(auth)/upload-document');
+      } else if (!profile.is_approved) {
+        router.replace('/(auth)/pending-approval');
+      } else {
+        router.replace('/(provider)');
+      }
+    } else if (profile.role === 'admin') {
+      router.replace('/(admin)');
+    } else {
+      router.replace('/(auth)/complete-profile');
+    }
   }
 
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#F97316" />
+        <ActivityIndicator size="large" color="#16A34A" />
       </View>
     );
   }

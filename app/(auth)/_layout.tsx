@@ -7,6 +7,8 @@ export default function AuthLayout() {
       <Stack.Screen name="register" />
       <Stack.Screen name="verify" />
       <Stack.Screen name="complete-profile" />
+      <Stack.Screen name="upload-document" />
+      <Stack.Screen name="pending-approval" />
     </Stack>
   );
 }

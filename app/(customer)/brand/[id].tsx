@@ -67,12 +67,16 @@ export default function BrandProductsScreen() {
     // supabase_realtime publication. Until then, useFocusEffect handles refresh on focus.
     const { data: priceRows } = await supabase
       .from('provider_products')
-      .select('id, product_id, price, stock')
+      .select('id, product_id, price, stock, provider:profiles!provider_products_provider_id_fkey(is_online, is_approved)')
       .in('product_id', productIds)
       .gt('stock', 0);
 
+    const activeRows = (priceRows ?? []).filter(
+      (row) => row.provider?.is_online === true && row.provider?.is_approved === true
+    );
+
     const entriesByProduct: Record<string, { id: string; price: number; stock: number }[]> = {};
-    for (const row of priceRows ?? []) {
+    for (const row of activeRows) {
       if (!entriesByProduct[row.product_id]) entriesByProduct[row.product_id] = [];
       entriesByProduct[row.product_id].push({ id: row.id, price: Number(row.price), stock: Number(row.stock) });
     }
@@ -296,7 +300,7 @@ const styles = StyleSheet.create({
   cardBody: { padding: 6, gap: 2, alignItems: 'center' },
   sizeLabel: { fontSize: 15, fontWeight: '800', color: '#111827', textAlign: 'center' },
   price: { fontSize: 10, fontWeight: '600', color: PRIMARY, textAlign: 'center' },
-  outOfStockText: { fontSize: 10, fontWeight: '600', color: '#9CA3AF' },
+  outOfStockText: { fontSize: 10, fontWeight: '600', color: '#EF4444' },
   lowStock: { fontSize: 9, color: '#D97706', fontWeight: '600' },
   addButton: {
     backgroundColor: PRIMARY,

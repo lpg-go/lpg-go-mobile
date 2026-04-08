@@ -12,11 +12,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { formatPhone, formatPhoneAsEmail } from '../../lib/auth';
 import supabase from '../../lib/supabase';
+import { useAppLogo } from '../../lib/useAppLogo';
 
 export default function LoginScreen() {
+  const { logoUrl } = useAppLogo();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -51,19 +54,28 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <SafeAreaView style={styles.flex}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <Image
-          source={require('../../assets/images/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        {logoUrl ? (
+          <Image
+            source={{ uri: logoUrl }}
+            style={styles.logoDynamic}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        )}
 
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.subtitle}>Sign in to your LPG Go account.</Text>
@@ -121,7 +133,8 @@ export default function LoginScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -138,6 +151,12 @@ const styles = StyleSheet.create({
   logo: {
     width: 120,
     height: 120,
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  logoDynamic: {
+    width: 200,
+    height: 80,
     alignSelf: 'center',
     marginBottom: 24,
   },
