@@ -250,6 +250,17 @@ export default function CheckoutScreen() {
       return;
     }
 
+    // Transition to awaiting_dealer_selection now that items are committed
+    const { error: statusError } = await supabase
+      .from('orders')
+      .update({ status: 'awaiting_dealer_selection' })
+      .eq('id', order.id);
+
+    if (statusError) {
+      console.log('[checkout] failed to set awaiting_dealer_selection:', statusError.message);
+      // Non-fatal — order is placed, status will be corrected by the provider flow
+    }
+
     clearCart();
     setPlacing(false);
     router.replace({ pathname: '/(customer)/order/[id]', params: { id: order.id } });

@@ -14,7 +14,7 @@
 - lib/supabase.ts — Supabase client
 - lib/auth.ts — phone-as-email helper
 - lib/cartStore.ts — global cart context
-- components/ — shared components
+- components/ — shared components 
 - supabase/migrations/ — all SQL migrations
 
 ## Test accounts
