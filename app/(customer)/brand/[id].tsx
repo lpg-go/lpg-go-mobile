@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -24,7 +24,7 @@ type Product = {
   minPrice: number | null;
   maxPrice: number | null;
   cheapestProviderProductId: string | null;
-  lowestStock: number | null;
+  totalStock: number;
 };
 
 const PRIMARY = '#16A34A';
@@ -40,6 +40,12 @@ export default function BrandProductsScreen() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Clear stale data immediately when brand changes
+  useEffect(() => {
+    setProducts([]);
+    setLoading(true);
+  }, [id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,9 +91,10 @@ export default function BrandProductsScreen() {
       productRows.map((p) => {
         const entries = entriesByProduct[p.id];
         if (!entries || entries.length === 0) {
-          return { id: p.id, name: p.name, size_kg: p.size_kg, image_url: p.image_url ?? null, minPrice: null, maxPrice: null, cheapestProviderProductId: null, lowestStock: null };
+          return { id: p.id, name: p.name, size_kg: p.size_kg, image_url: p.image_url ?? null, minPrice: null, maxPrice: null, cheapestProviderProductId: null, totalStock: 0 };
         }
         entries.sort((a, b) => a.price - b.price);
+        const totalStock = entries.reduce((sum, e) => sum + e.stock, 0);
         return {
           id: p.id,
           name: p.name,
@@ -96,7 +103,7 @@ export default function BrandProductsScreen() {
           minPrice: entries[0].price,
           maxPrice: entries[entries.length - 1].price,
           cheapestProviderProductId: entries[0].id,
-          lowestStock: entries[0].stock,
+          totalStock,
         };
       })
     );
@@ -187,7 +194,6 @@ function ProductCard({
 }) {
   const inStock = product.minPrice !== null;
   const samePrice = product.minPrice === product.maxPrice;
-  const showLowStock = inStock && product.lowestStock !== null && product.lowestStock <= 5;
 
   return (
     <View style={styles.card}>
@@ -219,10 +225,6 @@ function ProductCard({
           </Text>
         ) : (
           <Text style={styles.outOfStockText}>Unavailable</Text>
-        )}
-
-        {showLowStock && (
-          <Text style={styles.lowStock}>{product.lowestStock} left!</Text>
         )}
 
         <TouchableOpacity
@@ -301,7 +303,6 @@ const styles = StyleSheet.create({
   sizeLabel: { fontSize: 15, fontWeight: '800', color: '#111827', textAlign: 'center' },
   price: { fontSize: 10, fontWeight: '600', color: PRIMARY, textAlign: 'center' },
   outOfStockText: { fontSize: 10, fontWeight: '600', color: '#EF4444' },
-  lowStock: { fontSize: 9, color: '#D97706', fontWeight: '600' },
   addButton: {
     backgroundColor: PRIMARY,
     borderRadius: 6,

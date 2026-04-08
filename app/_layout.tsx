@@ -53,7 +53,7 @@ export default function RootLayout() {
       if (!profile.document_url) {
         router.replace('/(auth)/upload-document');
       } else if (!profile.is_approved) {
-        router.replace('/(auth)/pending-approval');
+        router.replace('/(auth)/upload-document');
       } else {
         router.replace('/(provider)');
       }

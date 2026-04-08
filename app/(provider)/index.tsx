@@ -60,6 +60,7 @@ export default function ProviderIncomingOrdersScreen() {
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [orders, setOrders] = useState<IncomingOrder[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [stockedProductIds, setStockedProductIds] = useState<string[]>([]);
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,6 +68,7 @@ export default function ProviderIncomingOrdersScreen() {
   const [accepting, setAccepting] = useState<string | null>(null);
 
   const providerIdRef = useRef<string | null>(null);
+  const stockedProductIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     boot();
@@ -135,6 +137,17 @@ export default function ProviderIncomingOrdersScreen() {
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
+  async function fetchStockedProducts(uid: string) {
+    const { data } = await supabase
+      .from('provider_products')
+      .select('product_id')
+      .eq('provider_id', uid)
+      .gt('stock', 0);
+    const ids = (data ?? []).map((r) => r.product_id);
+    stockedProductIdsRef.current = ids;
+    setStockedProductIds(ids);
+  }
+
   async function fetchProfile(uid: string) {
     const { data } = await supabase
       .from('profiles')
@@ -159,7 +172,28 @@ export default function ProviderIncomingOrdersScreen() {
     const uid = providerIdRef.current;
     if (!uid) return;
 
-    // Get orders this provider has withdrawn from
+    // 1. Get stocked product IDs
+    const { data: myStockedProducts } = await supabase
+      .from('provider_products')
+      .select('product_id')
+      .eq('provider_id', uid)
+      .gt('stock', 0);
+
+    const myStockedProductIds = myStockedProducts?.map((p) => p.product_id) || [];
+
+    console.log('My stocked products:', myStockedProductIds);
+
+    if (myStockedProductIds.length === 0) {
+      stockedProductIdsRef.current = [];
+      setStockedProductIds([]);
+      setOrders([]);
+      return;
+    }
+
+    stockedProductIdsRef.current = myStockedProductIds;
+    setStockedProductIds(myStockedProductIds);
+
+    // 2. Get orders this provider has withdrawn from
     const { data: withdrawn } = await supabase
       .from('order_acceptances')
       .select('order_id')
@@ -168,10 +202,10 @@ export default function ProviderIncomingOrdersScreen() {
 
     const withdrawnIds = (withdrawn ?? []).map((r) => r.order_id);
 
-    // Fetch pending / awaiting orders, excluding withdrawn ones
+    // 3. Fetch pending / awaiting orders with their items
     let query = supabase
       .from('orders')
-      .select('id, status, delivery_address, total_amount, created_at')
+      .select('id, status, delivery_address, total_amount, created_at, order_items(product_id)')
       .in('status', ['pending', 'awaiting_dealer_selection'])
       .is('selected_provider_id', null)
       .order('created_at', { ascending: false });
@@ -182,20 +216,31 @@ export default function ProviderIncomingOrdersScreen() {
 
     const { data: orderRows } = await query;
 
-    if (!orderRows || orderRows.length === 0) {
+    console.log('All orders:', orderRows?.length);
+
+    // 4. Filter client-side to orders the provider can fulfill
+    const filteredOrders = orderRows?.filter((order) =>
+      (order.order_items as { product_id: string }[])?.some((item) =>
+        myStockedProductIds.includes(item.product_id)
+      )
+    ) || [];
+
+    console.log('Filtered orders:', filteredOrders.length);
+
+    if (filteredOrders.length === 0) {
       setOrders([]);
       return;
     }
 
-    const orderIds = orderRows.map((o) => o.id);
+    const orderIds = filteredOrders.map((o) => o.id);
 
-    // Item summaries
+    // 5. Fetch item summaries for filtered orders
     const { data: itemRows } = await supabase
       .from('order_items')
       .select('order_id, quantity, product:products(name)')
       .in('order_id', orderIds);
 
-    // Provider's acceptances
+    // 6. Fetch provider's acceptances
     const { data: acceptanceRows } = await supabase
       .from('order_acceptances')
       .select('order_id')
@@ -205,7 +250,6 @@ export default function ProviderIncomingOrdersScreen() {
 
     const acceptedSet = new Set((acceptanceRows ?? []).map((a) => a.order_id));
 
-    // Build item summary per order
     const summaryByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
       const name = (row.product as { name: string } | null)?.name ?? 'LPG Gas';
@@ -216,7 +260,7 @@ export default function ProviderIncomingOrdersScreen() {
     }
 
     setOrders(
-      orderRows.map((o) => ({
+      filteredOrders.map((o) => ({
         id: o.id,
         status: o.status as IncomingOrder['status'],
         delivery_address: o.delivery_address,
@@ -333,6 +377,27 @@ export default function ProviderIncomingOrdersScreen() {
 
     setAccepting(orderId);
 
+    // Verify provider still has stock for at least one item in this order
+    const { data: orderItems } = await supabase
+      .from('order_items')
+      .select('product_id')
+      .eq('order_id', orderId);
+
+    const orderProductIds = (orderItems ?? []).map((i) => i.product_id);
+
+    const { data: freshStock } = await supabase
+      .from('provider_products')
+      .select('product_id')
+      .eq('provider_id', providerId)
+      .in('product_id', orderProductIds.length > 0 ? orderProductIds : [''])
+      .gt('stock', 0);
+
+    if (!freshStock || freshStock.length === 0) {
+      setAccepting(null);
+      Alert.alert('Out of Stock', 'You no longer have stock for this product.');
+      return;
+    }
+
     const { error } = await supabase
       .from('order_acceptances')
       .insert({ order_id: orderId, provider_id: providerId });
@@ -359,13 +424,14 @@ export default function ProviderIncomingOrdersScreen() {
   }
 
   async function handleRefresh() {
-    if (!providerIdRef.current) return;
+    const uid = providerIdRef.current;
+    if (!uid) return;
     setRefreshing(true);
     await Promise.all([
       fetchOrders(),
       fetchActiveOrders(),
       fetchRecentOrders(),
-      fetchProfile(providerIdRef.current),
+      fetchProfile(uid),
     ]);
     setRefreshing(false);
   }
@@ -478,7 +544,14 @@ export default function ProviderIncomingOrdersScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>New Requests</Text>
 
-              {orders.length === 0 ? (
+              {stockedProductIds.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Feather name="package" size={40} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>
+                    Add stock to your products to start receiving orders.
+                  </Text>
+                </View>
+              ) : orders.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Feather name="inbox" size={40} color="#D1D5DB" />
                   <Text style={styles.emptyText}>

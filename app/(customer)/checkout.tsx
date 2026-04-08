@@ -1,7 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   ScrollView,
@@ -46,9 +47,14 @@ export default function CheckoutScreen() {
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
-    fetchSettings();
     autoGetLocation();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSettings();
+    }, [])
+  );
 
   async function fetchSettings() {
     const { data } = await supabase
@@ -58,9 +64,19 @@ export default function CheckoutScreen() {
 
     if (data) {
       setSettings(data);
-      // Pre-select first available method
-      if (data.allow_cash_payment) setPaymentMethod('cash');
-      else if (data.allow_card_payment) setPaymentMethod('card');
+      setPaymentMethod((current) => {
+        if (current === 'cash' && !data.allow_cash_payment) {
+          return data.allow_card_payment ? 'card' : null;
+        }
+        if (current === 'card' && !data.allow_card_payment) {
+          return data.allow_cash_payment ? 'cash' : null;
+        }
+        if (current === null) {
+          if (data.allow_cash_payment) return 'cash';
+          if (data.allow_card_payment) return 'card';
+        }
+        return current;
+      });
     }
   }
 
@@ -362,6 +378,8 @@ export default function CheckoutScreen() {
 
           {settings === null ? (
             <ActivityIndicator color={PRIMARY} style={{ marginTop: 8 }} />
+          ) : !settings.allow_cash_payment && !settings.allow_card_payment ? (
+            <Text style={styles.noPaymentWarning}>No payment methods available</Text>
           ) : (
             <View style={styles.paymentOptions}>
               {settings.allow_cash_payment && (
@@ -564,6 +582,12 @@ const styles = StyleSheet.create({
   totalValue: { fontSize: 16, fontWeight: '800', color: PRIMARY },
 
   // Payment
+  noPaymentWarning: {
+    fontSize: 14,
+    color: '#EF4444',
+    fontWeight: '500',
+    marginTop: 4,
+  },
   paymentOptions: { gap: 10 },
   paymentOption: {
     flexDirection: 'row',

@@ -41,6 +41,8 @@ type Order = {
   selected_provider_id: string | null;
   created_at: string;
   expires_at: string | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
 };
 
 type OrderItem = {
@@ -147,6 +149,12 @@ export default function OrderTrackingScreen() {
           console.log('[Realtime] orders change:', payload);
           if (payload.new) {
             setOrder((prev) => prev ? { ...prev, ...(payload.new as Partial<Order>) } : null);
+            if ((payload.new as Partial<Order>).status === 'cancelled') {
+              if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+              }
+            }
           }
           fetchOrderAcceptances();
         }
@@ -308,7 +316,7 @@ export default function OrderTrackingScreen() {
   async function fetchOrder() {
     const { data } = await supabase
       .from('orders')
-      .select('id, status, payment_method, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, selected_provider_id, created_at, expires_at')
+      .select('id, status, payment_method, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, selected_provider_id, created_at, expires_at, cancelled_by, cancel_reason')
       .eq('id', id)
       .single();
     if (data) setOrder(data as Order);
@@ -597,6 +605,23 @@ export default function OrderTrackingScreen() {
             <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
           </View>
         </View>
+
+        {/* System-expired order notice */}
+        {order.status === 'cancelled' && order.cancelled_by === 'system' && (
+          <View style={styles.expiredCard}>
+            <Feather name="clock" size={32} color="#DC2626" />
+            <Text style={styles.expiredTitle}>Order Expired</Text>
+            <Text style={styles.expiredSubtitle}>
+              Your order expired as no provider accepted it in time.
+            </Text>
+            <TouchableOpacity
+              style={styles.newOrderBtn}
+              onPress={() => router.replace('/(customer)/')}
+            >
+              <Text style={styles.newOrderBtnText}>Place New Order</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Confirm delivery — shown prominently when provider has marked as delivered */}
         {order.status === 'awaiting_confirmation' && (
@@ -943,6 +968,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   addressText: { fontSize: 13, color: '#6B7280', flex: 1, textAlign: 'center' },
+
+  // System-expired card
+  expiredCard: {
+    backgroundColor: '#FFF1F2',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 8,
+  },
+  expiredTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: 4,
+  },
+  expiredSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  newOrderBtn: {
+    marginTop: 8,
+    backgroundColor: PRIMARY,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+  },
+  newOrderBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
 
   // Confirm delivery card
   confirmCard: {
