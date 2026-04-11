@@ -286,14 +286,14 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   logo: {
-    width: 180,
-    height: 180,
+    width: 300,
+    height: 150,
     alignSelf: 'center',
     marginBottom: 20,
   },
   logoDynamic: {
-    width: 280,
-    height: 120,
+    width: 300,
+    height: 150,
     alignSelf: 'center',
     marginBottom: 20,
   },
