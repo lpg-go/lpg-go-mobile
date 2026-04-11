@@ -164,6 +164,13 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={styles.forgotRow}
+          onPress={() => router.push('/(auth)/forgot-password')}
+        >
+          <Text style={styles.forgotText}>Forgot Password?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.otpButton, loading && styles.buttonDisabled]}
           onPress={handleLoginWithOtp}
           disabled={loading}
@@ -287,6 +294,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   otpButtonText: { color: PRIMARY, fontSize: 15, fontWeight: '600' },
+  forgotRow: { alignItems: 'center', marginBottom: 20 },
+  forgotText: { fontSize: 14, color: PRIMARY, fontWeight: '500' },
   linkRow: { alignItems: 'center' },
   linkText: { fontSize: 14, color: '#6B7280' },
   linkBold: { color: PRIMARY, fontWeight: '600' },

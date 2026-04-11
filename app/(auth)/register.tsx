@@ -14,11 +14,13 @@ import {
 } from 'react-native';
 
 import { formatPhone } from '../../lib/auth';
+import { useAppLogo } from '../../lib/useAppLogo';
 
 type Role = 'customer' | 'provider';
 type ProviderType = 'dealer' | 'rider';
 
 export default function RegisterScreen() {
+  const { logoUrl } = useAppLogo();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -102,11 +104,19 @@ export default function RegisterScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <Image
-          source={require('../../assets/images/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        {logoUrl ? (
+          <Image
+            source={{ uri: logoUrl }}
+            style={styles.logoDynamic}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        )}
 
         <Text style={styles.title}>Create account</Text>
         <Text style={styles.subtitle}>Join LPG Go to get started.</Text>
@@ -278,6 +288,12 @@ const styles = StyleSheet.create({
   logo: {
     width: 100,
     height: 100,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  logoDynamic: {
+    width: 200,
+    height: 80,
     alignSelf: 'center',
     marginBottom: 20,
   },
