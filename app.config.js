@@ -15,7 +15,13 @@ export default {
       'expo-router',
       ['expo-location', {
         locationWhenInUsePermission: 'LPG Go needs your location to share it with the customer during delivery.'
-      }]
-    ]
-  }
+      }],
+      'expo-notifications',
+    ],
+    extra: {
+      eas: {
+        projectId: '561fa033-aa41-477a-9e42-88d23c44049b',
+      },
+    },
+  },
 };

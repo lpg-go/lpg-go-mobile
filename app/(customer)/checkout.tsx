@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
+import { sendOrderNotification } from '../../lib/notifications';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
@@ -261,6 +262,8 @@ export default function CheckoutScreen() {
       // Non-fatal — order is placed, status will be corrected by the provider flow
     }
 
+    console.log('[checkout] order placed, sending new_order notification for', order.id);
+    sendOrderNotification(order.id, 'new_order');
     clearCart();
     setPlacing(false);
     router.replace({ pathname: '/(customer)/order/[id]', params: { id: order.id } });

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -92,10 +93,15 @@ export default function ProviderIncomingOrdersScreen() {
         (payload) => {
           const isDelete = payload.eventType === 'DELETE';
           const isCancelled = payload.eventType === 'UPDATE' && (payload.new as any)?.status === 'cancelled';
+          const isAssigned = payload.eventType === 'UPDATE' && (payload.new as any)?.selected_provider_id !== null;
 
-          if (isDelete || isCancelled) {
+          if (isDelete || isCancelled || isAssigned) {
             const removedId = isDelete ? (payload.old as any).id : (payload.new as any).id;
             setOrders((prev) => prev.filter((o) => o.id !== removedId));
+            // If this provider was the one selected, refresh active orders immediately
+            if (isAssigned && (payload.new as any)?.selected_provider_id === providerIdRef.current) {
+              fetchActiveOrders();
+            }
             return;
           }
 
@@ -416,6 +422,15 @@ export default function ProviderIncomingOrdersScreen() {
       .eq('id', orderId)
       .eq('status', 'pending');
     // Don't throw if this fails — order may already be awaiting_dealer_selection
+
+    // Notify customer — check acceptance count to pick the right event
+    const { count } = await supabase
+      .from('order_acceptances')
+      .select('*', { count: 'exact', head: true })
+      .eq('order_id', orderId)
+      .is('withdrawn_at', null);
+
+    sendOrderNotification(orderId, (count ?? 0) > 1 ? 'multiple_dealers_accepted' : 'dealer_accepted');
 
     // Optimistically mark as accepted in local state
     setOrders((prev) =>

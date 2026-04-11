@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -57,6 +57,7 @@ export default function ProviderProductsScreen() {
   const insets = useSafeAreaInsets();
 
   const [products, setProducts] = useState<ProviderProduct[]>([]);
+  const [minStockLevel, setMinStockLevel] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
@@ -64,6 +65,12 @@ export default function ProviderProductsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      supabase
+        .from('platform_settings')
+        .select('min_stock_level')
+        .single()
+        .then(({ data }) => { if (data) setMinStockLevel(data.min_stock_level); });
+
       fetchProducts().finally(() => setLoading(false));
 
       let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -225,6 +232,7 @@ export default function ProviderProductsScreen() {
                         key={product.id}
                         product={product}
                         isLast={index === group.products.length - 1}
+                        minStockLevel={minStockLevel}
                         onPriceChange={(v) => handlePriceChange(product.id, v)}
                         onStockChange={(v) => handleStockChange(product.id, v)}
                       />
@@ -245,11 +253,13 @@ export default function ProviderProductsScreen() {
 function ProductRow({
   product,
   isLast,
+  minStockLevel,
   onPriceChange,
   onStockChange,
 }: {
   product: ProviderProduct;
   isLast: boolean;
+  minStockLevel: number;
   onPriceChange: (v: number) => void;
   onStockChange: (v: number) => void;
 }) {
@@ -257,6 +267,10 @@ function ProductRow({
   const [stockText, setStockText] = useState(String(product.stock));
   const [priceSave, setPriceSave] = useState<SaveState>('idle');
   const [stockSave, setStockSave] = useState<SaveState>('idle');
+
+  // Sync local text state when parent refreshes data from Realtime
+  useEffect(() => { setPriceText(String(product.price)); }, [product.price]);
+  useEffect(() => { setStockText(String(product.stock)); }, [product.stock]);
   const priceRef = useRef<TextInput>(null);
   const stockRef = useRef<TextInput>(null);
 
@@ -305,10 +319,7 @@ function ProductRow({
   }
 
   const stockNum = parseInt(stockText, 10);
-  const stockColor =
-    isNaN(stockNum) || stockNum === 0 ? '#EF4444' :
-    stockNum <= 10 ? '#D97706' :
-    PRIMARY;
+  const stockColor = isNaN(stockNum) || stockNum <= minStockLevel ? '#EF4444' : PRIMARY;
 
   return (
     <View style={[styles.productRow, !isLast && styles.productRowBorder]}>

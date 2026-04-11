@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LiveMap from '../../../components/LiveMap';
+import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -300,7 +301,11 @@ export default function ActiveDeliveryScreen() {
       .update({ status: 'awaiting_confirmation', delivery_completed_at: new Date().toISOString() })
       .eq('id', id);
     setMarking(false);
-    if (error) Alert.alert('Error', error.message);
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+    sendOrderNotification(id, 'awaiting_confirmation');
   }
 
   function confirmCancelDelivery() {
@@ -345,6 +350,7 @@ export default function ActiveDeliveryScreen() {
         .eq('provider_id', user.id);
     }
 
+    sendOrderNotification(id, 'provider_unavailable');
     router.replace('/(provider)');
   }
 

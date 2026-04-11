@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LiveMap from '../../../components/LiveMap';
+import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -433,6 +434,10 @@ export default function OrderTrackingScreen() {
       .eq('id', id);
 
     setSelectingProvider(null);
+    if (!error) {
+      sendOrderNotification(id, 'dealer_selected');
+      sendOrderNotification(id, 'in_transit');
+    }
 
     if (error) Alert.alert('Error', error.message);
   }
@@ -461,6 +466,7 @@ export default function OrderTrackingScreen() {
       return;
     }
 
+    sendOrderNotification(id, 'order_cancelled');
     // Update local state immediately in case Realtime is slow
     setOrder((prev) => prev ? { ...prev, status: 'cancelled', selected_provider_id: null } : prev);
 
@@ -493,6 +499,7 @@ export default function OrderTrackingScreen() {
       return;
     }
 
+    sendOrderNotification(id, 'delivery_confirmed');
     setOrder((prev) => prev ? { ...prev, status: 'delivered' } : prev);
   }
 

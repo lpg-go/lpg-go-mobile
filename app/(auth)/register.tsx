@@ -13,8 +13,7 @@ import {
   View,
 } from 'react-native';
 
-import { formatPhone, formatPhoneAsEmail } from '../../lib/auth';
-import supabase from '../../lib/supabase';
+import { formatPhone } from '../../lib/auth';
 
 type Role = 'customer' | 'provider';
 type ProviderType = 'dealer' | 'rider';
@@ -48,56 +47,50 @@ export default function RegisterScreen() {
     }
 
     const fullPhone = formatPhone(digits);
-    const phoneAsEmail = formatPhoneAsEmail(fullPhone);
     setLoading(true);
 
-    const metadata: Record<string, string> = {
-      full_name: fullName.trim(),
-      phone: fullPhone,
-      role,
-    };
-    if (role === 'provider' && providerType) {
-      metadata.provider_type = providerType;
-      if (providerType === 'dealer') metadata.business_name = businessName.trim();
-    }
+    // Send OTP first — account created only after verification
+    console.log('[send-otp] sending to phone:', fullPhone);
+    const res = await fetch(
+      'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/send-otp',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: fullPhone }),
+      }
+    );
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: phoneAsEmail,
-      password,
-      options: { data: metadata },
-    });
+    const text = await res.text();
+    console.log('[send-otp] raw response:', text);
 
-    if (signUpError) {
+    let json: { success?: boolean; error?: string };
+    try {
+      json = JSON.parse(text);
+    } catch {
       setLoading(false);
-      setError(signUpError.message);
+      setError('Server error: ' + text);
       return;
     }
 
-    const userId = signUpData.user?.id;
-    if (userId) {
-      const profileRow: Record<string, unknown> = {
-        id: userId,
-        full_name: fullName.trim(),
-        phone: fullPhone,
-        role,
-        updated_at: new Date().toISOString(),
-      };
-      if (role === 'provider') {
-        profileRow.provider_type = providerType;
-        if (providerType === 'dealer') profileRow.business_name = businessName.trim();
-      }
+    setLoading(false);
 
-      const { error: profileError } = await supabase.from('profiles').upsert(profileRow);
-      if (profileError) {
-        setLoading(false);
-        setError(profileError.message);
-        return;
-      }
+    if (!res.ok || json.error) {
+      setError(json.error ?? 'Failed to send OTP. Try again.');
+      return;
     }
 
-    setLoading(false);
-    if (role === 'customer') router.replace('/(customer)');
-    else router.replace('/(provider)');
+    router.push({
+      pathname: '/(auth)/verify-otp',
+      params: {
+        action: 'register',
+        phone: fullPhone,
+        password,
+        fullName: fullName.trim(),
+        role,
+        providerType: providerType ?? '',
+        businessName: role === 'provider' && providerType === 'dealer' ? businessName.trim() : '',
+      },
+    });
   }
 
   return (
