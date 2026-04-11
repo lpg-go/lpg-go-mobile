@@ -11,8 +11,6 @@ import {
   View,
 } from 'react-native';
 
-import { formatPhoneAsEmail } from '../../lib/auth';
-import { registerForPushNotificationsAsync } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
 
 const SEND_OTP_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/send-otp';
@@ -23,7 +21,7 @@ const RESEND_SECONDS = 60;
 
 export default function VerifyOtpScreen() {
   const params = useLocalSearchParams<{
-    action: 'register' | 'login';
+    action: 'register';
     phone: string;
     password: string;
     fullName?: string;
@@ -32,7 +30,7 @@ export default function VerifyOtpScreen() {
     businessName?: string;
   }>();
 
-  const { action, phone, password, fullName, role, providerType, businessName } = params;
+  const { phone, password, fullName, role, providerType, businessName } = params;
 
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
@@ -107,24 +105,8 @@ export default function VerifyOtpScreen() {
       return;
     }
 
-    // 2. OTP verified — proceed based on action
-    if (action === 'login') {
-      const phoneAsEmail = formatPhoneAsEmail(phone);
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: phoneAsEmail,
-        password,
-      });
-      setLoading(false);
-      if (signInError) {
-        setError(signInError.message);
-        return;
-      }
-      registerForPushNotificationsAsync();
-      return; // root layout handles redirect
-    }
-
-    // action === 'register'
-    const phoneAsEmail = formatPhoneAsEmail(phone);
+    // 2. OTP verified — register the user
+    const phoneAsEmail = `${phone.replace(/^\+/, '')}@lpggo.app`;
     const metadata: Record<string, string> = {
       full_name: fullName ?? '',
       phone,

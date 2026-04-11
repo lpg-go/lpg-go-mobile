@@ -15,9 +15,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { formatPhone, formatPhoneAsEmail } from '../../lib/auth';
+import { formatPhoneAsEmail } from '../../lib/auth';
 import supabase from '../../lib/supabase';
 import { useAppLogo } from '../../lib/useAppLogo';
+
 
 export default function LoginScreen() {
   const { logoUrl } = useAppLogo();
@@ -39,8 +40,7 @@ export default function LoginScreen() {
       return;
     }
 
-    const fullPhone = formatPhone(digits);
-    const phoneAsEmail = formatPhoneAsEmail(fullPhone);
+    const phoneAsEmail = formatPhoneAsEmail(`+63${digits}`);
     setLoading(true);
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -54,43 +54,6 @@ export default function LoginScreen() {
     }
     registerForPushNotificationsAsync();
     // Root layout handles redirect once session is set
-  }
-
-  async function handleLoginWithOtp() {
-    setError('');
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length !== 10) {
-      setError('Enter a valid 10-digit phone number.');
-      return;
-    }
-    if (!password) {
-      setError('Enter your password.');
-      return;
-    }
-
-    const fullPhone = formatPhone(digits);
-    setLoading(true);
-
-    const res = await fetch(
-      'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/send-otp',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: fullPhone }),
-      }
-    );
-    const json = await res.json();
-    setLoading(false);
-
-    if (!res.ok || json.error) {
-      setError(json.error ?? 'Failed to send OTP. Try again.');
-      return;
-    }
-
-    router.push({
-      pathname: '/(auth)/verify-otp',
-      params: { action: 'login', phone: fullPhone, password },
-    });
   }
 
   return (
@@ -168,14 +131,6 @@ export default function LoginScreen() {
           onPress={() => router.push('/(auth)/forgot-password')}
         >
           <Text style={styles.forgotText}>Forgot Password?</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.otpButton, loading && styles.buttonDisabled]}
-          onPress={handleLoginWithOtp}
-          disabled={loading}
-        >
-          <Text style={styles.otpButtonText}>Login with OTP</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -285,15 +240,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  otpButton: {
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  otpButtonText: { color: PRIMARY, fontSize: 15, fontWeight: '600' },
   forgotRow: { alignItems: 'center', marginBottom: 20 },
   forgotText: { fontSize: 14, color: PRIMARY, fontWeight: '500' },
   linkRow: { alignItems: 'center' },
