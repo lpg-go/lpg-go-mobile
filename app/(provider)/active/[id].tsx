@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Modal,
   ScrollView,
@@ -39,7 +40,7 @@ type Order = {
   admin_fee: number;
   customer_id: string;
   created_at: string;
-  customer: { full_name: string; phone: string } | null;
+  customer: { full_name: string; phone: string; avatar_url: string | null } | null;
 };
 
 type OrderItem = {
@@ -172,8 +173,15 @@ export default function ActiveDeliveryScreen() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'reviews', filter: `order_id=eq.${orderId}` },
         (payload) => {
-          const r = payload.new as { rating: number; comment: string | null };
-          setCustomerReview({ rating: r.rating, comment: r.comment, customerName: null });
+          const r = payload.new as { rating: number; comment: string | null; customer_id: string };
+          supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', r.customer_id)
+            .single()
+            .then(({ data }) => {
+              setCustomerReview({ rating: r.rating, comment: r.comment, customerName: data?.full_name ?? null });
+            });
         }
       )
       .subscribe();
@@ -201,7 +209,7 @@ export default function ActiveDeliveryScreen() {
   async function fetchOrder() {
     const { data } = await supabase
       .from('orders')
-      .select('id, status, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, customer_id, created_at, customer:profiles!customer_id(full_name, phone)')
+      .select('id, status, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, customer_id, created_at, customer:profiles!customer_id(full_name, phone, avatar_url)')
       .eq('id', id)
       .single();
     if (!data) return;
@@ -426,23 +434,9 @@ export default function ActiveDeliveryScreen() {
           <Text style={styles.orderId}>Order #{shortId}</Text>
           <Text style={styles.placedAt}>Placed {placedAt}</Text>
           <View style={styles.addressRow}>
-            <Feather name="map-pin" size={13} color="#9CA3AF" style={{ marginTop: 1 }} />
             <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
           </View>
         </View>
-
-        {/* Awaiting confirmation card */}
-        {order.status === 'awaiting_confirmation' && (
-          <View style={styles.waitingConfirmCard}>
-            <ActivityIndicator size="small" color="#7C3AED" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.waitingConfirmTitle}>Waiting for customer confirmation</Text>
-              <Text style={styles.waitingConfirmSubtitle}>
-                The customer needs to confirm they received the order.
-              </Text>
-            </View>
-          </View>
-        )}
 
         {/* Customer */}
         {order.customer && (
@@ -450,14 +444,18 @@ export default function ActiveDeliveryScreen() {
             <Text style={styles.sectionTitle}>Your Customer</Text>
             <View style={styles.customerCard}>
               <View style={styles.customerAvatar}>
-                <Feather name="user" size={22} color={PRIMARY} />
+                {order.customer.avatar_url ? (
+                  <Image source={{ uri: order.customer.avatar_url }} style={styles.avatarImage} />
+                ) : (
+                  <Feather name="user" size={22} color={PRIMARY} />
+                )}
               </View>
               <View style={styles.customerInfo}>
                 <Text style={styles.customerName}>{order.customer.full_name}</Text>
               </View>
               {order.status === 'in_transit' && (
                 <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => setMapVisible(true)}>
-                  <Feather name="map-pin" size={18} color={PRIMARY} />
+                  <Text style={styles.actionBtnText}>Details</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -466,7 +464,7 @@ export default function ActiveDeliveryScreen() {
 
         {/* Order items */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Items Ordered</Text>
+
           <View style={styles.itemsCard}>
             {items.map((item, index) => (
               <View
@@ -614,10 +612,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statusBadgeText: { fontSize: 16, fontWeight: '700' },
-  orderId: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 2 },
+  orderId: { fontSize: 13, fontWeight: '400', color: '#6B7280', marginBottom: 2 },
   placedAt: { fontSize: 12, color: '#9CA3AF', marginBottom: 10 },
   addressRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 8 },
-  addressText: { fontSize: 13, color: '#6B7280', flex: 1, textAlign: 'center' },
+  addressText: { fontSize: 13, fontWeight: '700', color: '#6B7280', flex: 1, textAlign: 'center' },
 
   // Awaiting confirmation card
   waitingConfirmCard: {
@@ -656,19 +654,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
   },
+  avatarImage: { width: 40, height: 40, borderRadius: 20 },
   customerInfo: { flex: 1 },
   customerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
   customerActions: { flexDirection: 'row', gap: 8 },
   actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
   },
 
   // Chat badge

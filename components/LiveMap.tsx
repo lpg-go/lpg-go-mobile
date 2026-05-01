@@ -99,27 +99,32 @@ export default function LiveMap({
   function fitMap() {
     if (!mapRef.current) return;
 
-    if (providerLocation && customerLocation) {
-      mapRef.current.fitToCoordinates(
-        [
-          { latitude: providerLocation.lat, longitude: providerLocation.lng },
-          { latitude: customerLocation.lat, longitude: customerLocation.lng },
-        ],
-        { edgePadding: { top: 100, right: 60, bottom: 300, left: 60 }, animated: true }
+    if (providerLocation) {
+      mapRef.current.animateCamera(
+        {
+          center: { latitude: providerLocation.lat, longitude: providerLocation.lng },
+          pitch: 60,
+          heading: providerHeading ?? 0,
+          zoom: 17,
+          altitude: 500,
+        },
+        { duration: 600 }
       );
       return;
     }
 
-    const single = providerLocation ?? customerLocation;
+    const single = customerLocation;
     if (single) {
-      const region: Region = {
-        latitude: single.lat,
-        longitude: single.lng,
-        latitudeDelta: DEFAULT_DELTA,
-        longitudeDelta: DEFAULT_DELTA,
-      };
-      mapRef.current.animateToRegion(region, 400);
-      regionRef.current = region;
+      mapRef.current.animateCamera(
+        {
+          center: { latitude: single.lat, longitude: single.lng },
+          pitch: 0,
+          heading: 0,
+          zoom: 15,
+          altitude: 1000,
+        },
+        { duration: 400 }
+      );
     }
   }
 
@@ -215,9 +220,9 @@ export default function LiveMap({
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
+        mapType="standard"
         style={StyleSheet.absoluteFillObject}
         initialRegion={initialRegion}
-        customMapStyle={MAP_STYLE}
         showsUserLocation={false}
         showsMyLocationButton={false}
         showsCompass={false}
@@ -233,40 +238,33 @@ export default function LiveMap({
           <Polyline coordinates={route.coords} strokeColor={PRIMARY} strokeWidth={6} />
         )}
 
-        {/* ── Truck marker ── orange rounded square, rotates with heading */}
+        {/* ── Driver marker ── green circle, rotates with heading */}
         {providerLocation && (
           <Marker
             coordinate={{ latitude: providerLocation.lat, longitude: providerLocation.lng }}
-            title={providerTitle}
             anchor={{ x: 0.5, y: 0.5 }}
             flat
             rotation={providerHeading ?? 0}
             tracksViewChanges={false}
           >
-            <View style={styles.truckMarker}>
-              <Feather name="truck" size={20} color="#fff" />
+            <View style={styles.driverMarker}>
+              <Feather name="truck" size={18} color="#fff" />
             </View>
           </Marker>
         )}
 
-        {/* ── Customer marker ── blue circle with white dot + pulse ring */}
+        {/* ── Destination marker ── green teardrop pin */}
         {customerLocation && (
           <Marker
             coordinate={{ latitude: customerLocation.lat, longitude: customerLocation.lng }}
-            title="Delivery Address"
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges
+            anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={false}
           >
-            <View style={styles.customerOuter}>
-              <Animated.View
-                style={[
-                  styles.customerPulse,
-                  { transform: [{ scale: pulseScale }], opacity: pulseOpacity },
-                ]}
-              />
-              <View style={styles.customerMarker}>
-                <View style={styles.customerDot} />
+            <View style={styles.destPin}>
+              <View style={styles.destPinHead}>
+                <View style={styles.destPinDot} />
               </View>
+              <View style={styles.destPinTail} />
             </View>
           </Marker>
         )}
@@ -292,14 +290,14 @@ export default function LiveMap({
         {/* ETA row */}
         <View style={styles.etaRow}>
           <View style={styles.etaLeft}>
-            <Text style={styles.etaTitle}>Driver is on the way</Text>
+            <Text style={styles.etaTitle}>{providerName ?? 'Driver'}</Text>
             {deliveryAddress ? (
               <Text style={styles.etaAddress} numberOfLines={1}>{deliveryAddress}</Text>
             ) : null}
           </View>
           {route && (
             <View style={styles.etaBadge}>
-              <Text style={styles.etaBadgeLabel}>ETA</Text>
+              <Text style={styles.etaBadgeLabel}>ETA </Text>
               <Text style={styles.etaBadgeTime}>{route.durationText}</Text>
             </View>
           )}
@@ -307,31 +305,13 @@ export default function LiveMap({
 
         <View style={styles.divider} />
 
-        {/* Provider row */}
-        {providerName && (
-          <View style={styles.providerRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials(providerName)}</Text>
-            </View>
-            <View style={styles.providerInfo}>
-              <Text style={styles.providerName} numberOfLines={1}>{providerName}</Text>
-              {businessName ? (
-                <Text style={styles.businessName} numberOfLines={1}>{businessName}</Text>
-              ) : null}
-            </View>
-            {route && (
-              <Text style={styles.distanceText}>{route.distanceText}</Text>
-            )}
-          </View>
-        )}
-
         {/* Action buttons */}
         {(onCall || onChat) && (
           <View style={styles.actionRow}>
             {onCall && (
-              <TouchableOpacity style={styles.actionBtn} onPress={onCall} activeOpacity={0.8}>
-                <Feather name="phone" size={16} color="#374151" />
-                <Text style={styles.actionBtnText}>Call</Text>
+              <TouchableOpacity style={[styles.actionBtn, styles.callBtn]} onPress={onCall} activeOpacity={0.8}>
+                <Feather name="phone" size={16} color="#fff" />
+                <Text style={[styles.actionBtnText, styles.callBtnText]}>Call</Text>
               </TouchableOpacity>
             )}
             {onChat && (
@@ -363,55 +343,58 @@ const styles = StyleSheet.create({
   },
   placeholderText: { fontSize: 14, color: '#9CA3AF' },
 
-  // ── Truck marker ────────────────────────────────────────────────────────
-  truckMarker: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#F97316',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-
-  // ── Customer marker ─────────────────────────────────────────────────────
-  customerOuter: {
-    width: 60,
-    height: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  customerPulse: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#2563EB',
-  },
-  customerMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#2563EB',
+  // ── Driver marker ────────────────────────────────────────────────────────
+  driverMarker: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 5,
+    elevation: 6,
   },
-  customerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+
+  // ── Destination marker ───────────────────────────────────────────────────
+  destPin: {
+    alignItems: 'center',
+  },
+  destPinHead: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  destPinDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#fff',
+  },
+  destPinTail: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#16A34A',
+    marginTop: -1,
   },
 
   // ── Back button ─────────────────────────────────────────────────────────
@@ -482,7 +465,7 @@ const styles = StyleSheet.create({
   // ETA row
   etaRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
     gap: 12,
@@ -491,15 +474,17 @@ const styles = StyleSheet.create({
   etaTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 4 },
   etaAddress: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
   etaBadge: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 72,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  etaBadgeLabel: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.75)', marginBottom: 2 },
-  etaBadgeTime: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  etaBadgeLabel: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+  etaBadgeTime: { fontSize: 14, fontWeight: '700', color: '#111827' },
 
   divider: {
     height: 1,
@@ -548,4 +533,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   actionBtnText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  callBtn: { backgroundColor: '#16A34A', borderColor: '#16A34A' },
+  callBtnText: { color: '#fff' },
 });

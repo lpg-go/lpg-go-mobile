@@ -284,7 +284,7 @@ export default function ProviderIncomingOrdersScreen() {
 
     const { data: orderRows } = await supabase
       .from('orders')
-      .select('id, status, total_amount, created_at')
+      .select('id, status, total_amount, created_at, delivery_address')
       .eq('selected_provider_id', uid)
       .in('status', ['delivered', 'cancelled'])
       .order('created_at', { ascending: false })
@@ -316,6 +316,7 @@ export default function ProviderIncomingOrdersScreen() {
         status: o.status as RecentOrder['status'],
         total_amount: o.total_amount,
         created_at: o.created_at,
+        delivery_address: o.delivery_address,
         itemSummary: summaryByOrder[o.id] ?? 'Order',
       }))
     );
@@ -603,7 +604,7 @@ export default function ProviderIncomingOrdersScreen() {
                       activeOpacity={0.7}
                     >
                       <View style={styles.recentCardTop}>
-                        <Text style={styles.recentCardId}>#{shortId}</Text>
+                        <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
                         <View style={[
                           styles.recentBadge,
                           { backgroundColor: isDelivered ? '#DCFCE7' : '#FEE2E2' },
@@ -616,9 +617,8 @@ export default function ProviderIncomingOrdersScreen() {
                           </Text>
                         </View>
                       </View>
-                      <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
                       <View style={styles.recentCardBottom}>
-                        <Text style={styles.recentDate}>{date}</Text>
+                        <Text style={styles.recentDate} numberOfLines={1}>{order.delivery_address}</Text>
                         <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
                       </View>
                     </TouchableOpacity>
@@ -762,19 +762,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+    gap: 8,
   },
-  recentCardId: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  recentBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  recentBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
   recentBadgeText: { fontSize: 11, fontWeight: '600' },
-  recentItems: { fontSize: 12, color: '#6B7280', marginBottom: 8 },
+  recentItems: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
   recentCardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
-  recentDate: { fontSize: 11, color: '#9CA3AF' },
-  recentAmount: { fontSize: 13, fontWeight: '700', color: '#111827' },
+  recentDate: { fontSize: 12, color: '#6B7280', flex: 1 },
+  recentAmount: { fontSize: 13, fontWeight: '700', color: '#111827', flexShrink: 0 },
 
   // Active order card
   activeCard: {

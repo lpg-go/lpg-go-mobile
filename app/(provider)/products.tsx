@@ -134,8 +134,7 @@ export default function ProviderProductsScreen() {
     setProducts(rows);
 
     if (!collapsedInitialized.current && rows.length > 0) {
-      const sortedBrands = [...new Set(rows.map((r) => r.brand_name))].sort();
-      setCollapsedBrands(new Set(sortedBrands.slice(1)));
+      setCollapsedBrands(new Set());
       collapsedInitialized.current = true;
     }
   }, []);

@@ -195,25 +195,7 @@ export default function ProviderEarningsScreen() {
           </View>
         )}
 
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={styles.statValue}>
-              {monthlyFees.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-            </Text>
-            <Text style={styles.statLabel}>This Month</Text>
-          </View>
-          <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={styles.statValue}>{completedOrders}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
-          </View>
-          <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={styles.statValue}>
-              {allTimeFees.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-            </Text>
-            <Text style={styles.statLabel}>All Time</Text>
-          </View>
-        </View>
+
 
         {/* Transaction history */}
         <Text style={styles.sectionTitle}>Transaction History</Text>
@@ -255,23 +237,13 @@ function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
 
   return (
     <View style={[styles.txRow, !isLast && styles.txRowBorder]}>
-      <View style={[styles.txIcon, { backgroundColor: isTopUp ? '#DCFCE7' : '#FEE2E2' }]}>
-        <Feather
-          name={isTopUp ? 'arrow-up' : 'arrow-down'}
-          size={16}
-          color={isTopUp ? PRIMARY : '#DC2626'}
-        />
+      <View style={styles.txTop}>
+        <Text style={styles.txType}>{isTopUp ? 'Top Up' : 'Fee'}{!isTopUp && shortRef ? ` · #${shortRef}` : ''}</Text>
+        <Text style={[styles.txAmount, { color: isTopUp ? PRIMARY : '#DC2626' }]}>
+          {isTopUp ? '+' : '-'}{Number(tx.amount).toLocaleString('en-PH', { minimumFractionDigits: 0 })}
+        </Text>
       </View>
-      <View style={styles.txInfo}>
-        <Text style={styles.txType}>{isTopUp ? 'Top Up' : 'Fee Deducted'}</Text>
-        {!isTopUp && shortRef && (
-          <Text style={styles.txRef}>Order #{shortRef}</Text>
-        )}
-        <Text style={styles.txDate}>{date}</Text>
-      </View>
-      <Text style={[styles.txAmount, { color: isTopUp ? PRIMARY : '#DC2626' }]}>
-        {isTopUp ? '+' : '-'}{Number(tx.amount).toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-      </Text>
+      <Text style={styles.txDate}>{date}</Text>
     </View>
   );
 }
@@ -364,23 +336,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   txRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    paddingVertical: 12,
   },
   txRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  txIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  txTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 3,
   },
-  txInfo: { flex: 1 },
-  txType: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  txRef: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  txDate: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  txAmount: { fontSize: 14, fontWeight: '700' },
+  txType: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
+  txDate: { fontSize: 11, color: '#9CA3AF' },
+  txAmount: { fontSize: 13, fontWeight: '700' },
 });

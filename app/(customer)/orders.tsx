@@ -36,6 +36,7 @@ type OrderRow = {
   status: OrderStatus;
   total_amount: number;
   created_at: string;
+  delivery_address: string;
   firstItemName: string;
   extraCount: number;
 };
@@ -52,13 +53,41 @@ export default function CustomerOrdersScreen() {
     fetchOrders().then(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      channel = supabase
+        .channel(`customer-orders-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
+          (payload) => {
+            const updated = payload.new as { id: string; status: OrderStatus };
+            setOrders((prev) =>
+              prev.map((o) => o.id === updated.id ? { ...o, status: updated.status } : o)
+            );
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
+          () => { fetchOrders(); }
+        )
+        .subscribe();
+    });
+
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, [fetchOrders]);
+
   const fetchOrders = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data: orderRows } = await supabase
       .from('orders')
-      .select('id, status, total_amount, created_at')
+      .select('id, status, total_amount, created_at, delivery_address')
       .eq('customer_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -91,6 +120,7 @@ export default function CustomerOrdersScreen() {
           status: o.status as OrderStatus,
           total_amount: o.total_amount,
           created_at: o.created_at,
+          delivery_address: o.delivery_address,
           firstItemName: names[0] ?? 'Order',
           extraCount: Math.max(0, names.length - 1),
         };
@@ -177,16 +207,14 @@ function OrderCard({ order }: { order: OrderRow }) {
       activeOpacity={0.7}
     >
       <View style={styles.cardTop}>
-        <Text style={styles.orderId}>#{shortId}</Text>
+        <Text style={styles.itemSummary} numberOfLines={1}>{itemSummary}</Text>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
           <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
         </View>
       </View>
 
-      <Text style={styles.itemSummary} numberOfLines={1}>{itemSummary}</Text>
-
       <View style={styles.cardBottom}>
-        <Text style={styles.date}>{date}</Text>
+        <Text style={styles.address} numberOfLines={1}>{order.delivery_address}</Text>
         <Text style={styles.amount}>₱{Number(order.total_amount).toLocaleString()}</Text>
       </View>
     </TouchableOpacity>
@@ -215,8 +243,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
+    padding: 14,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -225,18 +253,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
+    gap: 8,
   },
-  orderId: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  statusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 },
-  statusText: { fontSize: 12, fontWeight: '600' },
-  itemSummary: { fontSize: 13, color: '#6B7280', marginBottom: 10 },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
+  statusText: { fontSize: 11, fontWeight: '600' },
+  itemSummary: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
   cardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
-  date: { fontSize: 12, color: '#9CA3AF' },
-  amount: { fontSize: 14, fontWeight: '700', color: PRIMARY },
+  address: { fontSize: 12, color: '#6B7280', flex: 1 },
+  amount: { fontSize: 13, fontWeight: '700', color: '#111827', flexShrink: 0 },
 
   emptyState: {
     flex: 1,

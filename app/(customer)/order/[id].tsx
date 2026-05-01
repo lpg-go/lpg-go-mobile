@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Modal,
   ScrollView,
@@ -66,6 +67,7 @@ type Acceptance = {
     full_name: string;
     business_name: string | null;
     phone: string;
+    avatar_url: string | null;
   } | null;
 };
 
@@ -74,6 +76,7 @@ type ProviderProfile = {
   full_name: string;
   business_name: string | null;
   phone: string;
+  avatar_url: string | null;
 };
 
 type LatLng = { lat: number; lng: number };
@@ -334,7 +337,7 @@ export default function OrderTrackingScreen() {
   async function fetchOrderAcceptances() {
     const { data: acceptanceRows } = await supabase
       .from('order_acceptances')
-      .select('id, provider_id, accepted_at, provider:profiles(full_name, business_name, phone)')
+      .select('id, provider_id, accepted_at, provider:profiles(full_name, business_name, phone, avatar_url)')
       .eq('order_id', id)
       .is('withdrawn_at', null);
     console.log('[fetchOrderAcceptances] data:', acceptanceRows);
@@ -417,7 +420,7 @@ export default function OrderTrackingScreen() {
   async function fetchSelectedProvider(providerId: string) {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, business_name, phone')
+      .select('id, full_name, business_name, phone, avatar_url')
       .eq('id', providerId)
       .single();
     if (data) setSelectedProvider(data as ProviderProfile);
@@ -608,7 +611,6 @@ export default function OrderTrackingScreen() {
           <Text style={styles.orderId}>Order #{shortId}</Text>
           <Text style={styles.placedAt}>Placed {placedAt}</Text>
           <View style={styles.addressRow}>
-            <Feather name="map-pin" size={13} color="#9CA3AF" style={{ marginTop: 1 }} />
             <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
           </View>
         </View>
@@ -635,9 +637,7 @@ export default function OrderTrackingScreen() {
           <View style={styles.confirmCard}>
             <Feather name="check-circle" size={32} color={PRIMARY} />
             <Text style={styles.confirmCardTitle}>Your order has been delivered!</Text>
-            <Text style={styles.confirmCardSubtitle}>
-              Please confirm that you received your order so the provider can be paid.
-            </Text>
+
             <TouchableOpacity
               style={[styles.confirmBtn, confirming && { opacity: 0.6 }]}
               onPress={promptConfirmDelivery}
@@ -648,9 +648,6 @@ export default function OrderTrackingScreen() {
               ) : (
                 <Text style={styles.confirmBtnText}>Confirm Delivery</Text>
               )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.reportBtn} onPress={() => Alert.alert('Report Issue', 'Please contact support.')}>
-              <Text style={styles.reportBtnText}>Report an Issue</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -725,7 +722,11 @@ export default function OrderTrackingScreen() {
             <Text style={styles.sectionTitle}>Your Provider</Text>
             <View style={styles.selectedProviderCard}>
               <View style={styles.providerAvatar}>
-                <Feather name="user" size={22} color={PRIMARY} />
+                {selectedProvider.avatar_url ? (
+                  <Image source={{ uri: selectedProvider.avatar_url }} style={styles.avatarImage} />
+                ) : (
+                  <Feather name="user" size={22} color={PRIMARY} />
+                )}
               </View>
               <View style={styles.providerInfo}>
                 <Text style={styles.providerName}>{selectedProvider.full_name}</Text>
@@ -739,7 +740,7 @@ export default function OrderTrackingScreen() {
                   hitSlop={8}
                   onPress={() => setMapVisible(true)}
                 >
-                  <Feather name="map-pin" size={18} color={PRIMARY} />
+                  <Text style={styles.providerActionBtnText}>Details</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -748,7 +749,7 @@ export default function OrderTrackingScreen() {
 
         {/* Order items */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Items Ordered</Text>
+
           <View style={styles.itemsCard}>
             {items.map((item, index) => (
               <View
@@ -788,12 +789,6 @@ export default function OrderTrackingScreen() {
             ) : (
               <>
                 <Text style={styles.reviewTitle}>Rate your delivery</Text>
-                <View style={styles.reviewProviderRow}>
-                  <View style={styles.reviewAvatar}>
-                    <Feather name="user" size={14} color={PRIMARY} />
-                  </View>
-                  <Text style={styles.reviewProviderName}>{selectedProvider.full_name}</Text>
-                </View>
                 <View style={styles.starsRow}>
                   {[1, 2, 3, 4, 5].map((s) => (
                     <TouchableOpacity key={s} onPress={() => setReviewRating(s)} hitSlop={6}>
@@ -819,9 +814,6 @@ export default function OrderTrackingScreen() {
                   {submittingReview
                     ? <ActivityIndicator color="#fff" />
                     : <Text style={styles.reviewSubmitText}>Submit Review</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.reviewSkipBtn} onPress={() => setReviewDone(true)}>
-                  <Text style={styles.reviewSkipText}>Skip</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -879,7 +871,11 @@ function ProviderCard({
   return (
     <View style={styles.providerCard}>
       <View style={styles.providerAvatar}>
-        <Feather name="user" size={20} color={PRIMARY} />
+        {provider?.avatar_url ? (
+          <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
+        ) : (
+          <Feather name="user" size={20} color={PRIMARY} />
+        )}
       </View>
       <View style={styles.providerInfo}>
         <Text style={styles.providerName}>
@@ -967,14 +963,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statusBadgeText: { fontSize: 16, fontWeight: '700' },
-  orderId: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 2 },
+  orderId: { fontSize: 13, fontWeight: '400', color: '#6B7280', marginBottom: 2 },
   placedAt: { fontSize: 12, color: '#9CA3AF', marginBottom: 10 },
   addressRow: {
     flexDirection: 'row',
     gap: 6,
     paddingHorizontal: 8,
   },
-  addressText: { fontSize: 13, color: '#6B7280', flex: 1, textAlign: 'center' },
+  addressText: { fontSize: 13, fontWeight: '700', color: '#6B7280', flex: 1, textAlign: 'center' },
 
   // System-expired card
   expiredCard: {
@@ -1050,7 +1046,7 @@ const styles = StyleSheet.create({
 
   // Section
   section: { marginBottom: 16, zIndex: 1 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1137,7 +1133,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
   },
+  avatarImage: { width: 40, height: 40, borderRadius: 20 },
   providerInfo: { flex: 1 },
   providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
   providerBusiness: { fontSize: 12, color: '#6B7280', marginTop: 1 },
@@ -1176,14 +1174,17 @@ const styles = StyleSheet.create({
 
   providerActions: { flexDirection: 'row', gap: 8 },
   providerActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  providerActionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
   },
   selectBtn: {
     backgroundColor: PRIMARY,

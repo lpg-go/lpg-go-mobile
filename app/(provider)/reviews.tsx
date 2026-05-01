@@ -142,9 +142,6 @@ function ReviewRow({ review, isLast }: { review: Review; isLast: boolean }) {
   return (
     <View style={[styles.reviewRow, !isLast && styles.reviewRowBorder]}>
       <View style={styles.reviewTop}>
-        <View style={styles.reviewAvatar}>
-          <Feather name="user" size={16} color={PRIMARY} />
-        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.reviewCustomer}>{review.customer?.full_name ?? 'Customer'}</Text>
           <Text style={styles.reviewDate}>{date}</Text>
@@ -220,7 +217,7 @@ const styles = StyleSheet.create({
   },
   reviewCustomer: { fontSize: 14, fontWeight: '600', color: '#111827' },
   reviewDate: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  reviewComment: { fontSize: 13, color: '#6B7280', lineHeight: 19, paddingLeft: 42 },
+  reviewComment: { fontSize: 13, color: '#6B7280', lineHeight: 19 },
 
   // Empty state
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },
