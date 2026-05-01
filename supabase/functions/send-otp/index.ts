@@ -45,7 +45,7 @@ serve(async (req) => {
 
   // Generate 6-digit OTP
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
   // Invalidate any existing unused OTPs for this phone
   await supabase
@@ -68,7 +68,7 @@ serve(async (req) => {
   const form = new FormData();
   form.append('apikey', SEMAPHORE_API_KEY);
   form.append('number', phone);
-  form.append('message', `Your LPG Go verification code is: ${code}. Valid for 10 minutes.`);
+  form.append('message', `Your LPG Go verification code is: ${code}. Valid for 15 minutes.`);
   form.append('sendername', 'LPGGo');
 
   const smsRes = await fetch('https://api.semaphore.co/api/v4/messages', {
