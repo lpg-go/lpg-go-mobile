@@ -21,7 +21,7 @@ const RESEND_SECONDS = 60;
 
 export default function VerifyOtpScreen() {
   const params = useLocalSearchParams<{
-    action: 'register';
+    action: 'register' | 'forgot_password';
     phone: string;
     password: string;
     fullName?: string;
@@ -30,7 +30,7 @@ export default function VerifyOtpScreen() {
     businessName?: string;
   }>();
 
-  const { phone, password, fullName, role, providerType, businessName } = params;
+  const { action, phone, password, fullName, role, providerType, businessName } = params;
 
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
@@ -105,7 +105,14 @@ export default function VerifyOtpScreen() {
       return;
     }
 
-    // 2. OTP verified — register the user
+    // 2a. Forgot password — go to reset screen
+    if (action === 'forgot_password') {
+      setLoading(false);
+      router.replace({ pathname: '/(auth)/reset-password', params: { phone } });
+      return;
+    }
+
+    // 2b. OTP verified — register the user
     const phoneAsEmail = `${phone.replace(/^\+/, '')}@lpggo.app`;
     const metadata: Record<string, string> = {
       full_name: fullName ?? '',

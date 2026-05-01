@@ -46,8 +46,8 @@ export default function ForgotPasswordScreen() {
     }
 
     router.push({
-      pathname: '/(auth)/reset-password',
-      params: { phone: fullPhone },
+      pathname: '/(auth)/verify-otp',
+      params: { action: 'forgot_password', phone: fullPhone },
     });
   }
 

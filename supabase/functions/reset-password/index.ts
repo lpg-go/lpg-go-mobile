@@ -32,7 +32,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: CORS });
   }
 
-  let body: { phone?: string; code?: string; newPassword?: string };
+  let body: { phone?: string; newPassword?: string };
   try {
     body = await req.json();
   } catch {
@@ -40,12 +40,11 @@ serve(async (req) => {
   }
 
   const phone = normalizePhone(body.phone ?? '');
-  const code = (body.code ?? '').trim();
   const newPassword = body.newPassword ?? '';
 
-  if (!phone || !code || !newPassword) {
+  if (!phone || !newPassword) {
     return new Response(
-      JSON.stringify({ error: 'phone, code, and newPassword are required' }),
+      JSON.stringify({ error: 'phone and newPassword are required' }),
       { status: 400, headers: CORS }
     );
   }
@@ -55,25 +54,6 @@ serve(async (req) => {
       JSON.stringify({ error: 'Password must be at least 6 characters' }),
       { status: 400, headers: CORS }
     );
-  }
-
-  // Verify the OTP
-  const { data: otpData, error: otpError } = await adminClient
-    .from('otp_verifications')
-    .select('id, expires_at, used')
-    .eq('phone', phone)
-    .eq('code', code)
-    .eq('used', false)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (otpError || !otpData) {
-    return new Response(JSON.stringify({ error: 'Invalid or expired OTP' }), { status: 200, headers: CORS });
-  }
-
-  if (new Date(otpData.expires_at) < new Date()) {
-    return new Response(JSON.stringify({ error: 'Invalid or expired OTP' }), { status: 200, headers: CORS });
   }
 
   // Look up the user by phone-as-email
@@ -97,12 +77,6 @@ serve(async (req) => {
   if (updateError) {
     return new Response(JSON.stringify({ error: updateError.message }), { status: 500, headers: CORS });
   }
-
-  // Mark OTP as used
-  await adminClient
-    .from('otp_verifications')
-    .update({ used: true })
-    .eq('id', otpData.id);
 
   return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS });
 });
