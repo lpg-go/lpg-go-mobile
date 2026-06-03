@@ -48,6 +48,25 @@ async function sendPush(tokens: string[], title: string, body: string, data?: ob
   return res.json();
 }
 
+async function insertNotifications(
+  userIds: string[],
+  title: string,
+  body: string,
+  type: OrderEvent,
+  orderId?: string,
+): Promise<void> {
+  if (userIds.length === 0) return;
+  const rows = userIds.map((user_id) => ({
+    user_id,
+    title,
+    body,
+    type,
+    order_id: orderId ?? null,
+  }));
+  const { error } = await supabase.from('notifications').insert(rows);
+  if (error) console.error('[notifications] insert error:', error);
+}
+
 async function getToken(userId: string): Promise<string | null> {
   const { data } = await supabase
     .from('profiles')
@@ -111,33 +130,45 @@ async function handleNewOrder(orderId: string): Promise<HandlerResult> {
     .gt('stock', 0);
 
   const tokenSet = new Set<string>();
+  const providerIds = new Set<string>();
   for (const pp of providerProducts ?? []) {
     const profile = pp.provider as { is_approved: boolean; is_online: boolean; expo_push_token: string | null } | null;
-    if (profile?.is_approved && profile?.is_online && profile?.expo_push_token) {
-      tokenSet.add(profile.expo_push_token);
+    if (profile?.is_approved && profile?.is_online) {
+      providerIds.add(pp.provider_id);
+      if (profile.expo_push_token) tokenSet.add(profile.expo_push_token);
     }
   }
 
+  const title = 'New Order Request';
+  const body = 'A customer placed a new order. Tap to accept.';
+  await insertNotifications([...providerIds], title, body, 'new_order', orderId);
+
   const tokens = [...tokenSet];
-  const pushResult = await sendPush(tokens, 'New Order Request', 'A customer placed a new order. Tap to accept.', { orderId });
+  const pushResult = await sendPush(tokens, title, body, { orderId });
   return { tokensFound: tokens.length, pushResult };
 }
 
 async function handleDealerAccepted(orderId: string): Promise<HandlerResult> {
   const order = await getOrder(orderId);
   if (!order) return { tokensFound: 0, pushResult: null };
+  const title = 'Provider Accepted';
+  const body = 'A provider accepted your order. Check your order for details.';
+  await insertNotifications([order.customer_id], title, body, 'dealer_accepted', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], 'Provider Accepted', 'A provider accepted your order. Check your order for details.', { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId });
   return { tokensFound: 1, pushResult };
 }
 
 async function handleMultipleDealersAccepted(orderId: string): Promise<HandlerResult> {
   const order = await getOrder(orderId);
   if (!order) return { tokensFound: 0, pushResult: null };
+  const title = 'Multiple Providers Ready';
+  const body = 'More than one provider is ready. Select your preferred one!';
+  await insertNotifications([order.customer_id], title, body, 'multiple_dealers_accepted', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], 'Multiple Providers Ready', 'More than one provider is ready. Select your preferred one!', { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId });
   return { tokensFound: 1, pushResult };
 }
 
@@ -148,19 +179,27 @@ async function handleDealerSelected(orderId: string): Promise<HandlerResult> {
   const allProviderIds = await getAcceptingProviderIds(orderId);
   const otherProviderIds = allProviderIds.filter((id) => id !== order.selected_provider_id);
 
+  const selectedTitle = 'You Were Selected!';
+  const selectedBody = 'The customer chose you. Head out for delivery!';
+  const otherTitle = 'Order Taken';
+  const otherBody = 'The customer selected another provider for this order.';
+
+  await insertNotifications([order.selected_provider_id], selectedTitle, selectedBody, 'dealer_selected', orderId);
+  await insertNotifications(otherProviderIds, otherTitle, otherBody, 'dealer_selected', orderId);
+
   const results: unknown[] = [];
   let tokensFound = 0;
 
   const selectedToken = await getToken(order.selected_provider_id);
   if (selectedToken) {
     tokensFound++;
-    results.push(await sendPush([selectedToken], 'You Were Selected!', 'The customer chose you. Head out for delivery!', { orderId }));
+    results.push(await sendPush([selectedToken], selectedTitle, selectedBody, { orderId }));
   }
 
   const otherTokens = await getTokens(otherProviderIds);
   if (otherTokens.length > 0) {
     tokensFound += otherTokens.length;
-    results.push(await sendPush(otherTokens, 'Order Taken', 'The customer selected another provider for this order.', { orderId }));
+    results.push(await sendPush(otherTokens, otherTitle, otherBody, { orderId }));
   }
 
   return { tokensFound, pushResult: results };
@@ -168,27 +207,36 @@ async function handleDealerSelected(orderId: string): Promise<HandlerResult> {
 
 async function handleOrderCancelled(orderId: string): Promise<HandlerResult> {
   const providerIds = await getAcceptingProviderIds(orderId);
+  const title = 'Order Cancelled';
+  const body = 'The customer cancelled this order.';
+  await insertNotifications(providerIds, title, body, 'order_cancelled', orderId);
   const tokens = await getTokens(providerIds);
   if (tokens.length === 0) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush(tokens, 'Order Cancelled', 'The customer cancelled this order.', { orderId });
+  const pushResult = await sendPush(tokens, title, body, { orderId });
   return { tokensFound: tokens.length, pushResult };
 }
 
 async function handleInTransit(orderId: string): Promise<HandlerResult> {
   const order = await getOrder(orderId);
   if (!order) return { tokensFound: 0, pushResult: null };
+  const title = 'On the Way!';
+  const body = 'Your LPG is on its way. Track your delivery in the app.';
+  await insertNotifications([order.customer_id], title, body, 'in_transit', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], 'On the Way!', 'Your LPG is on its way. Track your delivery in the app.', { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId });
   return { tokensFound: 1, pushResult };
 }
 
 async function handleAwaitingConfirmation(orderId: string): Promise<HandlerResult> {
   const order = await getOrder(orderId);
   if (!order) return { tokensFound: 0, pushResult: null };
+  const title = 'Confirm Your Delivery';
+  const body = 'Your provider marked the order as delivered. Please confirm receipt.';
+  await insertNotifications([order.customer_id], title, body, 'awaiting_confirmation', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], 'Confirm Your Delivery', 'Your provider marked the order as delivered. Please confirm receipt.', { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId });
   return { tokensFound: 1, pushResult };
 }
 
@@ -233,13 +281,12 @@ async function handleDeliveryConfirmed(orderId: string): Promise<HandlerResult> 
 
   console.log('[delivery_confirmed] balance=%d adminFee=%d token=%s', balance, adminFee, profile?.expo_push_token);
 
+  const title = 'Delivery Confirmed!';
+  const body = `Order complete. Admin fee ₱${adminFee.toLocaleString()} deducted. New balance: ₱${balance.toLocaleString()}.`;
+  await insertNotifications([providerId], title, body, 'delivery_confirmed', orderId);
+
   const pushResult = profile?.expo_push_token
-    ? await sendPush(
-        [profile.expo_push_token],
-        'Delivery Confirmed!',
-        `Order complete. Admin fee ₱${adminFee.toLocaleString()} deducted. New balance: ₱${balance.toLocaleString()}.`,
-        { orderId }
-      )
+    ? await sendPush([profile.expo_push_token], title, body, { orderId })
     : null;
 
   // ── 4. Low balance / low stock checks ──────────────────────────────────────
@@ -260,17 +307,16 @@ async function handleLowBalance(providerId: string): Promise<HandlerResult> {
     .eq('id', providerId)
     .single();
 
+  const minBalance = Number(settings?.min_balance ?? 0);
+  const balance = Number(profile?.balance ?? 0);
+
+  const title = 'Low Balance Warning';
+  const body = `Your balance (₱${balance.toLocaleString()}) is at or below the minimum (₱${minBalance.toLocaleString()}). Top up to keep receiving orders.`;
+  await insertNotifications([providerId], title, body, 'low_balance');
+
   if (!profile?.expo_push_token) return { tokensFound: 0, pushResult: null };
 
-  const minBalance = Number(settings?.min_balance ?? 0);
-  const balance = Number(profile.balance ?? 0);
-
-  const pushResult = await sendPush(
-    [profile.expo_push_token],
-    'Low Balance Warning',
-    `Your balance (₱${balance.toLocaleString()}) is at or below the minimum (₱${minBalance.toLocaleString()}). Top up to keep receiving orders.`,
-    { providerId }
-  );
+  const pushResult = await sendPush([profile.expo_push_token], title, body, { providerId });
   return { tokensFound: 1, pushResult };
 }
 
@@ -286,6 +332,15 @@ async function handleLowStock(providerId: string): Promise<HandlerResult> {
 
   if (!lowStockProducts || lowStockProducts.length === 0) return { tokensFound: 0, pushResult: null };
 
+  const productNames = lowStockProducts
+    .map((p) => (p.product as { name: string } | null)?.name)
+    .filter(Boolean)
+    .join(', ');
+
+  const title = 'Low Stock Alert';
+  const body = `Stock is running low for: ${productNames}. Update your inventory to keep receiving orders.`;
+  await insertNotifications([providerId], title, body, 'low_stock');
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('expo_push_token')
@@ -294,26 +349,19 @@ async function handleLowStock(providerId: string): Promise<HandlerResult> {
 
   if (!profile?.expo_push_token) return { tokensFound: 0, pushResult: null };
 
-  const productNames = lowStockProducts
-    .map((p) => (p.product as { name: string } | null)?.name)
-    .filter(Boolean)
-    .join(', ');
-
-  const pushResult = await sendPush(
-    [profile.expo_push_token],
-    'Low Stock Alert',
-    `Stock is running low for: ${productNames}. Update your inventory to keep receiving orders.`,
-    { providerId }
-  );
+  const pushResult = await sendPush([profile.expo_push_token], title, body, { providerId });
   return { tokensFound: 1, pushResult };
 }
 
 async function handleProviderUnavailable(orderId: string): Promise<HandlerResult> {
   const order = await getOrder(orderId);
   if (!order) return { tokensFound: 0, pushResult: null };
+  const title = 'Provider Unavailable';
+  const body = 'Your provider cancelled. Please select another provider.';
+  await insertNotifications([order.customer_id], title, body, 'provider_unavailable', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], 'Provider Unavailable', 'Your provider cancelled. Please select another provider.', { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId });
   return { tokensFound: 1, pushResult };
 }
 

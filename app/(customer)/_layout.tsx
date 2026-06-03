@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { CartProvider, useCart } from '../../lib/cartStore';
+import { NotificationsProvider } from '../../lib/notificationsStore';
 
 const PRIMARY = '#16A34A';
 const INACTIVE = '#9CA3AF';
@@ -39,8 +40,9 @@ const styles = StyleSheet.create({
 
 export default function CustomerLayout() {
   return (
-    <CartProvider>
-      <Tabs
+    <NotificationsProvider>
+      <CartProvider>
+        <Tabs
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: PRIMARY,
@@ -97,7 +99,12 @@ export default function CustomerLayout() {
           name="chat/[orderId]"
           options={{ href: null, tabBarStyle: { display: 'none' } }}
         />
+        <Tabs.Screen
+          name="notifications"
+          options={{ href: null, tabBarStyle: { display: 'none' } }}
+        />
       </Tabs>
-    </CartProvider>
+      </CartProvider>
+    </NotificationsProvider>
   );
 }

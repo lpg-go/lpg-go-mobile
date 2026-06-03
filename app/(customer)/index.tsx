@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import NotificationBell from '../../components/NotificationBell';
 import supabase from '../../lib/supabase';
 import { useAppLogo } from '../../lib/useAppLogo';
 
@@ -137,20 +138,23 @@ export default function CustomerHomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header logo */}
-        {logoUrl ? (
-          <Image
-            source={{ uri: logoUrl }}
-            style={styles.headerLogoDynamic}
-            resizeMode="contain"
-          />
-        ) : (
-          <Image
-            source={require('../../assets/images/logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-          />
-        )}
+        {/* Header */}
+        <View style={styles.headerRow}>
+          {logoUrl ? (
+            <Image
+              source={{ uri: logoUrl }}
+              style={styles.headerLogoDynamic}
+              resizeMode="contain"
+            />
+          ) : (
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+          )}
+          <NotificationBell href="/(customer)/notifications" />
+        </View>
 
         {/* Search */}
         <View style={styles.searchRow}>
@@ -264,20 +268,21 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingBottom: 32 },
 
-  // Header logo
-  headerLogo: {
-    width: 120,
-    height: 48,
-    alignSelf: 'center',
+  // Header
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 12,
     marginBottom: 4,
   },
+  headerLogo: {
+    width: 90,
+    height: 36,
+  },
   headerLogoDynamic: {
-    width: 200,
-    height: 80,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
+    width: 140,
+    height: 56,
   },
 
   // Search

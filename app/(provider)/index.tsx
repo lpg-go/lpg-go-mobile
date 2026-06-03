@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import NotificationBell from '../../components/NotificationBell';
 import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
 
@@ -25,6 +26,7 @@ type IncomingOrder = {
   delivery_address: string;
   total_amount: number;
   created_at: string;
+  customerName: string;
   itemSummary: string;
   alreadyAccepted: boolean;
 };
@@ -211,7 +213,7 @@ export default function ProviderIncomingOrdersScreen() {
     // 3. Fetch pending / awaiting orders with their items
     let query = supabase
       .from('orders')
-      .select('id, status, delivery_address, total_amount, created_at, order_items(product_id)')
+      .select('id, status, delivery_address, total_amount, created_at, customer:profiles!customer_id(full_name), order_items(product_id)')
       .in('status', ['pending', 'awaiting_dealer_selection'])
       .is('selected_provider_id', null)
       .order('created_at', { ascending: false });
@@ -266,15 +268,19 @@ export default function ProviderIncomingOrdersScreen() {
     }
 
     setOrders(
-      filteredOrders.map((o) => ({
-        id: o.id,
-        status: o.status as IncomingOrder['status'],
-        delivery_address: o.delivery_address,
-        total_amount: o.total_amount,
-        created_at: o.created_at,
-        itemSummary: summaryByOrder[o.id] ?? 'LPG Gas',
-        alreadyAccepted: acceptedSet.has(o.id),
-      }))
+      filteredOrders.map((o) => {
+        const customer = o.customer as { full_name: string } | null;
+        return {
+          id: o.id,
+          status: o.status as IncomingOrder['status'],
+          delivery_address: o.delivery_address,
+          total_amount: o.total_amount,
+          created_at: o.created_at,
+          customerName: customer?.full_name ?? 'New Customer',
+          itemSummary: summaryByOrder[o.id] ?? 'LPG Gas',
+          alreadyAccepted: acceptedSet.has(o.id),
+        };
+      })
     );
   }
 
@@ -479,6 +485,7 @@ export default function ProviderIncomingOrdersScreen() {
             thumbColor={isOnline ? PRIMARY : '#fff'}
             disabled={togglingOnline}
           />
+          <NotificationBell href="/(provider)/notifications" />
         </View>
       </View>
 
@@ -514,44 +521,35 @@ export default function ProviderIncomingOrdersScreen() {
             {/* Active orders */}
             {activeOrders.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Active Orders ({activeOrders.length})</Text>
+                <Text style={styles.sectionTitle}>Active Orders</Text>
                 {activeOrders.map((order) => (
-                  <View key={order.id} style={[styles.activeCard, { marginBottom: 10 }]}>
-                    <View style={styles.activeBadge}>
-                      <View style={[
-                        styles.activeDot,
-                        order.status === 'awaiting_confirmation' && { backgroundColor: '#7C3AED' },
-                      ]} />
-                      <Text style={[
-                        styles.activeBadgeText,
-                        order.status === 'awaiting_confirmation' && { color: '#7C3AED' },
-                      ]}>
-                        {order.status === 'awaiting_confirmation' ? 'Awaiting Confirmation' : 'In Transit'}
+                  <TouchableOpacity
+                    key={order.id}
+                    style={styles.activeCard}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(provider)/active/[id]',
+                        params: { id: order.id },
+                      })
+                    }
+                  >
+                    <View style={styles.activeCardBody}>
+                      <Text style={styles.activeCustomer} numberOfLines={1}>
+                        {order.customerName}
                       </Text>
-                    </View>
-                    <Text style={styles.activeCustomer}>{order.customerName}</Text>
-                    <View style={styles.activeAddressRow}>
-                      <Feather name="map-pin" size={12} color="#9CA3AF" />
-                      <Text style={styles.activeAddress} numberOfLines={1}>
-                        {order.delivery_address}
+                      <Text style={styles.activeItems} numberOfLines={1}>
+                        {order.itemSummary}
                       </Text>
+                      <View style={styles.activeAddressRow}>
+                        <Feather name="map-pin" size={12} color="rgba(255,255,255,0.75)" />
+                        <Text style={styles.activeAddress} numberOfLines={1}>
+                          {order.delivery_address}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={styles.activeItems} numberOfLines={1}>
-                      {order.itemSummary}
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.viewActiveBtn}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/(provider)/active/[id]',
-                          params: { id: order.id },
-                        })
-                      }
-                    >
-                      <Text style={styles.viewActiveBtnText}>View</Text>
-                      <Feather name="arrow-right" size={15} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
+                    <Feather name="chevron-right" size={24} color="#fff" />
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -644,57 +642,43 @@ function OrderCard({
   accepting: boolean;
   onAccept: () => void;
 }) {
-  const shortId = order.id.slice(-8).toUpperCase();
-  const age = timeAgo(order.created_at);
-
   return (
-    <View style={styles.orderCard}>
-      <View style={styles.orderCardTop}>
-        <Text style={styles.orderCardId}>#{shortId}</Text>
-        <Text style={styles.orderCardAge}>{age}</Text>
+    <TouchableOpacity
+      style={styles.orderCard}
+      activeOpacity={0.85}
+      onPress={() => {
+        Alert.alert(
+          'Accept Order?',
+          `Customer: ${order.customerName}\nItems: ${order.itemSummary}\nTotal: ₱${Number(order.total_amount).toLocaleString()}`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Accept', onPress: onAccept },
+          ]
+        );
+      }}
+      disabled={accepting || order.alreadyAccepted}
+    >
+      <View style={styles.orderCardBody}>
+        <Text style={styles.orderCustomer} numberOfLines={1}>{order.customerName}</Text>
+        <Text style={styles.orderItems} numberOfLines={1}>
+          {order.itemSummary}
+        </Text>
+        <View style={styles.orderAddressRow}>
+          <Feather name="map-pin" size={12} color="#9CA3AF" />
+          <Text style={styles.orderAddress} numberOfLines={1}>
+            {order.delivery_address}
+          </Text>
+        </View>
       </View>
-
-      <Text style={styles.orderItems} numberOfLines={2}>{order.itemSummary}</Text>
-
-      <View style={styles.orderAddressRow}>
-        <Feather name="map-pin" size={12} color="#9CA3AF" />
-        <Text style={styles.orderAddress} numberOfLines={1}>{order.delivery_address}</Text>
-      </View>
-
-      <View style={styles.orderCardBottom}>
-        <Text style={styles.orderAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
-
-        {order.alreadyAccepted ? (
-          <View style={styles.acceptedBadge}>
-            <Feather name="check" size={13} color={PRIMARY} />
-            <Text style={styles.acceptedBadgeText}>Accepted</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[styles.acceptBtn, accepting && styles.acceptBtnDisabled]}
-            onPress={onAccept}
-            disabled={accepting}
-          >
-            {accepting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.acceptBtnText}>Accept Order</Text>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+      {accepting ? (
+        <ActivityIndicator size="small" color={PRIMARY} />
+      ) : order.alreadyAccepted ? (
+        <Feather name="check" size={24} color={PRIMARY} />
+      ) : (
+        <Feather name="chevron-right" size={24} color={PRIMARY} />
+      )}
+    </TouchableOpacity>
   );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -779,87 +763,49 @@ const styles = StyleSheet.create({
 
   // Active order card
   activeCard: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  activeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2563EB',
-  },
-  activeBadgeText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
-  activeCustomer: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  activeAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
-  activeAddress: { fontSize: 13, color: '#6B7280', flex: 1 },
-  activeItems: { fontSize: 12, color: '#9CA3AF', marginBottom: 12 },
-  viewActiveBtn: {
     backgroundColor: PRIMARY,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 12,
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  viewActiveBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  activeCardBody: { flex: 1 },
+  activeCustomer: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 4 },
+  activeAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  activeAddress: { fontSize: 12, color: 'rgba(255,255,255,0.75)', flex: 1 },
+  activeItems: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginBottom: 4 },
 
-  // Incoming order card
+  // Incoming order card — same shape as activeCard, white background
   orderCard: {
     backgroundColor: '#fff',
     borderRadius: 14,
-    padding: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  orderCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  orderCardId: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  orderCardAge: { fontSize: 12, color: '#9CA3AF' },
-  orderItems: { fontSize: 13, color: '#374151', marginBottom: 6 },
-  orderAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
+  orderCardBody: { flex: 1 },
+  orderCustomer: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 4 },
+  orderItems: { fontSize: 13, color: '#374151', marginBottom: 4 },
+  orderAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   orderAddress: { fontSize: 12, color: '#9CA3AF', flex: 1 },
-  orderCardBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  orderAmount: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  acceptBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    minWidth: 110,
-    alignItems: 'center',
-  },
-  acceptBtnDisabled: { opacity: 0.6 },
-  acceptBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
-  acceptedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#DCFCE7',
-    borderRadius: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-  },
-  acceptedBadgeText: { fontSize: 13, fontWeight: '600', color: PRIMARY },
 
   // Empty state
   emptyState: {
