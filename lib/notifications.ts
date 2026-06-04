@@ -1,3 +1,4 @@
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -52,9 +53,22 @@ export async function registerForPushNotificationsAsync(): Promise<void> {
 
   if (finalStatus !== 'granted') return;
 
-  const { data: token } = await Notifications.getExpoPushTokenAsync({
-    projectId: '561fa033-aa41-477a-9e42-88d23c44049b',
-  });
+  // Remote push tokens are unsupported in Expo Go on SDK 53+, skip the fetch there.
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    console.warn('[registerForPushNotificationsAsync] skipping push token fetch in Expo Go');
+    return;
+  }
+
+  let token: string;
+  try {
+    const result = await Notifications.getExpoPushTokenAsync({
+      projectId: '561fa033-aa41-477a-9e42-88d23c44049b',
+    });
+    token = result.data;
+  } catch (err) {
+    console.warn('[registerForPushNotificationsAsync] failed to get Expo push token', err);
+    return;
+  }
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
