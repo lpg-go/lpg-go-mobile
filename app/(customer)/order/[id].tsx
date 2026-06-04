@@ -431,10 +431,10 @@ export default function OrderTrackingScreen() {
   async function handleSelectProvider(providerId: string) {
     setSelectingProvider(providerId);
 
-    const { error } = await supabase
-      .from('orders')
-      .update({ selected_provider_id: providerId, status: 'in_transit' })
-      .eq('id', id);
+    const { error } = await supabase.rpc('select_provider_for_order', {
+      p_order_id: id,
+      p_provider_id: providerId,
+    });
 
     setSelectingProvider(null);
     if (!error) {
