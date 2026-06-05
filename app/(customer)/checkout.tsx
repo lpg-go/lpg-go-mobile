@@ -381,8 +381,12 @@ export default function CheckoutScreen() {
 
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>₱{totalAmount.toLocaleString()}</Text>
+              <Text style={styles.totalValue}>Est. ₱{totalAmount.toLocaleString()}</Text>
             </View>
+
+            <Text style={styles.estimateNote}>
+              Final price depends on the provider you choose.
+            </Text>
           </View>
         </View>
 
@@ -431,7 +435,7 @@ export default function CheckoutScreen() {
           ) : (
             <>
               <Text style={styles.placeOrderText}>Place Order</Text>
-              <Text style={styles.placeOrderAmount}>₱{totalAmount.toLocaleString()}</Text>
+              <Text style={styles.placeOrderAmount}>Est. ₱{totalAmount.toLocaleString()}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -594,6 +598,7 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
   totalValue: { fontSize: 16, fontWeight: '800', color: PRIMARY },
+  estimateNote: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
 
   // Payment
   noPaymentWarning: {

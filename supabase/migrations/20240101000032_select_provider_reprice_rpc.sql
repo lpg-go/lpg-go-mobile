@@ -12,6 +12,7 @@ declare
   v_order   public.orders%rowtype;
   v_item    record;
   v_price   numeric(10,2);
+  v_stock   integer;
   v_total   numeric(12,2) := 0;
 begin
   select * into v_order from public.orders where id = p_order_id;
@@ -40,14 +41,20 @@ begin
     select id, product_id, quantity from public.order_items
     where order_id = p_order_id
   loop
-    select price into v_price
+    select price, stock into v_price, v_stock
     from public.provider_products
     where provider_id = p_provider_id
       and product_id  = v_item.product_id
       and is_available = true;
 
     if v_price is null then
-      raise exception 'Selected provider no longer offers a product in this order';
+      raise exception 'Selected provider does not offer one of the ordered products';
+    end if;
+    if v_price <= 0 then
+      raise exception 'Selected provider has not set a price for one of the ordered products';
+    end if;
+    if v_stock is null or v_stock < v_item.quantity then
+      raise exception 'Selected provider has insufficient stock for one of the ordered products';
     end if;
 
     update public.order_items

@@ -68,7 +68,7 @@ export default function CartScreen() {
                 <Text style={styles.summaryLabel}>
                   Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'})
                 </Text>
-                <Text style={styles.summaryValue}>₱{totalAmount.toLocaleString()}</Text>
+                <Text style={styles.summaryValue}>Est. ₱{totalAmount.toLocaleString()}</Text>
               </View>
 
               <View style={styles.summaryRow}>
@@ -80,8 +80,12 @@ export default function CartScreen() {
 
               <View style={styles.summaryRow}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>₱{totalAmount.toLocaleString()}</Text>
+                <Text style={styles.totalValue}>Est. ₱{totalAmount.toLocaleString()}</Text>
               </View>
+
+              <Text style={styles.estimateNote}>
+                Final price depends on the provider you choose.
+              </Text>
             </View>
           </ScrollView>
 
@@ -92,7 +96,7 @@ export default function CartScreen() {
               onPress={() => router.push('/(customer)/checkout')}
             >
               <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
-              <Text style={styles.checkoutAmount}>₱{totalAmount.toLocaleString()}</Text>
+              <Text style={styles.checkoutAmount}>Est. ₱{totalAmount.toLocaleString()}</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -119,7 +123,7 @@ function CartRow({
       <View style={styles.rowBody}>
         <Text style={styles.rowName} numberOfLines={2}>{item.product_name}</Text>
         <Text style={styles.rowBrand}>{item.brand_name}</Text>
-        <Text style={styles.rowPrice}>₱{item.unit_price.toLocaleString()} each</Text>
+        <Text style={styles.rowPrice}>From ₱{item.unit_price.toLocaleString()} each</Text>
       </View>
 
       <View style={styles.rowRight}>
@@ -226,6 +230,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 10 },
   totalLabel: { fontSize: 15, fontWeight: '700', color: '#111827' },
   totalValue: { fontSize: 17, fontWeight: '800', color: PRIMARY },
+  estimateNote: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
 
   // Checkout bar
   checkoutBar: {
