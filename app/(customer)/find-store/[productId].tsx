@@ -282,34 +282,26 @@ export default function FindStoreScreen() {
           <View style={styles.productCard}>
             <View style={styles.productInfo}>
               <Text style={styles.productName} numberOfLines={1}>{productName}</Text>
-              <Text style={styles.productMeta}>
-                {brandName}{sizeKg ? ` · ${sizeKg}kg` : ''}
-              </Text>
+              <Text style={styles.productPrice}>₱{unitPriceNum.toLocaleString()}</Text>
             </View>
-            <Text style={styles.productPrice}>₱{unitPriceNum.toLocaleString()}</Text>
-          </View>
-        </View>
-
-        {/* Quantity */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quantity</Text>
-          <View style={styles.quantityRow}>
-            <TouchableOpacity
-              style={[styles.qtyButton, quantity <= 1 && styles.qtyButtonDisabled]}
-              onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-              disabled={quantity <= 1}
-              hitSlop={8}
-            >
-              <Feather name="minus" size={18} color={quantity <= 1 ? '#9CA3AF' : PRIMARY} />
-            </TouchableOpacity>
-            <Text style={styles.qtyValue}>{quantity}</Text>
-            <TouchableOpacity
-              style={styles.qtyButton}
-              onPress={() => setQuantity((q) => q + 1)}
-              hitSlop={8}
-            >
-              <Feather name="plus" size={18} color={PRIMARY} />
-            </TouchableOpacity>
+            <View style={styles.quantityRow}>
+              <TouchableOpacity
+                style={[styles.qtyButton, quantity <= 1 && styles.qtyButtonDisabled]}
+                onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+                disabled={quantity <= 1}
+                hitSlop={8}
+              >
+                <Feather name="minus" size={18} color={quantity <= 1 ? '#9CA3AF' : PRIMARY} />
+              </TouchableOpacity>
+              <Text style={styles.qtyValue}>{quantity}</Text>
+              <TouchableOpacity
+                style={styles.qtyButton}
+                onPress={() => setQuantity((q) => q + 1)}
+                hitSlop={8}
+              >
+                <Feather name="plus" size={18} color={PRIMARY} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -464,16 +456,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  productInfo: { flex: 1 },
-  productName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  productInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  productName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#111827' },
   productMeta: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  productPrice: { fontSize: 15, fontWeight: '800', color: PRIMARY, marginLeft: 12 },
+  productPrice: { fontSize: 14, fontWeight: '800', color: PRIMARY, marginLeft: 12 },
 
   // Quantity
   quantityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     backgroundColor: '#fff',
     borderRadius: 12,
     borderWidth: 1,
@@ -481,6 +472,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 6,
     gap: 8,
+    marginLeft: 12,
   },
   qtyButton: {
     width: 36,
