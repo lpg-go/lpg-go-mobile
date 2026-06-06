@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useCart } from '../../../lib/cartStore';
 import supabase from '../../../lib/supabase';
 
 type Product = {
@@ -36,7 +35,6 @@ const CARD_WIDTH = (Dimensions.get('window').width - H_PADDING * 2 - GRID_GAP * 
 export default function BrandProductsScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const insets = useSafeAreaInsets();
-  const { addItem, items, totalItems } = useCart();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,19 +108,18 @@ export default function BrandProductsScreen() {
     setLoading(false);
   }
 
-  function handleAddToCart(product: Product) {
-    addItem({
-      product_id: product.id,
-      product_name: product.name,
-      brand_name: name ?? '',
-      quantity: 1,
-      unit_price: product.minPrice!,
-      provider_product_id: product.cheapestProviderProductId!,
+  function handleFindStore(product: Product) {
+    router.push({
+      pathname: '/(customer)/find-store/[productId]',
+      params: {
+        productId: product.id,
+        productName: product.name,
+        brandName: name ?? '',
+        sizeKg: String(product.size_kg),
+        unitPrice: String(product.minPrice),
+        providerProductId: product.cheapestProviderProductId!,
+      },
     });
-  }
-
-  function cartQuantityFor(productId: string) {
-    return items.find((i) => i.product_id === productId)?.quantity ?? 0;
   }
 
   return (
@@ -154,30 +151,13 @@ export default function BrandProductsScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={totalItems > 0 ? <View style={{ height: 80 }} /> : null}
           renderItem={({ item: product }) => (
             <ProductCard
               product={product}
-              quantity={cartQuantityFor(product.id)}
-              onAddToCart={() => handleAddToCart(product)}
+              onFindStore={() => handleFindStore(product)}
             />
           )}
         />
-      )}
-
-      {/* Floating View Cart button */}
-      {totalItems > 0 && (
-        <View style={[styles.floatingBar, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity
-            style={styles.viewCartButton}
-            onPress={() => router.push('/(customer)/cart')}
-          >
-            <Text style={styles.viewCartText}>View Cart</Text>
-            <View style={styles.viewCartBadge}>
-              <Text style={styles.viewCartBadgeText}>{totalItems}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
       )}
     </View>
   );
@@ -185,12 +165,10 @@ export default function BrandProductsScreen() {
 
 function ProductCard({
   product,
-  quantity,
-  onAddToCart,
+  onFindStore,
 }: {
   product: Product;
-  quantity: number;
-  onAddToCart: () => void;
+  onFindStore: () => void;
 }) {
   const inStock = product.minPrice !== null;
   const samePrice = product.minPrice === product.maxPrice;
@@ -229,10 +207,10 @@ function ProductCard({
 
         <TouchableOpacity
           style={[styles.addButton, !inStock && styles.addButtonDisabled]}
-          onPress={onAddToCart}
+          onPress={onFindStore}
           disabled={!inStock}
         >
-          <Text style={styles.addButtonText}>Add</Text>
+          <Text style={styles.addButtonText}>Find Store</Text>
         </TouchableOpacity>
       </View>
     </View>
