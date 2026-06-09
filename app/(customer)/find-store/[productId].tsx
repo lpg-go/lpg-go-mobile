@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   ScrollView,
@@ -87,6 +88,10 @@ export default function FindStoreScreen() {
   const [selectingProvider, setSelectingProvider] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'price' | 'distance'>('price');
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | null>(null);
+  const [paymentSettings, setPaymentSettings] = useState<{ allow_cash_payment: boolean; allow_card_payment: boolean } | null>(null);
 
   const [pickerVisible, setPickerVisible] = useState(false);
 
@@ -144,6 +149,20 @@ export default function FindStoreScreen() {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, [phase, orderId]);
+
+  // Fetch payment settings once on mount; default selected method to cash if allowed
+  useEffect(() => {
+    supabase
+      .from('platform_settings')
+      .select('allow_cash_payment, allow_card_payment')
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setPaymentSettings(data);
+          setPaymentMethod(data.allow_cash_payment ? 'cash' : data.allow_card_payment ? 'card' : null);
+        }
+      });
+  }, []);
 
   async function fetchSettings() {
     const { data } = await supabase
@@ -344,6 +363,44 @@ export default function FindStoreScreen() {
   function confirmPicker() {
     // Pin edits already applied live via handlePinDrag/handleUseLocation.
     setPickerVisible(false);
+  }
+
+  async function confirmSelection() {
+    if (!pendingProviderId || !paymentMethod || !orderId) return;
+    setSelectingProvider(pendingProviderId);
+
+    // Save the chosen payment method first
+    const { error: paymentError } = await supabase
+      .from('orders')
+      .update({ payment_method: paymentMethod })
+      .eq('id', orderId);
+
+    if (paymentError) {
+      setSelectingProvider(null);
+      Alert.alert('Error', paymentError.message);
+      return;
+    }
+
+    // Then run the provider selection RPC
+    const { error } = await supabase.rpc('select_provider_for_order', {
+      p_order_id: orderId,
+      p_provider_id: pendingProviderId,
+    });
+
+    setSelectingProvider(null);
+    if (!error) {
+      sendOrderNotification(orderId, 'dealer_selected');
+      sendOrderNotification(orderId, 'in_transit');
+      setPendingProviderId(null);
+      // Stop polling before leaving the bidding screen
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      router.replace({ pathname: '/(customer)/order/[id]', params: { id: orderId } });
+    }
+
+    if (error) Alert.alert('Error', error.message);
   }
 
   async function handleFindStore() {
@@ -586,8 +643,8 @@ export default function FindStoreScreen() {
                   <ProviderCard
                     key={acc.id}
                     acceptance={acc}
-                    selecting={selectingProvider === acc.provider_id}
-                    onSelect={() => console.log('selected provider', acc.provider_id)}
+                    selected={selectedProviderId === acc.provider_id}
+                    onSelect={() => setSelectedProviderId(acc.provider_id)}
                   />
                 ))
             )}
@@ -611,6 +668,13 @@ export default function FindStoreScreen() {
             ) : (
               <Text style={styles.placeOrderText}>Find Provider</Text>
             )}
+          </TouchableOpacity>
+        ) : selectedProviderId ? (
+          <TouchableOpacity
+            style={styles.placeOrderButton}
+            onPress={() => setPendingProviderId(selectedProviderId)}
+          >
+            <Text style={styles.placeOrderText}>Select Provider</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -697,23 +761,110 @@ export default function FindStoreScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Payment method modal */}
+      <Modal
+        visible={pendingProviderId !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPendingProviderId(null)}
+      >
+        <View style={styles.paymentModalOverlay}>
+          <View style={[styles.paymentModalCard, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.paymentModalHeader}>
+              <Text style={styles.paymentModalTitle}>Choose Payment Method</Text>
+              <TouchableOpacity onPress={() => setPendingProviderId(null)} hitSlop={8}>
+                <Feather name="x" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.paymentOptions}>
+              {paymentSettings?.allow_cash_payment && (
+                <TouchableOpacity
+                  style={[styles.paymentOption, paymentMethod === 'cash' && styles.paymentOptionSelected]}
+                  onPress={() => setPaymentMethod('cash')}
+                >
+                  <View style={[styles.radio, paymentMethod === 'cash' && styles.radioSelected]}>
+                    {paymentMethod === 'cash' && <View style={styles.radioDot} />}
+                  </View>
+                  <Feather
+                    name="dollar-sign"
+                    size={18}
+                    color={paymentMethod === 'cash' ? PRIMARY : '#6B7280'}
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text style={[styles.paymentLabel, paymentMethod === 'cash' && styles.paymentLabelSelected]}>
+                    Cash on Delivery
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {paymentSettings?.allow_card_payment && (
+                <TouchableOpacity
+                  style={[styles.paymentOption, paymentMethod === 'card' && styles.paymentOptionSelected]}
+                  onPress={() => setPaymentMethod('card')}
+                >
+                  <View style={[styles.radio, paymentMethod === 'card' && styles.radioSelected]}>
+                    {paymentMethod === 'card' && <View style={styles.radioDot} />}
+                  </View>
+                  <Feather
+                    name="credit-card"
+                    size={18}
+                    color={paymentMethod === 'card' ? PRIMARY : '#6B7280'}
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text style={[styles.paymentLabel, paymentMethod === 'card' && styles.paymentLabelSelected]}>
+                    Card Payment
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.confirmOrderBtn,
+                (selectingProvider !== null || !paymentMethod) && { opacity: 0.6 },
+              ]}
+              onPress={confirmSelection}
+              disabled={selectingProvider !== null || !paymentMethod}
+            >
+              {selectingProvider !== null ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.confirmOrderBtnText}>Confirm Order</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.paymentCancelBtn}
+              onPress={() => setPendingProviderId(null)}
+              disabled={selectingProvider !== null}
+            >
+              <Text style={styles.paymentCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 function ProviderCard({
   acceptance,
-  selecting,
+  selected,
   onSelect,
 }: {
   acceptance: Acceptance;
-  selecting: boolean;
+  selected: boolean;
   onSelect: () => void;
 }) {
   const provider = acceptance.provider;
 
   return (
-    <View style={styles.providerCard}>
+    <TouchableOpacity
+      style={[styles.providerCard, selected && styles.providerCardSelected]}
+      onPress={onSelect}
+      activeOpacity={0.8}
+    >
       <View style={styles.providerAvatar}>
         {provider?.avatar_url ? (
           <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
@@ -746,20 +897,10 @@ function ProviderCard({
           )}
         </View>
       </View>
-      <TouchableOpacity
-        style={[styles.selectBtn, selecting && styles.selectBtnDisabled]}
-        onPress={onSelect}
-        disabled={selecting}
-      >
-        {selecting ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Text style={styles.selectBtnText}>
-            {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : 'Select'}
-          </Text>
-        )}
-      </TouchableOpacity>
-    </View>
+      <Text style={styles.providerPriceText}>
+        {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : '—'}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -1078,6 +1219,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  providerCardSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: '#F0FDF4',
+  },
   providerAvatar: {
     width: 40,
     height: 40,
@@ -1096,14 +1241,73 @@ const styles = StyleSheet.create({
   ratingCount: { fontSize: 11, fontWeight: '400', color: '#9CA3AF' },
   ratingNew: { fontSize: 12, color: '#9CA3AF' },
   ratingDot: { fontSize: 12, color: '#D1D5DB' },
-  selectBtn: {
+  providerPriceText: { fontSize: 15, fontWeight: '700', color: PRIMARY, marginLeft: 12 },
+
+  // Payment modal
+  paymentModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  paymentModalCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: H_PADDING,
+    paddingTop: 18,
+  },
+  paymentModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  paymentModalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  paymentOptions: { gap: 10, marginBottom: 16 },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  paymentOptionSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: '#F0FDF4',
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  radioSelected: { borderColor: PRIMARY },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: PRIMARY,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minWidth: 70,
+  },
+  paymentLabel: { fontSize: 14, fontWeight: '500', color: '#374151' },
+  paymentLabelSelected: { color: PRIMARY, fontWeight: '600' },
+  confirmOrderBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 12,
+    paddingVertical: 15,
     alignItems: 'center',
   },
-  selectBtnDisabled: { opacity: 0.6 },
-  selectBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  confirmOrderBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  paymentCancelBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  paymentCancelBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
 });

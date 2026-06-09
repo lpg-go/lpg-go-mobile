@@ -41,6 +41,14 @@ type OrderRow = {
   extraCount: number;
 };
 
+// In-progress statuses — everything before delivered/cancelled
+const ACTIVE_STATUSES: OrderStatus[] = [
+  'pending',
+  'awaiting_dealer_selection',
+  'in_transit',
+  'awaiting_confirmation',
+];
+
 const H_PADDING = 20;
 
 export default function CustomerOrdersScreen() {
@@ -142,6 +150,9 @@ export default function CustomerOrdersScreen() {
     );
   }
 
+  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const recentOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -177,7 +188,22 @@ export default function CustomerOrdersScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          orders.map((order) => <OrderCard key={order.id} order={order} />)
+          <>
+            {activeOrders.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Active Orders</Text>
+                {activeOrders.map((order) => <OrderCard key={order.id} order={order} />)}
+              </>
+            )}
+            {recentOrders.length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, activeOrders.length > 0 && styles.sectionTitleSpaced]}>
+                  Recent Orders
+                </Text>
+                {recentOrders.map((order) => <OrderCard key={order.id} order={order} />)}
+              </>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -239,6 +265,9 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },
   scrollEmpty: { flex: 1 },
+
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
+  sectionTitleSpaced: { marginTop: 18 },
 
   card: {
     backgroundColor: '#fff',
