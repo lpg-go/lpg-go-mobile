@@ -309,7 +309,7 @@ export default function FindStoreScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Delivery address */}
-        <View style={styles.section}>
+        <View style={[styles.section, { marginBottom: 10 }]}>
           <Text style={styles.sectionTitle}>Delivery Address</Text>
 
           <View style={styles.addressInputWrap}>
@@ -343,15 +343,10 @@ export default function FindStoreScreen() {
 
         {/* Product summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Product</Text>
           <View style={styles.productCard}>
             <View style={styles.productInfo}>
               <Text style={styles.productName} numberOfLines={1}>{productName}</Text>
-              <Text style={styles.productPrice}>
-                {!maxPriceNum || maxPriceNum === unitPriceNum
-                  ? `₱${unitPriceNum.toLocaleString()}`
-                  : `₱${unitPriceNum.toLocaleString()}-₱${maxPriceNum.toLocaleString()}`}
-              </Text>
+              <Text style={styles.productPrice}>Est. ₱{totalAmount.toLocaleString()}</Text>
             </View>
             <View style={styles.quantityRow}>
               <TouchableOpacity
@@ -393,10 +388,7 @@ export default function FindStoreScreen() {
           {placing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <>
-              <Text style={styles.placeOrderText}>Find Store</Text>
-              <Text style={styles.placeOrderAmount}>Est. ₱{totalAmount.toLocaleString()}</Text>
-            </>
+            <Text style={styles.placeOrderText}>Find Store</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -708,10 +700,9 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
   },
   placeOrderButtonDisabled: { opacity: 0.6 },
   placeOrderText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  placeOrderAmount: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });

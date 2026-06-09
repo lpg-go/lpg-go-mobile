@@ -172,11 +172,14 @@ function ProductCard({
   onFindStore: () => void;
 }) {
   const inStock = product.minPrice !== null;
-  const samePrice = product.minPrice === product.maxPrice;
 
   return (
-    <View style={styles.card}>
-      {/* Image */}
+    <TouchableOpacity
+      style={[styles.card, !inStock && styles.cardDisabled]}
+      onPress={onFindStore}
+      disabled={!inStock}
+      activeOpacity={0.75}
+    >
       <View style={styles.imageWrap}>
         {product.image_url ? (
           <Image source={{ uri: product.image_url }} style={styles.image} resizeMode="cover" />
@@ -187,34 +190,13 @@ function ProductCard({
         )}
         {!inStock && (
           <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockOverlayText}>Out of{'\n'}Stock</Text>
+            <Text style={styles.outOfStockOverlayText}>Unavailable</Text>
           </View>
         )}
       </View>
 
-      {/* Info */}
-      <View style={styles.cardBody}>
-        <Text style={styles.sizeLabel}>{product.size_kg}kg</Text>
-
-        {inStock ? (
-          <Text style={styles.price} numberOfLines={1}>
-            {samePrice
-              ? `₱${product.minPrice!.toLocaleString()}`
-              : `₱${product.minPrice!.toLocaleString()}-₱${product.maxPrice!.toLocaleString()}`}
-          </Text>
-        ) : (
-          <Text style={styles.outOfStockText}>Unavailable</Text>
-        )}
-
-        <TouchableOpacity
-          style={[styles.addButton, !inStock && styles.addButtonDisabled]}
-          onPress={onFindStore}
-          disabled={!inStock}
-        >
-          <Text style={styles.addButtonText}>Find Store</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      <Text style={[styles.sizeLabel, !inStock && styles.sizeLabelUnavailable]}>{product.size_kg}kg</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -244,55 +226,46 @@ const styles = StyleSheet.create({
   // Product card
   card: {
     width: CARD_WIDTH,
+    height: 120,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+    gap: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
   },
-  imageWrap: {
-    width: '100%',
-    aspectRatio: 1,
-    position: 'relative',
-  },
-  image: { width: '100%', height: '100%' },
+  imageWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  image: { width: 64, height: 64, borderRadius: 8 },
   imagePlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: 64,
+    height: 64,
+    borderRadius: 8,
     backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  placeholderSizeText: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  placeholderSizeText: { fontSize: 16, fontWeight: '800', color: '#fff' },
   outOfStockOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  outOfStockOverlayText: { fontSize: 10, fontWeight: '700', color: '#fff', textAlign: 'center' },
+  outOfStockOverlayText: { fontSize: 9, fontWeight: '700', color: '#fff', textAlign: 'center' },
 
-  // Card body
-  cardBody: { padding: 6, gap: 2, alignItems: 'center' },
-  sizeLabel: { fontSize: 15, fontWeight: '800', color: '#111827', textAlign: 'center' },
-  price: { fontSize: 10, fontWeight: '600', color: PRIMARY, textAlign: 'center' },
-  outOfStockText: { fontSize: 10, fontWeight: '600', color: '#EF4444' },
-  addButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 6,
-    height: 26,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  addButtonDisabled: { backgroundColor: '#E5E7EB' },
-  addButtonText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+  // Labels
+  sizeLabel: { fontSize: 13, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  sizeLabelUnavailable: { color: '#9CA3AF' },
+  cardDisabled: { opacity: 0.7 },
 
   // Floating cart bar
   floatingBar: {
