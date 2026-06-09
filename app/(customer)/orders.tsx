@@ -1,4 +1,3 @@
-import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -161,10 +160,7 @@ export default function CustomerOrdersScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          orders.length === 0 && styles.scrollEmpty,
-        ]}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -175,35 +171,32 @@ export default function CustomerOrdersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {orders.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="package" size={48} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.emptySubtitle}>Your order history will appear here</Text>
-            <TouchableOpacity
-              style={styles.browseButton}
-              onPress={() => router.replace('/(customer)')}
-            >
-              <Text style={styles.browseButtonText}>Browse Brands</Text>
-            </TouchableOpacity>
+        {/* Active orders — always visible (ongoing deliveries) */}
+        <Text style={styles.sectionTitle}>Active Orders</Text>
+        {activeOrders.length === 0 ? (
+          <View style={styles.cardEmptyState}>
+            <Text style={styles.cardEmptyText}>No active orders</Text>
           </View>
         ) : (
+          activeOrders.map((order) => <OrderCard key={order.id} order={order} />)
+        )}
+
+        {recentOrders.length > 0 && (
           <>
-            {activeOrders.length > 0 && (
-              <>
-                <Text style={styles.sectionTitle}>Active Orders</Text>
-                {activeOrders.map((order) => <OrderCard key={order.id} order={order} />)}
-              </>
-            )}
-            {recentOrders.length > 0 && (
-              <>
-                <Text style={[styles.sectionTitle, activeOrders.length > 0 && styles.sectionTitleSpaced]}>
-                  Recent Orders
-                </Text>
-                {recentOrders.map((order) => <OrderCard key={order.id} order={order} />)}
-              </>
-            )}
+            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
+              Recent Orders
+            </Text>
+            {recentOrders.map((order) => <OrderCard key={order.id} order={order} />)}
           </>
+        )}
+
+        {orders.length === 0 && (
+          <TouchableOpacity
+            style={styles.browseButton}
+            onPress={() => router.replace('/(customer)')}
+          >
+            <Text style={styles.browseButtonText}>Browse Brands</Text>
+          </TouchableOpacity>
         )}
       </ScrollView>
     </View>
@@ -264,10 +257,20 @@ const styles = StyleSheet.create({
 
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },
-  scrollEmpty: { flex: 1 },
 
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
   sectionTitleSpaced: { marginTop: 18 },
+
+  cardEmptyState: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardEmptyText: { fontSize: 13, color: '#9CA3AF' },
 
   card: {
     backgroundColor: '#fff',
@@ -296,17 +299,9 @@ const styles = StyleSheet.create({
   address: { fontSize: 12, color: '#6B7280', flex: 1 },
   amount: { fontSize: 13, fontWeight: '700', color: '#111827', flexShrink: 0 },
 
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingBottom: 40,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginTop: 4 },
-  emptySubtitle: { fontSize: 14, color: '#9CA3AF' },
   browseButton: {
-    marginTop: 8,
+    alignSelf: 'center',
+    marginTop: 16,
     backgroundColor: PRIMARY,
     borderRadius: 10,
     paddingVertical: 11,

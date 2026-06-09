@@ -826,13 +826,17 @@ const styles = StyleSheet.create({
 
   // Empty state
   emptyState: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    paddingTop: 40,
-    paddingBottom: 20,
-    gap: 12,
+    justifyContent: 'center',
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
