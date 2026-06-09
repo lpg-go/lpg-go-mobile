@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NotificationBell from '../../components/NotificationBell';
 import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
+import { useAppLogo } from '../../lib/useAppLogo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,12 +50,18 @@ type ActiveOrder = {
   itemSummary: string;
 };
 
+const ACTIVE_STATUS_BADGE: Record<ActiveOrder['status'], { label: string; color: string; bg: string }> = {
+  in_transit:            { label: 'On the Way', color: '#2563EB', bg: '#DBEAFE' },
+  awaiting_confirmation: { label: 'Delivered?',  color: '#7C3AED', bg: '#EDE9FE' },
+};
+
 const H_PADDING = 20;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProviderIncomingOrdersScreen() {
   const insets = useSafeAreaInsets();
+  const { logoUrl } = useAppLogo();
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -472,19 +480,37 @@ export default function ProviderIncomingOrdersScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Incoming Orders</Text>
-        <View style={styles.onlineRow}>
-          {togglingOnline && <ActivityIndicator size="small" color={PRIMARY} style={{ marginRight: 6 }} />}
-          <Text style={[styles.onlineLabel, { color: isOnline ? PRIMARY : '#9CA3AF' }]}>
-            {isOnline ? 'Online' : 'Offline'}
-          </Text>
-          <Switch
-            value={isOnline}
-            onValueChange={handleToggleOnline}
-            trackColor={{ false: '#D1D5DB', true: '#86EFAC' }}
-            thumbColor={isOnline ? PRIMARY : '#fff'}
-            disabled={togglingOnline}
+        {logoUrl ? (
+          <Image
+            source={{ uri: logoUrl }}
+            style={styles.headerLogoDynamic}
+            resizeMode="contain"
           />
+        ) : (
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        )}
+        <View style={styles.onlineRow}>
+          <TouchableOpacity
+            style={[styles.onlinePill, { backgroundColor: isOnline ? '#DCFCE7' : '#F3F4F6' }]}
+            onPress={() => handleToggleOnline(!isOnline)}
+            disabled={togglingOnline}
+            activeOpacity={0.7}
+          >
+            {togglingOnline ? (
+              <ActivityIndicator size="small" color={isOnline ? PRIMARY : '#9CA3AF'} />
+            ) : (
+              <>
+                <View style={[styles.onlineDot, { backgroundColor: isOnline ? PRIMARY : '#9CA3AF' }]} />
+                <Text style={[styles.onlineLabel, { color: isOnline ? PRIMARY : '#9CA3AF' }]}>
+                  {isOnline ? 'Online' : 'Offline'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
           <NotificationBell href="/(provider)/notifications" />
         </View>
       </View>
@@ -503,7 +529,7 @@ export default function ProviderIncomingOrdersScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          !isOnline && styles.scrollContentHidden,
+          !isOnline && activeOrders.length === 0 && styles.scrollContentHidden,
         ]}
         refreshControl={
           <RefreshControl
@@ -514,62 +540,57 @@ export default function ProviderIncomingOrdersScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
-        scrollEnabled={isOnline}
+        scrollEnabled={isOnline || activeOrders.length > 0}
       >
+        {/* Active orders — always visible (ongoing deliveries), even when offline */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Active Orders</Text>
+          {activeOrders.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No active deliveries</Text>
+            </View>
+          ) : (
+            activeOrders.map((order) => {
+              const cfg = ACTIVE_STATUS_BADGE[order.status];
+              return (
+                <TouchableOpacity
+                  key={order.id}
+                  style={styles.recentCard}
+                  onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.recentCardTop}>
+                    <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
+                    <View style={[styles.recentBadge, { backgroundColor: cfg.bg }]}>
+                      <Text style={[styles.recentBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.recentCardBottom}>
+                    <Text style={styles.recentDate} numberOfLines={1}>{order.delivery_address}</Text>
+                    <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+
         {isOnline && (
           <>
-            {/* Active orders */}
-            {activeOrders.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Active Orders</Text>
-                {activeOrders.map((order) => (
-                  <TouchableOpacity
-                    key={order.id}
-                    style={styles.activeCard}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/(provider)/active/[id]',
-                        params: { id: order.id },
-                      })
-                    }
-                  >
-                    <View style={styles.activeCardBody}>
-                      <Text style={styles.activeCustomer} numberOfLines={1}>
-                        {order.customerName}
-                      </Text>
-                      <Text style={styles.activeItems} numberOfLines={1}>
-                        {order.itemSummary}
-                      </Text>
-                      <View style={styles.activeAddressRow}>
-                        <Feather name="map-pin" size={12} color="rgba(255,255,255,0.75)" />
-                        <Text style={styles.activeAddress} numberOfLines={1}>
-                          {order.delivery_address}
-                        </Text>
-                      </View>
-                    </View>
-                    <Feather name="chevron-right" size={24} color="#fff" />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
             {/* Incoming orders */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>New Requests</Text>
 
               {stockedProductIds.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Feather name="package" size={40} color="#D1D5DB" />
                   <Text style={styles.emptyText}>
                     Add stock to your products to start receiving orders.
                   </Text>
                 </View>
               ) : orders.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Feather name="inbox" size={40} color="#D1D5DB" />
                   <Text style={styles.emptyText}>
-                    No orders right now. Stay online to receive orders.
+                    No orders right now
                   </Text>
                 </View>
               ) : (
@@ -701,7 +722,25 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerLogo: {
+    width: 90,
+    height: 36,
+  },
+  headerLogoDynamic: {
+    width: 140,
+    height: 56,
+  },
+  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  onlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    minHeight: 30,
+  },
+  onlineDot: { width: 8, height: 8, borderRadius: 4 },
   onlineLabel: { fontSize: 13, fontWeight: '600' },
 
   // Offline banner
@@ -760,28 +799,6 @@ const styles = StyleSheet.create({
   },
   recentDate: { fontSize: 12, color: '#6B7280', flex: 1 },
   recentAmount: { fontSize: 13, fontWeight: '700', color: '#111827', flexShrink: 0 },
-
-  // Active order card
-  activeCard: {
-    backgroundColor: PRIMARY,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  activeCardBody: { flex: 1 },
-  activeCustomer: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  activeAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  activeAddress: { fontSize: 12, color: 'rgba(255,255,255,0.75)', flex: 1 },
-  activeItems: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginBottom: 4 },
 
   // Incoming order card — same shape as activeCard, white background
   orderCard: {
