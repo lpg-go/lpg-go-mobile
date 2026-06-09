@@ -6,6 +6,7 @@ import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
   Modal,
   ScrollView,
@@ -403,6 +404,59 @@ export default function FindStoreScreen() {
     if (error) Alert.alert('Error', error.message);
   }
 
+  // ── Bidding-phase exit / cancel ───────────────────────────────────────────
+
+  async function cancelBiddingOrder() {
+    if (!orderId) return;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'cancelled', cancelled_by: 'customer' })
+      .eq('id', orderId);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    sendOrderNotification(orderId, 'order_cancelled');
+    // Stop polling before leaving the bidding screen
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    router.back();
+  }
+
+  function confirmCancelBidding() {
+    Alert.alert(
+      'Cancel this order?',
+      'Your order will be cancelled.',
+      [
+        { text: 'Keep waiting', style: 'cancel' },
+        { text: 'Cancel order', style: 'destructive', onPress: cancelBiddingOrder },
+      ]
+    );
+  }
+
+  function handleBack() {
+    if (phase === 'bidding') {
+      confirmCancelBidding();
+    } else {
+      router.back();
+    }
+  }
+
+  // Intercept Android hardware back during bidding to confirm cancellation
+  useEffect(() => {
+    if (phase !== 'bidding') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      confirmCancelBidding();
+      return true;
+    });
+    return () => sub.remove();
+  }, [phase, orderId]);
+
   async function handleFindStore() {
     setError('');
 
@@ -502,7 +556,7 @@ export default function FindStoreScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={8}>
           <Feather name="chevron-left" size={26} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Find Provider</Text>
@@ -669,19 +723,13 @@ export default function FindStoreScreen() {
               <Text style={styles.placeOrderText}>Find Provider</Text>
             )}
           </TouchableOpacity>
-        ) : selectedProviderId ? (
-          <TouchableOpacity
-            style={styles.placeOrderButton}
-            onPress={() => setPendingProviderId(selectedProviderId)}
-          >
-            <Text style={styles.placeOrderText}>Select Provider</Text>
-          </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.cancelOrderButton}
-            onPress={() => console.log('cancel pressed')}
+            style={[styles.placeOrderButton, !selectedProviderId && styles.selectProviderDisabled]}
+            onPress={() => selectedProviderId && setPendingProviderId(selectedProviderId)}
+            disabled={!selectedProviderId}
           >
-            <Text style={styles.cancelOrderText}>Cancel Order</Text>
+            <Text style={styles.placeOrderText}>Select Provider</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1137,19 +1185,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   placeOrderButtonDisabled: { opacity: 0.6 },
+  selectProviderDisabled: { opacity: 0.5 },
   placeOrderText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  cancelOrderButton: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: '#DC2626',
-  },
-  cancelOrderText: { fontSize: 15, fontWeight: '700', color: '#DC2626' },
 
   // Providers section (bidding phase)
   sectionTitleRow: {
