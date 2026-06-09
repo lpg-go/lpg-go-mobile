@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -21,6 +22,22 @@ import supabase from '../../../lib/supabase';
 
 type PlatformSettings = {
   order_expiry_minutes: number;
+};
+
+type Acceptance = {
+  id: string;
+  provider_id: string;
+  accepted_at: string;
+  provider_total: number;
+  avgRating: number | null;
+  reviewCount: number;
+  avgDeliveryMinutes: number | null;
+  provider: {
+    full_name: string;
+    business_name: string | null;
+    phone: string;
+    avatar_url: string | null;
+  } | null;
 };
 
 const H_PADDING = 20;
@@ -62,11 +79,21 @@ export default function FindStoreScreen() {
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
 
+  const [phase, setPhase] = useState<'form' | 'bidding'>('form');
+  const [orderId, setOrderId] = useState<string | null>(null);
+
+  // Bidding phase — provider acceptances
+  const [acceptances, setAcceptances] = useState<Acceptance[]>([]);
+  const [selectingProvider, setSelectingProvider] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'price' | 'distance'>('price');
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+
   const [pickerVisible, setPickerVisible] = useState(false);
 
   const mapRef = useRef<MapView>(null);
   // Snapshot of address/coords when the picker opens, so Cancel can restore.
   const snapshotRef = useRef<{ address: string; lat: number | null; lng: number | null } | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     autoGetLocation();
@@ -78,6 +105,46 @@ export default function FindStoreScreen() {
     }, [])
   );
 
+  // Bidding phase — realtime subscription on the orders row + initial fetch
+  useEffect(() => {
+    if (phase !== 'bidding' || !orderId) return;
+
+    fetchOrderAcceptances();
+
+    const channel = supabase
+      .channel(`order-${orderId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
+        (payload) => {
+          console.log('[find-store bidding] orders change:', payload);
+          fetchOrderAcceptances();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[find-store bidding] channel status:', status);
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [phase, orderId]);
+
+  // Bidding phase — poll order_acceptances every 5s
+  useEffect(() => {
+    if (phase !== 'bidding' || !orderId) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
+    pollIntervalRef.current = setInterval(() => {
+      fetchOrderAcceptances();
+    }, 5000);
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [phase, orderId]);
+
   async function fetchSettings() {
     const { data } = await supabase
       .from('platform_settings')
@@ -87,6 +154,91 @@ export default function FindStoreScreen() {
     if (data) {
       setSettings(data);
     }
+  }
+
+  async function fetchOrderAcceptances() {
+    if (!orderId) return;
+
+    const { data: acceptanceRows } = await supabase
+      .from('order_acceptances')
+      .select('id, provider_id, accepted_at, provider:profiles(full_name, business_name, phone, avatar_url)')
+      .eq('order_id', orderId)
+      .is('withdrawn_at', null);
+    console.log('[fetchOrderAcceptances] data:', acceptanceRows);
+
+    if (!acceptanceRows || acceptanceRows.length === 0) {
+      setAcceptances([]);
+      return;
+    }
+
+    // Fetch order items with product_id for price calculation
+    const { data: orderItemRows } = await supabase
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+
+    const productIds = (orderItemRows ?? []).map((i) => i.product_id);
+    const providerIds = acceptanceRows.map((a) => a.provider_id);
+
+    // Fetch provider_products for all providers × all products in this order
+    const { data: providerProductRows } = await supabase
+      .from('provider_products')
+      .select('provider_id, product_id, price')
+      .in('provider_id', providerIds)
+      .in('product_id', productIds);
+
+    // Fetch reviews for all providers to compute avg rating
+    const { data: reviewRows } = await supabase
+      .from('reviews')
+      .select('provider_id, rating')
+      .in('provider_id', providerIds);
+
+    // Fetch avg delivery time for all providers
+    const { data: providerStatsRows } = await supabase
+      .from('profiles')
+      .select('id, avg_delivery_minutes')
+      .in('id', providerIds);
+
+    const deliveryStats: Record<string, number | null> = {};
+    for (const p of providerStatsRows ?? []) {
+      deliveryStats[p.id] = p.avg_delivery_minutes != null ? Number(p.avg_delivery_minutes) : null;
+    }
+
+    // Build review stats: reviewStats[provider_id] = { sum, count }
+    const reviewStats: Record<string, { sum: number; count: number }> = {};
+    for (const r of reviewRows ?? []) {
+      if (!reviewStats[r.provider_id]) reviewStats[r.provider_id] = { sum: 0, count: 0 };
+      reviewStats[r.provider_id].sum += r.rating;
+      reviewStats[r.provider_id].count += 1;
+    }
+
+    // Build price lookup: providerPrices[provider_id][product_id] = price
+    const providerPrices: Record<string, Record<string, number>> = {};
+    for (const pp of providerProductRows ?? []) {
+      if (!providerPrices[pp.provider_id]) providerPrices[pp.provider_id] = {};
+      providerPrices[pp.provider_id][pp.product_id] = Number(pp.price);
+    }
+
+    const result: Acceptance[] = acceptanceRows.map((row) => {
+      let provider_total = 0;
+      for (const item of orderItemRows ?? []) {
+        const price = providerPrices[row.provider_id]?.[item.product_id];
+        if (price !== undefined) provider_total += price * item.quantity;
+      }
+      const stats = reviewStats[row.provider_id];
+      return {
+        id: row.id,
+        provider_id: row.provider_id,
+        accepted_at: row.accepted_at,
+        provider: row.provider as Acceptance['provider'],
+        provider_total,
+        avgRating: stats ? stats.sum / stats.count : null,
+        reviewCount: stats?.count ?? 0,
+        avgDeliveryMinutes: deliveryStats[row.provider_id] ?? null,
+      };
+    });
+
+    setAcceptances(result);
   }
 
   async function autoGetLocation() {
@@ -282,7 +434,8 @@ export default function FindStoreScreen() {
     console.log('[find-store] order placed, sending new_order notification for', order.id);
     sendOrderNotification(order.id, 'new_order');
     setPlacing(false);
-    router.replace({ pathname: '/(customer)/order/[id]', params: { id: order.id } });
+    setOrderId(order.id);
+    setPhase('bidding');
   }
 
   const totalAmount = quantity * unitPriceNum;
@@ -295,7 +448,7 @@ export default function FindStoreScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
           <Feather name="chevron-left" size={26} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Find Store</Text>
+        <Text style={styles.headerTitle}>Find Provider</Text>
         <View style={{ width: 34 }} />
       </View>
 
@@ -313,20 +466,23 @@ export default function FindStoreScreen() {
           <Text style={styles.sectionTitle}>Delivery Address</Text>
 
           <View style={styles.addressInputWrap}>
-            <TouchableOpacity
-              style={styles.addressPinWrap}
-              onPress={openPicker}
-              hitSlop={8}
-            >
-              <View style={styles.addressPinButton}>
-                <Feather name="map-pin" size={20} color="#fff" />
-              </View>
-            </TouchableOpacity>
+            {phase === 'form' && (
+              <TouchableOpacity
+                style={styles.addressPinWrap}
+                onPress={openPicker}
+                hitSlop={8}
+              >
+                <View style={styles.addressPinButton}>
+                  <Feather name="map-pin" size={20} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            )}
             <TextInput
               style={styles.addressInput}
               placeholder="Enter your full delivery address"
               placeholderTextColor="#9CA3AF"
               value={address}
+              editable={phase === 'form'}
               onChangeText={(text) => {
                 setAddress(text);
                 // Clear stored coords when user edits manually
@@ -348,11 +504,11 @@ export default function FindStoreScreen() {
               <Text style={styles.productName} numberOfLines={1}>{productName}</Text>
               <Text style={styles.productPrice}>Est. ₱{totalAmount.toLocaleString()}</Text>
             </View>
-            <View style={styles.quantityRow}>
+            <View style={[styles.quantityRow, phase === 'bidding' && styles.quantityRowDisabled]}>
               <TouchableOpacity
                 style={[styles.qtyButton, quantity <= 1 && styles.qtyButtonDisabled]}
                 onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
+                disabled={quantity <= 1 || phase === 'bidding'}
                 hitSlop={8}
               >
                 <Feather name="minus" size={20} color={quantity <= 1 ? '#9CA3AF' : '#fff'} />
@@ -361,6 +517,7 @@ export default function FindStoreScreen() {
               <TouchableOpacity
                 style={styles.qtyButton}
                 onPress={() => setQuantity((q) => q + 1)}
+                disabled={phase === 'bidding'}
                 hitSlop={8}
               >
                 <Feather name="plus" size={20} color="#fff" />
@@ -372,25 +529,97 @@ export default function FindStoreScreen() {
           </Text>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {phase === 'form' && error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {/* Bidding content — provider acceptances */}
+        {phase === 'bidding' && (
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>Providers</Text>
+              {acceptances.length > 0 && (
+                <View>
+                  <TouchableOpacity
+                    style={styles.sortDropdownBtn}
+                    onPress={() => setSortDropdownOpen((v) => !v)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.sortDropdownBtnText}>
+                      {sortBy === 'price' ? 'Price' : 'Distance'}
+                    </Text>
+                    <Feather name={sortDropdownOpen ? 'chevron-up' : 'chevron-down'} size={14} color={PRIMARY} />
+                  </TouchableOpacity>
+                  {sortDropdownOpen && (
+                    <View style={styles.sortDropdownMenu}>
+                      {(['price', 'distance'] as const).map((key) => (
+                        <TouchableOpacity
+                          key={key}
+                          style={[styles.sortDropdownItem, sortBy === key && styles.sortDropdownItemActive]}
+                          onPress={() => { setSortBy(key); setSortDropdownOpen(false); }}
+                        >
+                          <Text style={[styles.sortDropdownItemText, sortBy === key && styles.sortDropdownItemTextActive]}>
+                            {key === 'price' ? 'Price' : 'Distance'}
+                          </Text>
+                          {sortBy === key && <Feather name="check" size={13} color={PRIMARY} />}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+            {acceptances.length === 0 ? (
+              <View style={styles.emptyProviders}>
+                <ActivityIndicator size="small" color={PRIMARY} />
+                <Text style={styles.emptyProvidersText}>Waiting for providers to accept...</Text>
+              </View>
+            ) : (
+              [...acceptances]
+                .sort((a, b) => {
+                  if (sortBy === 'price') return a.provider_total - b.provider_total;
+                  // distance: sort by avgRating descending as proxy (no distance data available)
+                  if (a.avgRating == null && b.avgRating == null) return 0;
+                  if (a.avgRating == null) return 1;
+                  if (b.avgRating == null) return -1;
+                  return b.avgRating - a.avgRating;
+                })
+                .map((acc) => (
+                  <ProviderCard
+                    key={acc.id}
+                    acceptance={acc}
+                    selecting={selectingProvider === acc.provider_id}
+                    onSelect={() => console.log('selected provider', acc.provider_id)}
+                  />
+                ))
+            )}
+          </View>
+        )}
       </ScrollView>
 
-      {/* Find Store bar */}
+      {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <TouchableOpacity
-          style={[
-            styles.placeOrderButton,
-            (!canFindStore || placing) && styles.placeOrderButtonDisabled,
-          ]}
-          onPress={handleFindStore}
-          disabled={!canFindStore || placing}
-        >
-          {placing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.placeOrderText}>Find Store</Text>
-          )}
-        </TouchableOpacity>
+        {phase === 'form' ? (
+          <TouchableOpacity
+            style={[
+              styles.placeOrderButton,
+              (!canFindStore || placing) && styles.placeOrderButtonDisabled,
+            ]}
+            onPress={handleFindStore}
+            disabled={!canFindStore || placing}
+          >
+            {placing ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.placeOrderText}>Find Provider</Text>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.cancelOrderButton}
+            onPress={() => console.log('cancel pressed')}
+          >
+            <Text style={styles.cancelOrderText}>Cancel Order</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Full-screen map picker */}
@@ -468,6 +697,68 @@ export default function FindStoreScreen() {
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function ProviderCard({
+  acceptance,
+  selecting,
+  onSelect,
+}: {
+  acceptance: Acceptance;
+  selecting: boolean;
+  onSelect: () => void;
+}) {
+  const provider = acceptance.provider;
+
+  return (
+    <View style={styles.providerCard}>
+      <View style={styles.providerAvatar}>
+        {provider?.avatar_url ? (
+          <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
+        ) : (
+          <Feather name="user" size={20} color={PRIMARY} />
+        )}
+      </View>
+      <View style={styles.providerInfo}>
+        <Text style={styles.providerName}>
+          {provider?.business_name || provider?.full_name || 'Provider'}
+        </Text>
+        <View style={styles.ratingRow}>
+          {acceptance.avgRating !== null ? (
+            <>
+              <Feather name="star" size={12} color="#FBBF24" />
+              <Text style={styles.ratingText}>
+                {acceptance.avgRating.toFixed(1)}
+                <Text style={styles.ratingCount}> ({acceptance.reviewCount})</Text>
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.ratingNew}>New</Text>
+          )}
+          {acceptance.avgDeliveryMinutes !== null && (
+            <>
+              <Text style={styles.ratingDot}>·</Text>
+              <Feather name="clock" size={12} color="#9CA3AF" />
+              <Text style={styles.ratingCount}>~{acceptance.avgDeliveryMinutes} mins</Text>
+            </>
+          )}
+        </View>
+      </View>
+      <TouchableOpacity
+        style={[styles.selectBtn, selecting && styles.selectBtnDisabled]}
+        onPress={onSelect}
+        disabled={selecting}
+      >
+        {selecting ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Text style={styles.selectBtnText}>
+            {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : 'Select'}
+          </Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -552,6 +843,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
   },
+  quantityRowDisabled: { opacity: 0.5 },
 
   // Address
   addressInputWrap: {
@@ -705,4 +997,113 @@ const styles = StyleSheet.create({
   },
   placeOrderButtonDisabled: { opacity: 0.6 },
   placeOrderText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  cancelOrderButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#DC2626',
+  },
+  cancelOrderText: { fontSize: 15, fontWeight: '700', color: '#DC2626' },
+
+  // Providers section (bidding phase)
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sortDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: PRIMARY,
+    backgroundColor: '#F0FDF4',
+  },
+  sortDropdownBtnText: { fontSize: 12, fontWeight: '600', color: PRIMARY },
+  sortDropdownMenu: {
+    position: 'absolute',
+    top: 34,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 100,
+    minWidth: 130,
+    overflow: 'hidden',
+  },
+  sortDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  sortDropdownItemActive: { backgroundColor: '#F0FDF4' },
+  sortDropdownItemText: { fontSize: 13, fontWeight: '500', color: '#374151' },
+  sortDropdownItemTextActive: { color: PRIMARY, fontWeight: '600' },
+
+  emptyProviders: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emptyProvidersText: { fontSize: 13, color: '#6B7280' },
+  providerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  providerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: { width: 40, height: 40, borderRadius: 20 },
+  providerInfo: { flex: 1 },
+  providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3, flexWrap: 'wrap' },
+  ratingText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  ratingCount: { fontSize: 11, fontWeight: '400', color: '#9CA3AF' },
+  ratingNew: { fontSize: 12, color: '#9CA3AF' },
+  ratingDot: { fontSize: 12, color: '#D1D5DB' },
+  selectBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  selectBtnDisabled: { opacity: 0.6 },
+  selectBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
 });
