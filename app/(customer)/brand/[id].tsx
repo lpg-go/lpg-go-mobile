@@ -117,6 +117,7 @@ export default function BrandProductsScreen() {
         brandName: name ?? '',
         sizeKg: String(product.size_kg),
         unitPrice: String(product.minPrice),
+        maxPrice: String(product.maxPrice),
         providerProductId: product.cheapestProviderProductId!,
       },
     });

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,6 +34,7 @@ export default function FindStoreScreen() {
     brandName,
     sizeKg,
     unitPrice,
+    maxPrice,
     providerProductId,
   } = useLocalSearchParams<{
     productId: string;
@@ -40,10 +42,12 @@ export default function FindStoreScreen() {
     brandName: string;
     sizeKg: string;
     unitPrice: string;
+    maxPrice: string;
     providerProductId: string;
   }>();
 
   const unitPriceNum = Number(unitPrice);
+  const maxPriceNum = Number(maxPrice);
 
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState<number | null>(null);
@@ -58,7 +62,11 @@ export default function FindStoreScreen() {
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
 
+  const [pickerVisible, setPickerVisible] = useState(false);
+
   const mapRef = useRef<MapView>(null);
+  // Snapshot of address/coords when the picker opens, so Cancel can restore.
+  const snapshotRef = useRef<{ address: string; lat: number | null; lng: number | null } | null>(null);
 
   useEffect(() => {
     autoGetLocation();
@@ -83,7 +91,10 @@ export default function FindStoreScreen() {
 
   async function autoGetLocation() {
     const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== 'granted') {
+      setLocationError('Location off — type your address or tap Use current location.');
+      return;
+    }
 
     setLocationLoading(true);
     try {
@@ -160,6 +171,27 @@ export default function FindStoreScreen() {
     } catch {
       // Reverse geocoding failed — keep existing address text
     }
+  }
+
+  function openPicker() {
+    // Remember current values so a Cancel can revert any live pin edits.
+    snapshotRef.current = { address, lat, lng };
+    setPickerVisible(true);
+  }
+
+  function cancelPicker() {
+    const snap = snapshotRef.current;
+    if (snap) {
+      setAddress(snap.address);
+      setLat(snap.lat);
+      setLng(snap.lng);
+    }
+    setPickerVisible(false);
+  }
+
+  function confirmPicker() {
+    // Pin edits already applied live via handlePinDrag/handleUseLocation.
+    setPickerVisible(false);
   }
 
   async function handleFindStore() {
@@ -276,13 +308,50 @@ export default function FindStoreScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Delivery address */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Delivery Address</Text>
+
+          <View style={styles.addressInputWrap}>
+            <TouchableOpacity
+              style={styles.addressPinWrap}
+              onPress={openPicker}
+              hitSlop={8}
+            >
+              <View style={styles.addressPinButton}>
+                <Feather name="map-pin" size={20} color="#fff" />
+              </View>
+            </TouchableOpacity>
+            <TextInput
+              style={styles.addressInput}
+              placeholder="Enter your full delivery address"
+              placeholderTextColor="#9CA3AF"
+              value={address}
+              onChangeText={(text) => {
+                setAddress(text);
+                // Clear stored coords when user edits manually
+                if (lat !== null) { setLat(null); setLng(null); }
+              }}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+
+          {locationError ? <Text style={styles.fieldError}>{locationError}</Text> : null}
+        </View>
+
         {/* Product summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Product</Text>
           <View style={styles.productCard}>
             <View style={styles.productInfo}>
               <Text style={styles.productName} numberOfLines={1}>{productName}</Text>
-              <Text style={styles.productPrice}>₱{unitPriceNum.toLocaleString()}</Text>
+              <Text style={styles.productPrice}>
+                {!maxPriceNum || maxPriceNum === unitPriceNum
+                  ? `₱${unitPriceNum.toLocaleString()}`
+                  : `₱${unitPriceNum.toLocaleString()}-₱${maxPriceNum.toLocaleString()}`}
+              </Text>
             </View>
             <View style={styles.quantityRow}>
               <TouchableOpacity
@@ -291,7 +360,7 @@ export default function FindStoreScreen() {
                 disabled={quantity <= 1}
                 hitSlop={8}
               >
-                <Feather name="minus" size={18} color={quantity <= 1 ? '#9CA3AF' : PRIMARY} />
+                <Feather name="minus" size={20} color={quantity <= 1 ? '#9CA3AF' : '#fff'} />
               </TouchableOpacity>
               <Text style={styles.qtyValue}>{quantity}</Text>
               <TouchableOpacity
@@ -299,92 +368,13 @@ export default function FindStoreScreen() {
                 onPress={() => setQuantity((q) => q + 1)}
                 hitSlop={8}
               >
-                <Feather name="plus" size={18} color={PRIMARY} />
+                <Feather name="plus" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-
-        {/* Delivery address */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery Address</Text>
-
-          <TextInput
-            style={styles.addressInput}
-            placeholder="Enter your full delivery address"
-            placeholderTextColor="#9CA3AF"
-            value={address}
-            onChangeText={(text) => {
-              setAddress(text);
-              // Clear stored coords when user edits manually
-              if (lat !== null) { setLat(null); setLng(null); }
-            }}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
-
-          <TouchableOpacity
-            style={[styles.locationButton, locationLoading && styles.locationButtonDisabled]}
-            onPress={handleUseLocation}
-            disabled={locationLoading}
-          >
-            {locationLoading ? (
-              <ActivityIndicator size="small" color={PRIMARY} />
-            ) : (
-              <Feather name="map-pin" size={16} color={PRIMARY} />
-            )}
-            <Text style={styles.locationButtonText}>
-              {locationLoading ? 'Getting location...' : 'Use current location'}
-            </Text>
-          </TouchableOpacity>
-
-          {locationError ? <Text style={styles.fieldError}>{locationError}</Text> : null}
-
-          {/* Map pin preview */}
-          {lat !== null && lng !== null && (
-            <View style={styles.mapPreview}>
-              <MapView
-                ref={mapRef}
-                style={styles.mapPreviewMap}
-                initialRegion={{
-                  latitude: lat,
-                  longitude: lng,
-                  latitudeDelta: 0.005,
-                  longitudeDelta: 0.005,
-                }}
-                showsUserLocation={false}
-                showsMyLocationButton={false}
-              >
-                <Marker
-                  coordinate={{ latitude: lat, longitude: lng }}
-                  draggable
-                  onDragEnd={(e) => handlePinDrag(e.nativeEvent.coordinate)}
-                >
-                  <View style={styles.deliveryPin}>
-                    <Feather name="map-pin" size={18} color="#fff" />
-                  </View>
-                </Marker>
-              </MapView>
-              <View style={styles.mapPreviewHint}>
-                <Feather name="move" size={12} color="#6B7280" />
-                <Text style={styles.mapPreviewHintText}>Drag pin to adjust exact location</Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Estimated total */}
-        <View style={styles.section}>
-          <View style={styles.summaryCard}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Estimated Total</Text>
-              <Text style={styles.totalValue}>Est. ₱{totalAmount.toLocaleString()}</Text>
-            </View>
-            <Text style={styles.estimateNote}>
-              Final price depends on the provider you choose.
-            </Text>
-          </View>
+          <Text style={styles.estimateNote}>
+            Final price depends on the provider you choose.
+          </Text>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -410,11 +400,95 @@ export default function FindStoreScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Full-screen map picker */}
+      <Modal
+        visible={pickerVisible}
+        animationType="slide"
+        onRequestClose={cancelPicker}
+      >
+        <View style={styles.pickerScreen}>
+          <MapView
+            ref={mapRef}
+            style={styles.pickerMap}
+            initialRegion={{
+              latitude: lat ?? DEFAULT_REGION.latitude,
+              longitude: lng ?? DEFAULT_REGION.longitude,
+              latitudeDelta: lat !== null ? 0.005 : DEFAULT_REGION.latitudeDelta,
+              longitudeDelta: lng !== null ? 0.005 : DEFAULT_REGION.longitudeDelta,
+            }}
+            onPress={(e) => handlePinDrag(e.nativeEvent.coordinate)}
+            showsUserLocation
+            showsMyLocationButton={false}
+          >
+            {lat !== null && lng !== null && (
+              <Marker
+                coordinate={{ latitude: lat, longitude: lng }}
+                draggable
+                onDragEnd={(e) => handlePinDrag(e.nativeEvent.coordinate)}
+              >
+                <View style={styles.deliveryPin}>
+                  <Feather name="map-pin" size={18} color="#fff" />
+                </View>
+              </Marker>
+            )}
+          </MapView>
+
+          {/* Top bar: close + hint */}
+          <View style={[styles.pickerTopBar, { top: insets.top + 12 }]}>
+            <TouchableOpacity
+              style={styles.pickerCloseButton}
+              onPress={cancelPicker}
+              hitSlop={8}
+            >
+              <Feather name="x" size={22} color="#111827" />
+            </TouchableOpacity>
+            <View style={styles.pickerHint}>
+              <Feather name="move" size={12} color="#6B7280" />
+              <Text style={styles.pickerHintText}>Tap the map or drag the pin</Text>
+            </View>
+          </View>
+
+          {/* Bottom controls */}
+          <View style={[styles.pickerBottomBar, { paddingBottom: insets.bottom + 12 }]}>
+            <TouchableOpacity
+              style={styles.pickerUseLocation}
+              onPress={handleUseLocation}
+              disabled={locationLoading}
+            >
+              {locationLoading ? (
+                <ActivityIndicator size="small" color={PRIMARY} />
+              ) : (
+                <Feather name="navigation" size={16} color={PRIMARY} />
+              )}
+              <Text style={styles.pickerUseLocationText}>
+                {locationLoading ? 'Getting location...' : 'Use Current Location'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.confirmButton, lat === null && styles.confirmButtonDisabled]}
+              onPress={confirmPicker}
+              disabled={lat === null}
+            >
+              <Text style={styles.confirmButtonText}>Confirm Location</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const PRIMARY = '#16A34A';
+
+// Fallback map center when no location is available yet (Manila, PH).
+const DEFAULT_REGION = {
+  latitude: 14.5995,
+  longitude: 120.9842,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
+};
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F9FAFB' },
@@ -456,35 +530,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  productInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  productName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#111827' },
+  productInfo: { flex: 1 },
+  productName: { fontSize: 14, fontWeight: '600', color: '#111827' },
   productMeta: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  productPrice: { fontSize: 14, fontWeight: '800', color: PRIMARY, marginLeft: 12 },
+  productPrice: { fontSize: 12, fontWeight: '700', color: PRIMARY, marginTop: 3 },
 
   // Quantity
   quantityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    gap: 8,
+    gap: 12,
     marginLeft: 12,
   },
   qtyButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#F0FDF4',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyButtonDisabled: { backgroundColor: '#F3F4F6' },
   qtyValue: {
-    minWidth: 36,
+    minWidth: 24,
+    height: 40,
+    lineHeight: 40,
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
@@ -492,53 +562,107 @@ const styles = StyleSheet.create({
   },
 
   // Address
+  addressInputWrap: {
+    position: 'relative',
+    marginBottom: 10,
+  },
+  addressPinWrap: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  addressPinButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   addressInput: {
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingLeft: 14,
+    paddingRight: 62,
     paddingVertical: 12,
     fontSize: 14,
     color: '#111827',
-    minHeight: 80,
-    marginBottom: 10,
+    height: 68,
   },
-  locationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: PRIMARY,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  locationButtonDisabled: { borderColor: '#D1D5DB' },
-  locationButtonText: { fontSize: 13, fontWeight: '500', color: PRIMARY },
   fieldError: { fontSize: 12, color: '#EF4444', marginTop: 6 },
 
-  // Map preview
-  mapPreview: {
-    marginTop: 12,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
+  // Map picker (full-screen modal)
+  pickerScreen: { flex: 1, backgroundColor: '#fff' },
+  pickerMap: { ...StyleSheet.absoluteFillObject },
+  pickerTopBar: {
+    position: 'absolute',
+    left: H_PADDING,
+    right: H_PADDING,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  mapPreviewMap: { height: 180 },
-  mapPreviewHint: {
+  pickerCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  pickerHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fff',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  mapPreviewHintText: { fontSize: 12, color: '#6B7280' },
+  pickerHintText: { fontSize: 12, color: '#6B7280' },
+  pickerBottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: H_PADDING,
+    paddingTop: 12,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    gap: 10,
+  },
+  pickerUseLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  pickerUseLocationText: { fontSize: 14, fontWeight: '600', color: PRIMARY },
+  confirmButton: {
+    backgroundColor: PRIMARY,
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  confirmButtonDisabled: { opacity: 0.6 },
+  confirmButtonText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   deliveryPin: {
     width: 36,
     height: 36,
@@ -555,21 +679,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  // Summary card
-  summaryCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  totalValue: { fontSize: 16, fontWeight: '800', color: PRIMARY },
+  // Helper note
   estimateNote: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
 
   // Error
