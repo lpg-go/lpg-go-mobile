@@ -590,7 +590,7 @@ export default function FindStoreScreen() {
             )}
             <TextInput
               style={styles.addressInput}
-              placeholder="Enter your full delivery address"
+              placeholder={locationLoading ? 'Getting your location…' : 'Enter your full delivery address'}
               placeholderTextColor="#9CA3AF"
               value={address}
               editable={phase === 'form'}

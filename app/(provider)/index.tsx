@@ -515,22 +515,9 @@ export default function ProviderIncomingOrdersScreen() {
         </View>
       </View>
 
-      {/* Offline banner */}
-      {!isOnline && (
-        <View style={styles.offlineBanner}>
-          <Feather name="wifi-off" size={14} color="#92400E" />
-          <Text style={styles.offlineBannerText}>
-            You are offline. Toggle online to receive orders.
-          </Text>
-        </View>
-      )}
-
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          !isOnline && activeOrders.length === 0 && styles.scrollContentHidden,
-        ]}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -540,14 +527,12 @@ export default function ProviderIncomingOrdersScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
-        scrollEnabled={isOnline || activeOrders.length > 0}
       >
         {/* Active orders — always visible (ongoing deliveries), even when offline */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Active Orders</Text>
           {activeOrders.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No active deliveries</Text>
+              <Text style={styles.emptyText}>No Active Orders</Text>
             </View>
           ) : (
             activeOrders.map((order) => {
@@ -555,19 +540,19 @@ export default function ProviderIncomingOrdersScreen() {
               return (
                 <TouchableOpacity
                   key={order.id}
-                  style={styles.recentCard}
+                  style={[styles.recentCard, styles.activeOrderCard]}
                   onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
                   activeOpacity={0.7}
                 >
                   <View style={styles.recentCardTop}>
-                    <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
+                    <Text style={[styles.recentItems, styles.activeOrderText]} numberOfLines={1}>{order.itemSummary}</Text>
                     <View style={[styles.recentBadge, { backgroundColor: cfg.bg }]}>
                       <Text style={[styles.recentBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
                     </View>
                   </View>
                   <View style={styles.recentCardBottom}>
-                    <Text style={styles.recentDate} numberOfLines={1}>{order.delivery_address}</Text>
-                    <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
+                    <Text style={[styles.recentDate, styles.activeOrderAddress]}>{order.delivery_address}</Text>
+                    <Text style={[styles.recentAmount, styles.activeOrderText]}>₱{Number(order.total_amount).toLocaleString()}</Text>
                   </View>
                 </TouchableOpacity>
               );
@@ -575,38 +560,40 @@ export default function ProviderIncomingOrdersScreen() {
           )}
         </View>
 
-        {isOnline && (
-          <>
-            {/* Incoming orders */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>New Requests</Text>
-
-              {stockedProductIds.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>
-                    Add stock to your products to start receiving orders.
-                  </Text>
-                </View>
-              ) : orders.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>
-                    No orders right now
-                  </Text>
-                </View>
-              ) : (
-                orders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    accepting={accepting === order.id}
-                    onAccept={() => handleAccept(order.id)}
-                  />
-                ))
-              )}
+        {/* Incoming orders */}
+        <View style={styles.section}>
+          {!isOnline ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                You're offline
+              </Text>
             </View>
+          ) : stockedProductIds.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                Add stock to your products to start receiving orders.
+              </Text>
+            </View>
+          ) : orders.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                No New Orders
+              </Text>
+            </View>
+          ) : (
+            orders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                accepting={accepting === order.id}
+                onAccept={() => handleAccept(order.id)}
+              />
+            ))
+          )}
+        </View>
 
-            {/* Recent orders */}
-            {recentOrders.length > 0 && (
+        {/* Recent orders */}
+        {recentOrders.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Recent Orders</Text>
                 {recentOrders.map((order) => {
@@ -643,9 +630,7 @@ export default function ProviderIncomingOrdersScreen() {
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-            )}
-          </>
+          </View>
         )}
       </ScrollView>
     </View>
@@ -665,12 +650,12 @@ function OrderCard({
 }) {
   return (
     <TouchableOpacity
-      style={styles.orderCard}
-      activeOpacity={0.85}
+      style={[styles.recentCard, styles.newOrderCard]}
+      activeOpacity={0.7}
       onPress={() => {
         Alert.alert(
           'Accept Order?',
-          `Customer: ${order.customerName}\nItems: ${order.itemSummary}\nTotal: ₱${Number(order.total_amount).toLocaleString()}`,
+          `Location: ${order.delivery_address}`,
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Accept', onPress: onAccept },
@@ -679,24 +664,22 @@ function OrderCard({
       }}
       disabled={accepting || order.alreadyAccepted}
     >
-      <View style={styles.orderCardBody}>
-        <Text style={styles.orderCustomer} numberOfLines={1}>{order.customerName}</Text>
-        <Text style={styles.orderItems} numberOfLines={1}>
-          {order.itemSummary}
-        </Text>
-        <View style={styles.orderAddressRow}>
-          <Feather name="map-pin" size={12} color="#9CA3AF" />
-          <Text style={styles.orderAddress} numberOfLines={1}>
-            {order.delivery_address}
-          </Text>
-        </View>
+      <View style={styles.recentCardTop}>
+        <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
+        {accepting ? (
+          <ActivityIndicator size="small" color={PRIMARY} />
+        ) : (
+          <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
+        )}
       </View>
-      {accepting ? (
-        <ActivityIndicator size="small" color={PRIMARY} />
-      ) : order.alreadyAccepted ? (
-        <Feather name="check" size={24} color={PRIMARY} />
-      ) : (
-        <Feather name="chevron-right" size={24} color={PRIMARY} />
+      <Text style={styles.orderCustomerLine} numberOfLines={1}>{order.customerName}</Text>
+      <View style={styles.recentCardBottom}>
+        <Text style={styles.recentDate}>{order.delivery_address}</Text>
+      </View>
+      {order.alreadyAccepted && (
+        <View style={styles.acceptedCheck}>
+          <Feather name="check-circle" size={20} color={PRIMARY} />
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -743,23 +726,9 @@ const styles = StyleSheet.create({
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
   onlineLabel: { fontSize: 13, fontWeight: '600' },
 
-  // Offline banner
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
-  },
-  offlineBannerText: { fontSize: 13, color: '#92400E', flex: 1 },
-
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },
-  scrollContentHidden: { flex: 1 },
 
   // Section
   section: { marginBottom: 20 },
@@ -781,6 +750,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  newOrderCard: {
+    backgroundColor: '#F0FDF4',
+    borderColor: PRIMARY,
+  },
+  acceptedCheck: {
+    position: 'absolute',
+    bottom: 10,
+    right: 12,
+  },
+  activeOrderCard: {
+    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+  },
+  activeOrderText: { color: '#fff' },
+  activeOrderAddress: { color: 'rgba(255,255,255,0.85)' },
   recentCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -794,36 +778,14 @@ const styles = StyleSheet.create({
   recentCardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
   },
   recentDate: { fontSize: 12, color: '#6B7280', flex: 1 },
+  orderCustomerLine: { fontSize: 12, color: '#6B7280', marginBottom: 6 },
   recentAmount: { fontSize: 13, fontWeight: '700', color: '#111827', flexShrink: 0 },
 
   // Incoming order card — same shape as activeCard, white background
-  orderCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  orderCardBody: { flex: 1 },
-  orderCustomer: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  orderItems: { fontSize: 13, color: '#374151', marginBottom: 4 },
-  orderAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  orderAddress: { fontSize: 12, color: '#9CA3AF', flex: 1 },
-
   // Empty state
   emptyState: {
     backgroundColor: '#fff',

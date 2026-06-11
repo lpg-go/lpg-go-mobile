@@ -421,7 +421,7 @@ export default function ActiveDeliveryScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: (order.status === 'in_transit' ? 110 : 40) + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Status card */}
@@ -515,24 +515,6 @@ export default function ActiveDeliveryScreen() {
           </View>
         )}
 
-        {/* Mark as delivered */}
-        {order.status === 'in_transit' && (
-          <TouchableOpacity
-            style={[styles.markDeliveredBtn, marking && { opacity: 0.6 }]}
-            onPress={handleMarkDelivered}
-            disabled={marking}
-          >
-            {marking ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Feather name="check-circle" size={18} color="#fff" />
-                <Text style={styles.markDeliveredBtnText}>Mark as Delivered</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-
         {/* Cancel delivery */}
         {order.status === 'in_transit' && (
           <TouchableOpacity
@@ -548,6 +530,23 @@ export default function ActiveDeliveryScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Mark as delivered — fixed bottom bar */}
+      {order.status === 'in_transit' && (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+          <TouchableOpacity
+            style={[styles.markDeliveredBtn, marking && { opacity: 0.6 }]}
+            onPress={handleMarkDelivered}
+            disabled={marking}
+          >
+            {marking ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.markDeliveredBtnText}>Mark as Delivered</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Map modal */}
       <Modal visible={mapVisible} animationType="slide" onRequestClose={() => setMapVisible(false)}>
@@ -726,7 +725,18 @@ const styles = StyleSheet.create({
   },
   msgBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#fff' },
 
-  // Mark delivered
+  // Mark delivered — fixed bottom bar (matches customer Select Provider button)
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: H_PADDING,
+    paddingTop: 12,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
   markDeliveredBtn: {
     backgroundColor: PRIMARY,
     borderRadius: 12,
@@ -734,8 +744,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginBottom: 12,
+    paddingHorizontal: 20,
   },
   markDeliveredBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 
