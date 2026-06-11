@@ -589,6 +589,8 @@ export default function FindStoreScreen() {
   const totalAmount = quantity * (displayUnitPrice || 0);
   const canFindStore = address.trim().length > 0;
   const atLimit = maxActiveOrders > 0 && activeOrderCount >= maxActiveOrders;
+  // Lock the form inputs in bidding phase, or when the customer is at their limit.
+  const inputsDisabled = phase === 'bidding' || atLimit;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -615,7 +617,7 @@ export default function FindStoreScreen() {
           <Text style={styles.sectionTitle}>Delivery Address</Text>
 
           <View style={styles.addressInputWrap}>
-            {phase === 'form' && (
+            {!inputsDisabled && (
               <TouchableOpacity
                 style={styles.addressPinWrap}
                 onPress={openPicker}
@@ -631,7 +633,7 @@ export default function FindStoreScreen() {
               placeholder={locationLoading ? 'Getting your location…' : 'Enter your full delivery address'}
               placeholderTextColor="#9CA3AF"
               value={address}
-              editable={phase === 'form'}
+              editable={!inputsDisabled}
               onChangeText={(text) => {
                 setAddress(text);
                 // Clear stored coords when user edits manually
@@ -653,11 +655,11 @@ export default function FindStoreScreen() {
               <Text style={styles.productName} numberOfLines={1}>{displayName}</Text>
               <Text style={styles.productPrice}>Est. ₱{totalAmount.toLocaleString()}</Text>
             </View>
-            <View style={[styles.quantityRow, phase === 'bidding' && styles.quantityRowDisabled]}>
+            <View style={[styles.quantityRow, inputsDisabled && styles.quantityRowDisabled]}>
               <TouchableOpacity
                 style={[styles.qtyButton, quantity <= 1 && styles.qtyButtonDisabled]}
                 onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1 || phase === 'bidding'}
+                disabled={quantity <= 1 || inputsDisabled}
                 hitSlop={8}
               >
                 <Feather name="minus" size={20} color={quantity <= 1 ? '#9CA3AF' : '#fff'} />
@@ -666,7 +668,7 @@ export default function FindStoreScreen() {
               <TouchableOpacity
                 style={styles.qtyButton}
                 onPress={() => setQuantity((q) => q + 1)}
-                disabled={phase === 'bidding'}
+                disabled={inputsDisabled}
                 hitSlop={8}
               >
                 <Feather name="plus" size={20} color="#fff" />
@@ -747,27 +749,20 @@ export default function FindStoreScreen() {
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         {phase === 'form' ? (
-          <>
-            {atLimit && (
-              <Text style={styles.limitNote}>
-                Active order limit reached. Finish one to order again.
-              </Text>
+          <TouchableOpacity
+            style={[
+              styles.placeOrderButton,
+              (!canFindStore || placing || atLimit) && styles.placeOrderButtonDisabled,
+            ]}
+            onPress={handleFindStore}
+            disabled={!canFindStore || placing || atLimit}
+          >
+            {placing ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.placeOrderText}>Find Provider</Text>
             )}
-            <TouchableOpacity
-              style={[
-                styles.placeOrderButton,
-                (!canFindStore || placing || atLimit) && styles.placeOrderButtonDisabled,
-              ]}
-              onPress={handleFindStore}
-              disabled={!canFindStore || placing || atLimit}
-            >
-              {placing ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.placeOrderText}>Find Provider</Text>
-              )}
-            </TouchableOpacity>
-          </>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={[styles.placeOrderButton, !selectedProviderId && styles.selectProviderDisabled]}
@@ -1206,13 +1201,6 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     textAlign: 'center',
     marginBottom: 8,
-  },
-
-  limitNote: {
-    fontSize: 12,
-    color: '#DC2626',
-    textAlign: 'center',
-    marginBottom: 10,
   },
 
   // Bottom bar
