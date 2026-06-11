@@ -6,7 +6,6 @@ import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
-  BackHandler,
   Image,
   Modal,
   ScrollView,
@@ -55,6 +54,7 @@ export default function FindStoreScreen() {
     unitPrice,
     maxPrice,
     providerProductId,
+    resumeOrderId,
   } = useLocalSearchParams<{
     productId: string;
     productName: string;
@@ -63,10 +63,16 @@ export default function FindStoreScreen() {
     unitPrice: string;
     maxPrice: string;
     providerProductId: string;
+    resumeOrderId?: string;
   }>();
 
   const unitPriceNum = Number(unitPrice);
   const maxPriceNum = Number(maxPrice);
+
+  // When resuming an existing order, product name/price come from the DB
+  // (the navigation params productName/unitPrice may be absent).
+  const [resumeName, setResumeName] = useState<string | null>(null);
+  const [resumeUnitPrice, setResumeUnitPrice] = useState<number | null>(null);
 
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState<number | null>(null);
@@ -93,6 +99,8 @@ export default function FindStoreScreen() {
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<{ allow_cash_payment: boolean; allow_card_payment: boolean } | null>(null);
+  const [maxActiveOrders, setMaxActiveOrders] = useState(0); // 0 = unlimited
+  const [activeOrderCount, setActiveOrderCount] = useState(0);
 
   const [pickerVisible, setPickerVisible] = useState(false);
 
@@ -105,11 +113,74 @@ export default function FindStoreScreen() {
     autoGetLocation();
   }, []);
 
+  // Reset to a clean form state when opening Find Provider for a new product
+  // (the route component is reused across products, so state would otherwise persist).
+  // Address is intentionally left untouched so it persists across products.
+  // Skipped entirely when resuming an existing order's bidding.
+  useEffect(() => {
+    if (resumeOrderId) return;
+    setPhase('form');
+    setOrderId(null);
+    setAcceptances([]);
+    setSelectedProviderId(null);
+    setPendingProviderId(null);
+    setQuantity(1);
+  }, [productId, resumeOrderId]);
+
+  // Resume an existing order's bidding: jump straight to bidding phase and
+  // load the order so the read-only product + address display is populated.
+  // Realtime + polling (keyed on phase/orderId) then drive the providers list.
+  useEffect(() => {
+    if (!resumeOrderId) return;
+    setOrderId(resumeOrderId);
+    setPhase('bidding');
+    loadResumeOrder(resumeOrderId);
+  }, [resumeOrderId]);
+
+  async function loadResumeOrder(oid: string) {
+    const { data: order } = await supabase
+      .from('orders')
+      .select('delivery_address')
+      .eq('id', oid)
+      .single();
+    if (order) {
+      setAddress(order.delivery_address ?? '');
+    }
+
+    // Single-product order — load its item for the product/quantity display
+    const { data: item } = await supabase
+      .from('order_items')
+      .select('quantity, unit_price, product:products(name)')
+      .eq('order_id', oid)
+      .limit(1)
+      .single();
+    if (item) {
+      setQuantity(item.quantity);
+      setResumeUnitPrice(Number(item.unit_price));
+      setResumeName((item.product as { name: string } | null)?.name ?? 'Product');
+    }
+  }
+
   useFocusEffect(
     useCallback(() => {
       fetchSettings();
+      fetchActiveOrderCount();
     }, [])
   );
+
+  // Count the customer's current active orders (for the at-limit check).
+  async function fetchActiveOrderCount() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setActiveOrderCount(0); return; }
+
+    const { count } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('customer_id', user.id)
+      .in('status', ['awaiting_dealer_selection', 'in_transit', 'awaiting_confirmation']);
+
+    setActiveOrderCount(count ?? 0);
+  }
 
   // Bidding phase — realtime subscription on the orders row + initial fetch
   useEffect(() => {
@@ -155,12 +226,13 @@ export default function FindStoreScreen() {
   useEffect(() => {
     supabase
       .from('platform_settings')
-      .select('allow_cash_payment, allow_card_payment')
+      .select('allow_cash_payment, allow_card_payment, max_active_orders_per_customer')
       .single()
       .then(({ data }) => {
         if (data) {
           setPaymentSettings(data);
           setPaymentMethod(data.allow_cash_payment ? 'cash' : data.allow_card_payment ? 'card' : null);
+          setMaxActiveOrders(Number(data.max_active_orders_per_customer ?? 0));
         }
       });
   }, []);
@@ -404,59 +476,6 @@ export default function FindStoreScreen() {
     if (error) Alert.alert('Error', error.message);
   }
 
-  // ── Bidding-phase exit / cancel ───────────────────────────────────────────
-
-  async function cancelBiddingOrder() {
-    if (!orderId) return;
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'cancelled', cancelled_by: 'customer' })
-      .eq('id', orderId);
-
-    if (error) {
-      Alert.alert('Error', error.message);
-      return;
-    }
-
-    sendOrderNotification(orderId, 'order_cancelled');
-    // Stop polling before leaving the bidding screen
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-    router.back();
-  }
-
-  function confirmCancelBidding() {
-    Alert.alert(
-      'Cancel this order?',
-      'Your order will be cancelled.',
-      [
-        { text: 'Keep waiting', style: 'cancel' },
-        { text: 'Cancel order', style: 'destructive', onPress: cancelBiddingOrder },
-      ]
-    );
-  }
-
-  function handleBack() {
-    if (phase === 'bidding') {
-      confirmCancelBidding();
-    } else {
-      router.back();
-    }
-  }
-
-  // Intercept Android hardware back during bidding to confirm cancellation
-  useEffect(() => {
-    if (phase !== 'bidding') return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      confirmCancelBidding();
-      return true;
-    });
-    return () => sub.remove();
-  }, [phase, orderId]);
-
   async function handleFindStore() {
     setError('');
 
@@ -469,6 +488,21 @@ export default function FindStoreScreen() {
     if (!user) {
       setError('Not authenticated.');
       return;
+    }
+
+    // Safety net — the Find Provider button is disabled at the limit, but
+    // re-check with a fresh count in case state was stale (0 = unlimited).
+    if (maxActiveOrders > 0) {
+      const { count: activeCount } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('customer_id', user.id)
+        .in('status', ['awaiting_dealer_selection', 'in_transit', 'awaiting_confirmation']);
+
+      setActiveOrderCount(activeCount ?? 0);
+      if ((activeCount ?? 0) >= maxActiveOrders) {
+        return;
+      }
     }
 
     setPlacing(true);
@@ -549,14 +583,18 @@ export default function FindStoreScreen() {
     setPhase('bidding');
   }
 
-  const totalAmount = quantity * unitPriceNum;
+  // Product name/price fall back to DB-loaded values when resuming an order.
+  const displayName = productName || resumeName || 'Product';
+  const displayUnitPrice = resumeUnitPrice ?? unitPriceNum;
+  const totalAmount = quantity * (displayUnitPrice || 0);
   const canFindStore = address.trim().length > 0;
+  const atLimit = maxActiveOrders > 0 && activeOrderCount >= maxActiveOrders;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={8}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
           <Feather name="chevron-left" size={26} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Find Provider</Text>
@@ -612,7 +650,7 @@ export default function FindStoreScreen() {
         <View style={styles.section}>
           <View style={styles.productCard}>
             <View style={styles.productInfo}>
-              <Text style={styles.productName} numberOfLines={1}>{productName}</Text>
+              <Text style={styles.productName} numberOfLines={1}>{displayName}</Text>
               <Text style={styles.productPrice}>Est. ₱{totalAmount.toLocaleString()}</Text>
             </View>
             <View style={[styles.quantityRow, phase === 'bidding' && styles.quantityRowDisabled]}>
@@ -709,20 +747,27 @@ export default function FindStoreScreen() {
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         {phase === 'form' ? (
-          <TouchableOpacity
-            style={[
-              styles.placeOrderButton,
-              (!canFindStore || placing) && styles.placeOrderButtonDisabled,
-            ]}
-            onPress={handleFindStore}
-            disabled={!canFindStore || placing}
-          >
-            {placing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.placeOrderText}>Find Provider</Text>
+          <>
+            {atLimit && (
+              <Text style={styles.limitNote}>
+                Active order limit reached. Finish one to order again.
+              </Text>
             )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.placeOrderButton,
+                (!canFindStore || placing || atLimit) && styles.placeOrderButtonDisabled,
+              ]}
+              onPress={handleFindStore}
+              disabled={!canFindStore || placing || atLimit}
+            >
+              {placing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.placeOrderText}>Find Provider</Text>
+              )}
+            </TouchableOpacity>
+          </>
         ) : (
           <TouchableOpacity
             style={[styles.placeOrderButton, !selectedProviderId && styles.selectProviderDisabled]}
@@ -1161,6 +1206,13 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     textAlign: 'center',
     marginBottom: 8,
+  },
+
+  limitNote: {
+    fontSize: 12,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginBottom: 10,
   },
 
   // Bottom bar

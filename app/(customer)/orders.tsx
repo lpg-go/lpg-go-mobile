@@ -37,6 +37,7 @@ type OrderRow = {
   created_at: string;
   delivery_address: string;
   firstItemName: string;
+  firstItemProductId: string | null;
   extraCount: number;
 };
 
@@ -105,18 +106,22 @@ export default function CustomerOrdersScreen() {
 
     const orderIds = orderRows.map((o) => o.id);
 
-    // Fetch one item per order for the summary label
+    // Fetch items per order for the summary label + first product id (for routing)
     const { data: itemRows } = await supabase
       .from('order_items')
-      .select('order_id, product:products(name)')
+      .select('order_id, product_id, product:products(name)')
       .in('order_id', orderIds);
 
     // Group by order_id
     const itemsByOrder: Record<string, string[]> = {};
+    const firstProductIdByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
       const name = (row.product as { name: string } | null)?.name ?? 'Item';
       if (!itemsByOrder[row.order_id]) itemsByOrder[row.order_id] = [];
       itemsByOrder[row.order_id].push(name);
+      if (!firstProductIdByOrder[row.order_id] && row.product_id) {
+        firstProductIdByOrder[row.order_id] = row.product_id;
+      }
     }
 
     setOrders(
@@ -129,6 +134,7 @@ export default function CustomerOrdersScreen() {
           created_at: o.created_at,
           delivery_address: o.delivery_address,
           firstItemName: names[0] ?? 'Order',
+          firstItemProductId: firstProductIdByOrder[o.id] ?? null,
           extraCount: Math.max(0, names.length - 1),
         };
       })
@@ -172,7 +178,6 @@ export default function CustomerOrdersScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Active orders — always visible (ongoing deliveries) */}
-        <Text style={styles.sectionTitle}>Active Orders</Text>
         {activeOrders.length === 0 ? (
           <View style={styles.cardEmptyState}>
             <Text style={styles.cardEmptyText}>No active orders</Text>
@@ -205,6 +210,7 @@ export default function CustomerOrdersScreen() {
 
 function OrderCard({ order }: { order: OrderRow }) {
   const cfg = STATUS_CONFIG[order.status];
+  const isActive = ACTIVE_STATUSES.includes(order.status);
   const shortId = order.id.slice(-8).toUpperCase();
   const date = new Date(order.created_at).toLocaleString('en-PH', {
     month: 'short',
@@ -219,22 +225,30 @@ function OrderCard({ order }: { order: OrderRow }) {
 
   return (
     <TouchableOpacity
-      style={styles.card}
-      onPress={() =>
-        router.push({ pathname: '/(customer)/order/[id]', params: { id: order.id } })
-      }
+      style={[styles.card, isActive && styles.activeCard]}
+      onPress={() => {
+        if (order.status === 'awaiting_dealer_selection' && order.firstItemProductId) {
+          // Resume the bidding view for an order still finding a provider
+          router.push({
+            pathname: '/(customer)/find-store/[productId]',
+            params: { productId: order.firstItemProductId, resumeOrderId: order.id },
+          });
+        } else {
+          router.push({ pathname: '/(customer)/order/[id]', params: { id: order.id } });
+        }
+      }}
       activeOpacity={0.7}
     >
       <View style={styles.cardTop}>
-        <Text style={styles.itemSummary} numberOfLines={1}>{itemSummary}</Text>
+        <Text style={[styles.itemSummary, isActive && styles.activeText]} numberOfLines={1}>{itemSummary}</Text>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
           <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
         </View>
       </View>
 
       <View style={styles.cardBottom}>
-        <Text style={styles.address} numberOfLines={1}>{order.delivery_address}</Text>
-        <Text style={styles.amount}>₱{Number(order.total_amount).toLocaleString()}</Text>
+        <Text style={[styles.address, isActive && styles.activeAddress]} numberOfLines={1}>{order.delivery_address}</Text>
+        <Text style={[styles.amount, isActive && styles.activeText]}>₱{Number(order.total_amount).toLocaleString()}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -280,6 +294,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  activeCard: {
+    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+  },
+  activeText: { color: '#fff' },
+  activeAddress: { color: 'rgba(255,255,255,0.85)' },
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
