@@ -43,6 +43,9 @@ export type OrderBiddingProps = {
   paymentMethod: PaymentMethod | null;
   paymentSettings: PaymentSettings;
   selectingProvider: string | null;
+  // When true, the internal "Select Provider" button is not rendered (the host
+  // screen provides its own, e.g. a pinned bottom bar).
+  hideSelectButton?: boolean;
 
   // Callbacks
   onToggleSortDropdown: () => void;
@@ -66,6 +69,7 @@ export default function OrderBidding({
   paymentMethod,
   paymentSettings,
   selectingProvider,
+  hideSelectButton = false,
   onToggleSortDropdown,
   onSetSortBy,
   onSelectCard,
@@ -139,13 +143,15 @@ export default function OrderBidding({
               ))
           )}
 
-          <TouchableOpacity
-            style={[styles.selectProviderButton, !selectedProviderId && styles.selectProviderButtonDisabled]}
-            onPress={onOpenPayment}
-            disabled={!selectedProviderId}
-          >
-            <Text style={styles.selectProviderText}>Select Provider</Text>
-          </TouchableOpacity>
+          {!hideSelectButton && (
+            <TouchableOpacity
+              style={[styles.selectProviderButton, !selectedProviderId && styles.selectProviderButtonDisabled]}
+              onPress={onOpenPayment}
+              disabled={!selectedProviderId}
+            >
+              <Text style={styles.selectProviderText}>Select Provider</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
