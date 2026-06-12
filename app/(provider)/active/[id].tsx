@@ -442,7 +442,12 @@ export default function ActiveDeliveryScreen() {
         {order.customer && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Customer</Text>
-            <View style={styles.customerCard}>
+            <TouchableOpacity
+              style={styles.customerCard}
+              activeOpacity={0.8}
+              onPress={() => setMapVisible(true)}
+              disabled={order.status !== 'in_transit'}
+            >
               <View style={styles.customerAvatar}>
                 {order.customer.avatar_url ? (
                   <Image source={{ uri: order.customer.avatar_url }} style={styles.avatarImage} />
@@ -454,11 +459,9 @@ export default function ActiveDeliveryScreen() {
                 <Text style={styles.customerName}>{order.customer.full_name}</Text>
               </View>
               {order.status === 'in_transit' && (
-                <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => setMapVisible(true)}>
-                  <Text style={styles.actionBtnText}>Details</Text>
-                </TouchableOpacity>
+                <Feather name="chevron-right" size={20} color={PRIMARY} />
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -639,11 +642,11 @@ const styles = StyleSheet.create({
   customerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#DCFCE7',
+    borderColor: '#E5E7EB',
   },
   customerAvatar: {
     width: 40,
@@ -658,20 +661,6 @@ const styles = StyleSheet.create({
   avatarImage: { width: 40, height: 40, borderRadius: 20 },
   customerInfo: { flex: 1 },
   customerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  customerActions: { flexDirection: 'row', gap: 8 },
-  actionBtn: {
-    borderRadius: 8,
-    backgroundColor: '#16A34A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  actionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#fff',
-  },
 
   // Chat badge
   chatBtnWrapper: { position: 'relative' },

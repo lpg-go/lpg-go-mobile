@@ -74,6 +74,7 @@ type ProviderProfile = {
   business_name: string | null;
   phone: string;
   avatar_url: string | null;
+  provider_type: 'dealer' | 'rider' | null;
 };
 
 type LatLng = { lat: number; lng: number };
@@ -495,7 +496,7 @@ export default function OrderTrackingScreen() {
   async function fetchSelectedProvider(providerId: string) {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, business_name, phone, avatar_url')
+      .select('id, full_name, business_name, phone, avatar_url, provider_type')
       .eq('id', providerId)
       .single();
     if (data) setSelectedProvider(data as ProviderProfile);

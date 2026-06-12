@@ -47,6 +47,7 @@ type ProviderProfile = {
   business_name: string | null;
   phone: string;
   avatar_url: string | null;
+  provider_type: 'dealer' | 'rider' | null;
 };
 
 type LatLng = { lat: number; lng: number };
@@ -217,10 +218,10 @@ export default function OrderTracking({
                 )}
               </View>
               <View style={styles.providerInfo}>
-                <Text style={styles.providerName}>{selectedProvider.full_name}</Text>
-                {selectedProvider.business_name && (
-                  <Text style={styles.providerBusiness}>{selectedProvider.business_name}</Text>
-                )}
+                <Text style={styles.providerName}>{selectedProvider.business_name || selectedProvider.full_name}</Text>
+                <Text style={styles.providerBusiness}>
+                  {selectedProvider.provider_type === 'rider' ? 'Rider' : 'Dealer'}
+                </Text>
               </View>
               {order.status === 'in_transit' && (
                 <Feather name="chevron-right" size={20} color={PRIMARY} />
