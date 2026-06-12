@@ -203,7 +203,12 @@ export default function OrderTracking({
         {showSelectedProvider && selectedProvider && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Provider</Text>
-            <View style={styles.selectedProviderCard}>
+            <TouchableOpacity
+              style={styles.selectedProviderCard}
+              activeOpacity={0.8}
+              onPress={onOpenMap}
+              disabled={order.status !== 'in_transit'}
+            >
               <View style={styles.providerAvatar}>
                 {selectedProvider.avatar_url ? (
                   <Image source={{ uri: selectedProvider.avatar_url }} style={styles.avatarImage} />
@@ -218,15 +223,9 @@ export default function OrderTracking({
                 )}
               </View>
               {order.status === 'in_transit' && (
-                <TouchableOpacity
-                  style={styles.providerActionBtn}
-                  hitSlop={8}
-                  onPress={onOpenMap}
-                >
-                  <Text style={styles.providerActionBtnText}>Details</Text>
-                </TouchableOpacity>
+                <Feather name="chevron-right" size={20} color={PRIMARY} />
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -349,8 +348,8 @@ const styles = StyleSheet.create({
   // Status card
   statusCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -375,10 +374,10 @@ const styles = StyleSheet.create({
   // System-expired card
   expiredCard: {
     backgroundColor: '#FFF1F2',
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#FECDD3',
-    padding: 24,
+    padding: 16,
     alignItems: 'center',
     marginBottom: 20,
     gap: 8,
@@ -411,10 +410,10 @@ const styles = StyleSheet.create({
   // Confirm delivery card
   confirmCard: {
     backgroundColor: '#F0FDF4',
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#DCFCE7',
-    padding: 20,
+    padding: 16,
     marginBottom: 16,
     alignItems: 'center',
     gap: 10,
@@ -437,18 +436,18 @@ const styles = StyleSheet.create({
   confirmBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 
   // Section
-  section: { marginBottom: 16, zIndex: 1 },
+  section: { marginBottom: 20, zIndex: 1 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
 
   // Selected provider
   selectedProviderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#DCFCE7',
+    borderColor: '#E5E7EB',
   },
   providerAvatar: {
     width: 40,
@@ -464,19 +463,6 @@ const styles = StyleSheet.create({
   providerInfo: { flex: 1 },
   providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
   providerBusiness: { fontSize: 12, color: '#6B7280', marginTop: 1 },
-  providerActionBtn: {
-    borderRadius: 8,
-    backgroundColor: '#16A34A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  providerActionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#fff',
-  },
 
   // Order items
   itemsCard: {
