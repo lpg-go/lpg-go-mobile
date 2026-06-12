@@ -77,9 +77,10 @@ export type OrderTrackingProps = {
   // Flags
   confirming: boolean;
 
-  // Slots — bidding list + Cancel button stay owned by the parent screen and are
-  // injected here so the scroll order stays identical to the original layout.
-  biddingSlot?: React.ReactNode;
+  // Slots — bidding list (children) + Cancel button stay owned by the parent
+  // screen and are injected here so the scroll order stays identical to the
+  // original layout. `children` renders in the bidding scroll position.
+  children?: React.ReactNode;
   cancelSlot?: React.ReactNode;
 
   // Callbacks
@@ -114,7 +115,7 @@ export default function OrderTracking({
   reviewComment,
   submittingReview,
   confirming,
-  biddingSlot,
+  children,
   cancelSlot,
   onOpenMap,
   onCloseMap,
@@ -196,7 +197,7 @@ export default function OrderTracking({
         )}
 
         {/* Provider acceptances (bidding) — owned by the parent screen */}
-        {biddingSlot}
+        {children}
 
         {/* Selected provider */}
         {showSelectedProvider && selectedProvider && (

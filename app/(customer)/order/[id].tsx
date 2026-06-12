@@ -5,10 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Linking,
-  Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import OrderBidding from '../../../components/order/OrderBidding';
 import OrderTracking from '../../../components/order/OrderTracking';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
@@ -658,215 +656,24 @@ export default function OrderTrackingScreen() {
             )}
           </TouchableOpacity>
         )}
-        biddingSlot={showAcceptances && (
-          <View style={styles.section}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>Providers</Text>
-              {acceptances.length > 0 && (
-                <View>
-                  <TouchableOpacity
-                    style={styles.sortDropdownBtn}
-                    onPress={() => setSortDropdownOpen((v) => !v)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.sortDropdownBtnText}>
-                      {sortBy === 'price' ? 'Price' : 'Distance'}
-                    </Text>
-                    <Feather name={sortDropdownOpen ? 'chevron-up' : 'chevron-down'} size={14} color={PRIMARY} />
-                  </TouchableOpacity>
-                  {sortDropdownOpen && (
-                    <View style={styles.sortDropdownMenu}>
-                      {(['price', 'distance'] as const).map((key) => (
-                        <TouchableOpacity
-                          key={key}
-                          style={[styles.sortDropdownItem, sortBy === key && styles.sortDropdownItemActive]}
-                          onPress={() => { setSortBy(key); setSortDropdownOpen(false); }}
-                        >
-                          <Text style={[styles.sortDropdownItemText, sortBy === key && styles.sortDropdownItemTextActive]}>
-                            {key === 'price' ? 'Price' : 'Distance'}
-                          </Text>
-                          {sortBy === key && <Feather name="check" size={13} color={PRIMARY} />}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-            {acceptances.length === 0 ? (
-              <View style={styles.emptyProviders}>
-                <ActivityIndicator size="small" color={PRIMARY} />
-                <Text style={styles.emptyProvidersText}>Waiting for providers to accept...</Text>
-              </View>
-            ) : (
-              [...acceptances]
-                .sort((a, b) => {
-                  if (sortBy === 'price') return a.provider_total - b.provider_total;
-                  // distance: sort by avgRating descending as proxy (no distance data available)
-                  if (a.avgRating == null && b.avgRating == null) return 0;
-                  if (a.avgRating == null) return 1;
-                  if (b.avgRating == null) return -1;
-                  return b.avgRating - a.avgRating;
-                })
-                .map((acc) => (
-                  <ProviderCard
-                    key={acc.id}
-                    acceptance={acc}
-                    selecting={selectingProvider === acc.provider_id}
-                    onSelect={() => setPendingProviderId(acc.provider_id)}
-                  />
-                ))
-            )}
-          </View>
-        )}
-      />
-
-      {/* Payment method modal */}
-      <Modal
-        visible={pendingProviderId !== null}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPendingProviderId(null)}
       >
-        <View style={styles.paymentModalOverlay}>
-          <View style={[styles.paymentModalCard, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.paymentModalHeader}>
-              <Text style={styles.paymentModalTitle}>Choose Payment Method</Text>
-              <TouchableOpacity onPress={() => setPendingProviderId(null)} hitSlop={8}>
-                <Feather name="x" size={22} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.paymentOptions}>
-              {paymentSettings?.allow_cash_payment && (
-                <TouchableOpacity
-                  style={[styles.paymentOption, paymentMethod === 'cash' && styles.paymentOptionSelected]}
-                  onPress={() => setPaymentMethod('cash')}
-                >
-                  <View style={[styles.radio, paymentMethod === 'cash' && styles.radioSelected]}>
-                    {paymentMethod === 'cash' && <View style={styles.radioDot} />}
-                  </View>
-                  <Feather
-                    name="dollar-sign"
-                    size={18}
-                    color={paymentMethod === 'cash' ? PRIMARY : '#6B7280'}
-                    style={{ marginRight: 10 }}
-                  />
-                  <Text style={[styles.paymentLabel, paymentMethod === 'cash' && styles.paymentLabelSelected]}>
-                    Cash on Delivery
-                  </Text>
-                </TouchableOpacity>
-              )}
-              {paymentSettings?.allow_card_payment && (
-                <TouchableOpacity
-                  style={[styles.paymentOption, paymentMethod === 'card' && styles.paymentOptionSelected]}
-                  onPress={() => setPaymentMethod('card')}
-                >
-                  <View style={[styles.radio, paymentMethod === 'card' && styles.radioSelected]}>
-                    {paymentMethod === 'card' && <View style={styles.radioDot} />}
-                  </View>
-                  <Feather
-                    name="credit-card"
-                    size={18}
-                    color={paymentMethod === 'card' ? PRIMARY : '#6B7280'}
-                    style={{ marginRight: 10 }}
-                  />
-                  <Text style={[styles.paymentLabel, paymentMethod === 'card' && styles.paymentLabelSelected]}>
-                    Card Payment
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.confirmOrderBtn,
-                (selectingProvider !== null || !paymentMethod) && { opacity: 0.6 },
-              ]}
-              onPress={confirmSelection}
-              disabled={selectingProvider !== null || !paymentMethod}
-            >
-              {selectingProvider !== null ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.confirmOrderBtnText}>Confirm Order</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.paymentCancelBtn}
-              onPress={() => setPendingProviderId(null)}
-              disabled={selectingProvider !== null}
-            >
-              <Text style={styles.paymentCancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-}
-
-// ─── Provider card ────────────────────────────────────────────────────────────
-
-function ProviderCard({
-  acceptance,
-  selecting,
-  onSelect,
-}: {
-  acceptance: Acceptance;
-  selecting: boolean;
-  onSelect: () => void;
-}) {
-  const provider = acceptance.provider;
-
-  return (
-    <View style={styles.providerCard}>
-      <View style={styles.providerAvatar}>
-        {provider?.avatar_url ? (
-          <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
-        ) : (
-          <Feather name="user" size={20} color={PRIMARY} />
-        )}
-      </View>
-      <View style={styles.providerInfo}>
-        <Text style={styles.providerName}>
-          {provider?.business_name || provider?.full_name || 'Provider'}
-        </Text>
-        <View style={styles.ratingRow}>
-          {acceptance.avgRating !== null ? (
-            <>
-              <Feather name="star" size={12} color="#FBBF24" />
-              <Text style={styles.ratingText}>
-                {acceptance.avgRating.toFixed(1)}
-                <Text style={styles.ratingCount}> ({acceptance.reviewCount})</Text>
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.ratingNew}>New</Text>
-          )}
-          {acceptance.avgDeliveryMinutes !== null && (
-            <>
-              <Text style={styles.ratingDot}>·</Text>
-              <Feather name="clock" size={12} color="#9CA3AF" />
-              <Text style={styles.ratingCount}>~{acceptance.avgDeliveryMinutes} mins</Text>
-            </>
-          )}
-        </View>
-      </View>
-      <TouchableOpacity
-        style={[styles.selectBtn, selecting && styles.selectBtnDisabled]}
-        onPress={onSelect}
-        disabled={selecting}
-      >
-        {selecting ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Text style={styles.selectBtnText}>
-            {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : 'Select'}
-          </Text>
-        )}
-      </TouchableOpacity>
+        <OrderBidding
+          showAcceptances={showAcceptances}
+          acceptances={acceptances}
+          sortBy={sortBy}
+          sortDropdownOpen={sortDropdownOpen}
+          pendingProviderId={pendingProviderId}
+          paymentMethod={paymentMethod}
+          paymentSettings={paymentSettings}
+          selectingProvider={selectingProvider}
+          onToggleSortDropdown={() => setSortDropdownOpen((v) => !v)}
+          onSetSortBy={(key) => { setSortBy(key); setSortDropdownOpen(false); }}
+          onSelectProvider={(providerId) => setPendingProviderId(providerId)}
+          onSetPaymentMethod={setPaymentMethod}
+          onConfirmSelection={confirmSelection}
+          onClosePayment={() => setPendingProviderId(null)}
+        />
+      </OrderTracking>
     </View>
   );
 }
