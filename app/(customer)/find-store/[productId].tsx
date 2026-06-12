@@ -752,6 +752,14 @@ export default function FindStoreScreen() {
 
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+        {phase === 'form' && atLimit && (
+          <View style={styles.limitBanner}>
+            <Feather name="info" size={18} color="#B45309" style={styles.limitBannerIcon} />
+            <Text style={styles.limitBannerText}>
+              Complete or cancel an order to place a new one.
+            </Text>
+          </View>
+        )}
         {phase === 'form' ? (
           <TouchableOpacity
             style={[
@@ -1228,6 +1236,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
+  limitBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  limitBannerIcon: { marginRight: 8, marginTop: 1 },
+  limitBannerText: { flex: 1, fontSize: 13, lineHeight: 18, color: '#92400E' },
   placeOrderButtonDisabled: { opacity: 0.6 },
   selectProviderDisabled: { opacity: 0.5 },
   placeOrderText: { fontSize: 15, fontWeight: '700', color: '#fff' },

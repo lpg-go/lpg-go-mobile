@@ -669,20 +669,18 @@ function OrderCard({
     >
       <View style={styles.recentCardTop}>
         <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
+        <View style={styles.newBadge}>
+          <Text style={styles.newBadgeText}>{order.alreadyAccepted ? 'Accepted' : 'New'}</Text>
+        </View>
+      </View>
+      <View style={styles.recentCardBottom}>
+        <Text style={styles.recentDate}>{order.delivery_address}</Text>
         {accepting ? (
           <ActivityIndicator size="small" color={PRIMARY} />
         ) : (
           <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
         )}
       </View>
-      <View style={styles.recentCardBottom}>
-        <Text style={styles.recentDate}>{order.delivery_address}</Text>
-      </View>
-      {order.alreadyAccepted && (
-        <View style={styles.acceptedCheck}>
-          <ActivityIndicator size="small" color={PRIMARY} />
-        </View>
-      )}
     </TouchableOpacity>
   );
 }
@@ -756,11 +754,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     borderColor: PRIMARY,
   },
-  acceptedCheck: {
-    position: 'absolute',
-    bottom: 10,
-    right: 12,
-  },
   activeOrderCard: {
     backgroundColor: PRIMARY,
     borderColor: PRIMARY,
@@ -776,6 +769,8 @@ const styles = StyleSheet.create({
   },
   recentBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
   recentBadgeText: { fontSize: 11, fontWeight: '600' },
+  newBadge: { backgroundColor: PRIMARY, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
+  newBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
   recentItems: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
   recentCardBottom: {
     flexDirection: 'row',
