@@ -38,6 +38,7 @@ export type OrderBiddingProps = {
   acceptances: Acceptance[];
   sortBy: SortBy;
   sortDropdownOpen: boolean;
+  selectedProviderId: string | null;
   pendingProviderId: string | null;
   paymentMethod: PaymentMethod | null;
   paymentSettings: PaymentSettings;
@@ -46,7 +47,8 @@ export type OrderBiddingProps = {
   // Callbacks
   onToggleSortDropdown: () => void;
   onSetSortBy: (key: SortBy) => void;
-  onSelectProvider: (providerId: string) => void;
+  onSelectCard: (providerId: string) => void;
+  onOpenPayment: () => void;
   onSetPaymentMethod: (method: PaymentMethod) => void;
   onConfirmSelection: () => void;
   onClosePayment: () => void;
@@ -59,13 +61,15 @@ export default function OrderBidding({
   acceptances,
   sortBy,
   sortDropdownOpen,
+  selectedProviderId,
   pendingProviderId,
   paymentMethod,
   paymentSettings,
   selectingProvider,
   onToggleSortDropdown,
   onSetSortBy,
-  onSelectProvider,
+  onSelectCard,
+  onOpenPayment,
   onSetPaymentMethod,
   onConfirmSelection,
   onClosePayment,
@@ -129,11 +133,19 @@ export default function OrderBidding({
                 <ProviderCard
                   key={acc.id}
                   acceptance={acc}
-                  selecting={selectingProvider === acc.provider_id}
-                  onSelect={() => onSelectProvider(acc.provider_id)}
+                  selected={selectedProviderId === acc.provider_id}
+                  onSelect={() => onSelectCard(acc.provider_id)}
                 />
               ))
           )}
+
+          <TouchableOpacity
+            style={[styles.selectProviderButton, !selectedProviderId && styles.selectProviderButtonDisabled]}
+            onPress={onOpenPayment}
+            disabled={!selectedProviderId}
+          >
+            <Text style={styles.selectProviderText}>Select Provider</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -227,17 +239,21 @@ export default function OrderBidding({
 
 function ProviderCard({
   acceptance,
-  selecting,
+  selected,
   onSelect,
 }: {
   acceptance: Acceptance;
-  selecting: boolean;
+  selected: boolean;
   onSelect: () => void;
 }) {
   const provider = acceptance.provider;
 
   return (
-    <View style={styles.providerCard}>
+    <TouchableOpacity
+      style={[styles.providerCard, selected && styles.providerCardSelected]}
+      onPress={onSelect}
+      activeOpacity={0.8}
+    >
       <View style={styles.providerAvatar}>
         {provider?.avatar_url ? (
           <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
@@ -270,20 +286,10 @@ function ProviderCard({
           )}
         </View>
       </View>
-      <TouchableOpacity
-        style={[styles.selectBtn, selecting && styles.selectBtnDisabled]}
-        onPress={onSelect}
-        disabled={selecting}
-      >
-        {selecting ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Text style={styles.selectBtnText}>
-            {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : 'Select'}
-          </Text>
-        )}
-      </TouchableOpacity>
-    </View>
+      <Text style={styles.providerPriceText}>
+        {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : '—'}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -366,6 +372,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  providerCardSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: '#F0FDF4',
+  },
 
   // Provider avatar/info — shared shape with OrderTracking (kept in both)
   providerAvatar: {
@@ -389,17 +399,22 @@ const styles = StyleSheet.create({
   ratingNew: { fontSize: 12, color: '#9CA3AF' },
   ratingDot: { fontSize: 12, color: '#D1D5DB' },
 
-  // Select button
-  selectBtn: {
+  // Price text (plain, not a button) — matches Find Provider
+  providerPriceText: { fontSize: 15, fontWeight: '700', color: PRIMARY, marginLeft: 12 },
+
+  // Select Provider button (below the providers list)
+  selectProviderButton: {
     backgroundColor: PRIMARY,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minWidth: 70,
+    borderRadius: 12,
+    paddingVertical: 15,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 4,
   },
-  selectBtnDisabled: { opacity: 0.6 },
-  selectBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  selectProviderButtonDisabled: { opacity: 0.5 },
+  selectProviderText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 
   // Payment modal
   paymentModalOverlay: {

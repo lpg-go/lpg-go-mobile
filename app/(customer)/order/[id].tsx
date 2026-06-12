@@ -107,6 +107,7 @@ export default function OrderTrackingScreen() {
   const [selectedProvider, setSelectedProvider] = useState<ProviderProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectingProvider, setSelectingProvider] = useState<string | null>(null); // provider_id being confirmed
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null); // highlighted card (pre-payment)
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<{ allow_cash_payment: boolean; allow_card_payment: boolean } | null>(null);
@@ -254,6 +255,19 @@ export default function OrderTrackingScreen() {
       setSelectedProvider(null);
     }
   }, [order?.selected_provider_id]);
+
+  // Clear the highlighted (pre-payment) provider when bidding ends or the
+  // highlighted provider is no longer available — avoids a stale highlight /
+  // enabled "Select Provider" button pointing at a provider who's gone.
+  useEffect(() => {
+    if (!selectedProviderId) return;
+    const leftBidding =
+      order?.status !== 'awaiting_dealer_selection' || order?.selected_provider_id != null;
+    const providerGone = !acceptances.some((a) => a.provider_id === selectedProviderId);
+    if (leftBidding || providerGone) {
+      setSelectedProviderId(null);
+    }
+  }, [order?.status, order?.selected_provider_id, acceptances, selectedProviderId]);
 
   // Subscribe to provider location updates (real-time) when in_transit
   useEffect(() => {
@@ -662,13 +676,15 @@ export default function OrderTrackingScreen() {
           acceptances={acceptances}
           sortBy={sortBy}
           sortDropdownOpen={sortDropdownOpen}
+          selectedProviderId={selectedProviderId}
           pendingProviderId={pendingProviderId}
           paymentMethod={paymentMethod}
           paymentSettings={paymentSettings}
           selectingProvider={selectingProvider}
           onToggleSortDropdown={() => setSortDropdownOpen((v) => !v)}
           onSetSortBy={(key) => { setSortBy(key); setSortDropdownOpen(false); }}
-          onSelectProvider={(providerId) => setPendingProviderId(providerId)}
+          onSelectCard={(providerId) => setSelectedProviderId(providerId)}
+          onOpenPayment={() => selectedProviderId && setPendingProviderId(selectedProviderId)}
           onSetPaymentMethod={setPaymentMethod}
           onConfirmSelection={confirmSelection}
           onClosePayment={() => setPendingProviderId(null)}
