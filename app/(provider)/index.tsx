@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -451,6 +452,15 @@ export default function ProviderIncomingOrdersScreen() {
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, alreadyAccepted: true } : o))
     );
+
+    // Request location permission now so it's ready for live tracking once selected
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Location Permission Needed',
+        'Location access is required to share your position with the customer during delivery. Please enable it in Settings.'
+      );
+    }
   }
 
   async function handleRefresh() {
@@ -678,7 +688,7 @@ function OrderCard({
       </View>
       {order.alreadyAccepted && (
         <View style={styles.acceptedCheck}>
-          <Feather name="check-circle" size={20} color={PRIMARY} />
+          <ActivityIndicator size="small" color={PRIMARY} />
         </View>
       )}
     </TouchableOpacity>

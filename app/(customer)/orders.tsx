@@ -22,7 +22,7 @@ type OrderStatus =
   | 'cancelled';
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
-  pending:                   { label: 'Waiting...',       color: '#6B7280', bg: '#F3F4F6' },
+  pending:                   { label: 'Select Provider',  color: '#6B7280', bg: '#F3F4F6' },
   awaiting_dealer_selection: { label: 'Finding Provider', color: '#D97706', bg: '#FEF3C7' },
   in_transit:                { label: 'On the Way',      color: '#2563EB', bg: '#DBEAFE' },
   awaiting_confirmation:     { label: 'Awaiting Confirmation', color: '#7C3AED', bg: '#EDE9FE' },

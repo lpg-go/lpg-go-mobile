@@ -596,7 +596,7 @@ export default function FindStoreScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+        <TouchableOpacity onPress={() => router.replace('/(customer)/orders')} style={styles.backButton} hitSlop={8}>
           <Feather name="chevron-left" size={26} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Find Provider</Text>
