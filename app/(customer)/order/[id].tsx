@@ -11,13 +11,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import LiveMap from '../../../components/LiveMap';
+import OrderTracking from '../../../components/order/OrderTracking';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
@@ -619,74 +618,47 @@ export default function OrderTrackingScreen() {
         <View style={{ width: 34 }} />
       </View>
 
-      {/* New message banner */}
-      {newMsgBanner && (
-        <TouchableOpacity style={styles.msgBanner} onPress={handleChat} activeOpacity={0.85}>
-          <Feather name="message-circle" size={14} color="#fff" />
-          <Text style={styles.msgBannerText} numberOfLines={1}>{newMsgBanner}</Text>
-          <Feather name="chevron-right" size={14} color="#fff" />
-        </TouchableOpacity>
-      )}
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Status card */}
-        <View style={styles.statusCard}>
-          <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
-            <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>
-              {statusCfg.label}
-            </Text>
-          </View>
-          <Text style={styles.orderId}>Order #{shortId}</Text>
-          <Text style={styles.placedAt}>Placed {placedAt}</Text>
-          <View style={styles.addressRow}>
-            <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
-          </View>
-        </View>
-
-        {/* System-expired order notice */}
-        {order.status === 'cancelled' && order.cancelled_by === 'system' && (
-          <View style={styles.expiredCard}>
-            <Feather name="clock" size={32} color="#DC2626" />
-            <Text style={styles.expiredTitle}>Order Expired</Text>
-            <Text style={styles.expiredSubtitle}>
-              Your order expired as no provider accepted it in time.
-            </Text>
-            <TouchableOpacity
-              style={styles.newOrderBtn}
-              onPress={() => router.replace('/(customer)/')}
-            >
-              <Text style={styles.newOrderBtnText}>Place New Order</Text>
-            </TouchableOpacity>
-          </View>
+      <OrderTracking
+        order={order}
+        items={items}
+        selectedProvider={selectedProvider}
+        statusCfg={statusCfg}
+        shortId={shortId}
+        placedAt={placedAt}
+        providerLocation={providerLocation}
+        customerLocation={customerLocation}
+        mapVisible={mapVisible}
+        newMsgBanner={newMsgBanner}
+        reviewDone={reviewDone}
+        existingRating={existingRating}
+        existingComment={existingComment}
+        reviewRating={reviewRating}
+        reviewComment={reviewComment}
+        submittingReview={submittingReview}
+        confirming={confirming}
+        onOpenMap={() => setMapVisible(true)}
+        onCloseMap={() => setMapVisible(false)}
+        onChat={handleChat}
+        onCall={handleCall}
+        onConfirmDelivery={promptConfirmDelivery}
+        onSetReviewRating={setReviewRating}
+        onSetReviewComment={setReviewComment}
+        onSubmitReview={submitReview}
+        onPlaceNewOrder={() => router.replace('/(customer)/')}
+        cancelSlot={canCancel && (
+          <TouchableOpacity
+            style={[styles.cancelButton, cancelling && styles.cancelButtonDisabled]}
+            onPress={confirmCancelOrder}
+            disabled={cancelling}
+          >
+            {cancelling ? (
+              <ActivityIndicator size="small" color="#DC2626" />
+            ) : (
+              <Text style={styles.cancelButtonText}>Cancel Order</Text>
+            )}
+          </TouchableOpacity>
         )}
-
-        {/* Confirm delivery — shown prominently when provider has marked as delivered */}
-        {order.status === 'awaiting_confirmation' && (
-          <View style={styles.confirmCard}>
-            <Feather name="check-circle" size={32} color={PRIMARY} />
-            <Text style={styles.confirmCardTitle}>Your order has been delivered!</Text>
-
-            <TouchableOpacity
-              style={[styles.confirmBtn, confirming && { opacity: 0.6 }]}
-              onPress={promptConfirmDelivery}
-              disabled={confirming}
-            >
-              {confirming ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.confirmBtnText}>Confirm Delivery</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-
-        {/* Provider acceptances */}
-        {showAcceptances && (
+        biddingSlot={showAcceptances && (
           <View style={styles.section}>
             <View style={styles.sectionTitleRow}>
               <Text style={styles.sectionTitle}>Providers</Text>
@@ -747,142 +719,7 @@ export default function OrderTrackingScreen() {
             )}
           </View>
         )}
-
-        {/* Selected provider */}
-        {showSelectedProvider && selectedProvider && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Provider</Text>
-            <View style={styles.selectedProviderCard}>
-              <View style={styles.providerAvatar}>
-                {selectedProvider.avatar_url ? (
-                  <Image source={{ uri: selectedProvider.avatar_url }} style={styles.avatarImage} />
-                ) : (
-                  <Feather name="user" size={22} color={PRIMARY} />
-                )}
-              </View>
-              <View style={styles.providerInfo}>
-                <Text style={styles.providerName}>{selectedProvider.full_name}</Text>
-                {selectedProvider.business_name && (
-                  <Text style={styles.providerBusiness}>{selectedProvider.business_name}</Text>
-                )}
-              </View>
-              {order.status === 'in_transit' && (
-                <TouchableOpacity
-                  style={styles.providerActionBtn}
-                  hitSlop={8}
-                  onPress={() => setMapVisible(true)}
-                >
-                  <Text style={styles.providerActionBtnText}>Details</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Order items */}
-        <View style={styles.section}>
-
-          <View style={styles.itemsCard}>
-            {items.map((item, index) => (
-              <View
-                key={item.id}
-                style={[styles.itemRow, index < items.length - 1 && styles.itemRowBorder]}
-              >
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {item.product?.name ?? 'Product'}
-                </Text>
-                <Text style={styles.itemQty}>×{item.quantity}</Text>
-                <Text style={styles.itemSubtotal}>₱{Number(item.subtotal).toLocaleString()}</Text>
-              </View>
-            ))}
-            <View style={styles.itemTotalRow}>
-              <Text style={styles.itemTotalLabel}>Total</Text>
-              <Text style={styles.itemTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Review card — shown after delivery */}
-        {order.status === 'delivered' && selectedProvider && (
-          <View style={styles.reviewCard}>
-            {reviewDone ? (
-              <View style={styles.reviewDoneWrap}>
-                <Feather name="check-circle" size={20} color={PRIMARY} />
-                <Text style={styles.reviewDoneTitle}>Thank you for your review!</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Feather key={s} name="star" size={16} color={s <= (existingRating ?? 0) ? '#FBBF24' : '#E5E7EB'} />
-                  ))}
-                </View>
-                {existingComment ? (
-                  <Text style={styles.reviewDoneComment}>"{existingComment}"</Text>
-                ) : null}
-              </View>
-            ) : (
-              <>
-                <Text style={styles.reviewTitle}>Rate your delivery</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <TouchableOpacity key={s} onPress={() => setReviewRating(s)} hitSlop={6}>
-                      <Feather name="star" size={26} color={s <= reviewRating ? '#FBBF24' : '#E5E7EB'} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.reviewInput}
-                  placeholder="Share your experience (optional)"
-                  placeholderTextColor="#9CA3AF"
-                  value={reviewComment}
-                  onChangeText={setReviewComment}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-                <TouchableOpacity
-                  style={[styles.reviewSubmitBtn, submittingReview && { opacity: 0.6 }]}
-                  onPress={submitReview}
-                  disabled={submittingReview}
-                >
-                  {submittingReview
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.reviewSubmitText}>Submit Review</Text>}
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        )}
-
-        {/* Cancel button */}
-        {canCancel && (
-          <TouchableOpacity
-            style={[styles.cancelButton, cancelling && styles.cancelButtonDisabled]}
-            onPress={confirmCancelOrder}
-            disabled={cancelling}
-          >
-            {cancelling ? (
-              <ActivityIndicator size="small" color="#DC2626" />
-            ) : (
-              <Text style={styles.cancelButtonText}>Cancel Order</Text>
-            )}
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {/* Map modal */}
-      <Modal visible={mapVisible} animationType="slide" onRequestClose={() => setMapVisible(false)}>
-        <View style={[styles.modalScreen, { paddingTop: insets.top }]}>
-          <LiveMap
-            providerLocation={providerLocation}
-            customerLocation={customerLocation}
-            providerName={selectedProvider?.full_name}
-            businessName={selectedProvider?.business_name ?? undefined}
-            deliveryAddress={order?.delivery_address}
-            onBack={() => setMapVisible(false)}
-            onChat={() => { setMapVisible(false); handleChat(); }}
-            onCall={selectedProvider?.phone ? handleCall : undefined}
-          />
-        </View>
-      </Modal>
+      />
 
       {/* Payment method modal */}
       <Modal
