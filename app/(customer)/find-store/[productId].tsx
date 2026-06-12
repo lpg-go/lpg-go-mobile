@@ -525,7 +525,11 @@ export default function FindStoreScreen() {
     const totalAdminFee = Number(productRow?.admin_fee ?? 0) * quantity;
 
     const expiryMinutes = settings?.order_expiry_minutes ?? 10;
-    const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString();
+    // 0 means "never expire" — leave expires_at null so the cron skips it.
+    const expiresAt =
+      expiryMinutes > 0
+        ? new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString()
+        : null;
 
     const { data: order, error: orderError } = await supabase
       .from('orders')

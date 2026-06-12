@@ -87,12 +87,12 @@ const STATUS_CONFIG: Record<
   OrderStatus,
   { label: string; color: string; bg: string }
 > = {
-  pending:                   { label: 'Select Provider',   color: '#6B7280', bg: '#F3F4F6' },
-  awaiting_dealer_selection: { label: 'Finding Provider',  color: '#D97706', bg: '#FEF3C7' },
-  in_transit:                { label: 'On the Way',       color: '#2563EB', bg: '#DBEAFE' },
-  awaiting_confirmation:     { label: 'Awaiting Confirmation', color: '#7C3AED', bg: '#EDE9FE' },
-  delivered:                 { label: 'Delivered',         color: '#16A34A', bg: '#DCFCE7' },
-  cancelled:                 { label: 'Cancelled',         color: '#DC2626', bg: '#FEE2E2' },
+  pending:                   { label: 'Select Provider',   color: '#16A34A', bg: '#F0FDF4' },
+  awaiting_dealer_selection: { label: 'Finding Provider',  color: '#16A34A', bg: '#F0FDF4' },
+  in_transit:                { label: 'On the Way',       color: '#16A34A', bg: '#F0FDF4' },
+  awaiting_confirmation:     { label: 'Awaiting Confirmation', color: '#16A34A', bg: '#F0FDF4' },
+  delivered:                 { label: 'Delivered',         color: '#FFFFFF', bg: '#16A34A' },
+  cancelled:                 { label: 'Cancelled',         color: '#FFFFFF', bg: '#DC2626' },
 };
 
 

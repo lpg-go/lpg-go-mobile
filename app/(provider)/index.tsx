@@ -52,8 +52,8 @@ type ActiveOrder = {
 };
 
 const ACTIVE_STATUS_BADGE: Record<ActiveOrder['status'], { label: string; color: string; bg: string }> = {
-  in_transit:            { label: 'On the Way', color: '#2563EB', bg: '#DBEAFE' },
-  awaiting_confirmation: { label: 'Delivered?',  color: '#7C3AED', bg: '#EDE9FE' },
+  in_transit:            { label: 'On the Way', color: '#16A34A', bg: '#F0FDF4' },
+  awaiting_confirmation: { label: 'Delivered?',  color: '#16A34A', bg: '#F0FDF4' },
 };
 
 const H_PADDING = 20;
@@ -538,59 +538,34 @@ export default function ProviderIncomingOrdersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Active orders — always visible (ongoing deliveries), even when offline */}
+        {/* Active deliveries + new incoming orders — merged into one section */}
         <View style={styles.section}>
-          {activeOrders.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No Active Orders</Text>
-            </View>
-          ) : (
-            activeOrders.map((order) => {
-              const cfg = ACTIVE_STATUS_BADGE[order.status];
-              return (
-                <TouchableOpacity
-                  key={order.id}
-                  style={[styles.recentCard, styles.activeOrderCard]}
-                  onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.recentCardTop}>
-                    <Text style={[styles.recentItems, styles.activeOrderText]} numberOfLines={1}>{order.itemSummary}</Text>
-                    <View style={[styles.recentBadge, { backgroundColor: cfg.bg }]}>
-                      <Text style={[styles.recentBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
-                    </View>
+          {/* Active orders — always visible (ongoing deliveries), even when offline */}
+          {activeOrders.map((order) => {
+            const cfg = ACTIVE_STATUS_BADGE[order.status];
+            return (
+              <TouchableOpacity
+                key={order.id}
+                style={[styles.recentCard, styles.activeOrderCard]}
+                onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
+                activeOpacity={0.7}
+              >
+                <View style={styles.recentCardTop}>
+                  <Text style={[styles.recentItems, styles.activeOrderText]} numberOfLines={1}>{order.itemSummary}</Text>
+                  <View style={[styles.recentBadge, { backgroundColor: cfg.bg }]}>
+                    <Text style={[styles.recentBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
                   </View>
-                  <View style={styles.recentCardBottom}>
-                    <Text style={[styles.recentDate, styles.activeOrderAddress]}>{order.delivery_address}</Text>
-                    <Text style={[styles.recentAmount, styles.activeOrderText]}>₱{Number(order.total_amount).toLocaleString()}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
+                </View>
+                <View style={styles.recentCardBottom}>
+                  <Text style={[styles.recentDate, styles.activeOrderAddress]}>{order.delivery_address}</Text>
+                  <Text style={[styles.recentAmount, styles.activeOrderText]}>₱{Number(order.total_amount).toLocaleString()}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
 
-        {/* Incoming orders */}
-        <View style={styles.section}>
-          {!isOnline ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                You're offline
-              </Text>
-            </View>
-          ) : stockedProductIds.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                Add stock to your products to start receiving orders.
-              </Text>
-            </View>
-          ) : orders.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                No New Orders
-              </Text>
-            </View>
-          ) : (
+          {/* New incoming orders — only when online and stocked */}
+          {isOnline && stockedProductIds.length > 0 &&
             orders.map((order) => (
               <OrderCard
                 key={order.id}
@@ -598,7 +573,25 @@ export default function ProviderIncomingOrdersScreen() {
                 accepting={accepting === order.id}
                 onAccept={() => handleAccept(order.id)}
               />
-            ))
+            ))}
+
+          {/* Empty / status states — shown only when there are no active orders */}
+          {activeOrders.length === 0 && (
+            !isOnline ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>You're offline</Text>
+              </View>
+            ) : stockedProductIds.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>
+                  Add stock to your products to start receiving orders.
+                </Text>
+              </View>
+            ) : orders.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No Active Orders</Text>
+              </View>
+            ) : null
           )}
         </View>
 
@@ -623,11 +616,11 @@ export default function ProviderIncomingOrdersScreen() {
                         <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
                         <View style={[
                           styles.recentBadge,
-                          { backgroundColor: isDelivered ? '#DCFCE7' : '#FEE2E2' },
+                          { backgroundColor: isDelivered ? '#16A34A' : '#DC2626' },
                         ]}>
                           <Text style={[
                             styles.recentBadgeText,
-                            { color: isDelivered ? PRIMARY : '#DC2626' },
+                            { color: '#FFFFFF' },
                           ]}>
                             {isDelivered ? 'Delivered' : 'Cancelled'}
                           </Text>
@@ -682,7 +675,6 @@ function OrderCard({
           <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
         )}
       </View>
-      <Text style={styles.orderCustomerLine} numberOfLines={1}>{order.customerName}</Text>
       <View style={styles.recentCardBottom}>
         <Text style={styles.recentDate}>{order.delivery_address}</Text>
       </View>
