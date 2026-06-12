@@ -141,6 +141,40 @@ export default function OrderTrackingScreen() {
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const orderRef = useRef<Order | null>(null);   // latest order, for detecting reverts in realtime
+  const revertRedirectRef = useRef(false);        // guard: only redirect once on a provider-cancel revert
+
+  // Keep orderRef in sync so the realtime handler can read the *previous* order.
+  useEffect(() => { orderRef.current = order; }, [order]);
+
+  // Provider cancelled and the order reverted to bidding — bounce the customer
+  // back to the Find Provider resume screen instead of showing inline bidding.
+  async function handleProviderRevert() {
+    const { data } = await supabase
+      .from('order_items')
+      .select('product_id')
+      .eq('order_id', id)
+      .limit(1);
+    const firstProductId = data?.[0]?.product_id ?? null;
+
+    if (!firstProductId) {
+      // Can't determine the product to resume — stay here (inline bidding fallback).
+      revertRedirectRef.current = false;
+      return;
+    }
+
+    Alert.alert(
+      'Provider Unavailable',
+      'Your provider became unavailable. Please choose another.',
+      [{
+        text: 'OK',
+        onPress: () => router.replace({
+          pathname: '/(customer)/find-store/[productId]',
+          params: { productId: firstProductId, resumeOrderId: id },
+        }),
+      }],
+    );
+  }
 
   useEffect(() => {
     fetchAll();
@@ -152,9 +186,22 @@ export default function OrderTrackingScreen() {
         { event: '*', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
         (payload) => {
           console.log('[Realtime] orders change:', payload);
-          if (payload.new) {
-            setOrder((prev) => prev ? { ...prev, ...(payload.new as Partial<Order>) } : null);
-            if ((payload.new as Partial<Order>).status === 'cancelled') {
+          const newRow = payload.new as Partial<Order> | undefined;
+          if (newRow) {
+            // Revert: previously had a provider, now back to bidding with none.
+            const prevOrder = orderRef.current;
+            const revertedToBidding =
+              newRow.status === 'awaiting_dealer_selection' &&
+              newRow.selected_provider_id == null &&
+              prevOrder?.selected_provider_id != null;
+
+            if (revertedToBidding && !revertRedirectRef.current) {
+              revertRedirectRef.current = true;
+              handleProviderRevert();
+            }
+
+            setOrder((prev) => prev ? { ...prev, ...newRow } : null);
+            if (newRow.status === 'cancelled') {
               if (pollIntervalRef.current) {
                 clearInterval(pollIntervalRef.current);
                 pollIntervalRef.current = null;
