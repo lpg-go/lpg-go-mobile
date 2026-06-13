@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import HeaderAvatar from '../../components/HeaderAvatar';
 import NotificationBell from '../../components/NotificationBell';
 import supabase from '../../lib/supabase';
 import { useAppLogo } from '../../lib/useAppLogo';
@@ -153,7 +154,10 @@ export default function CustomerHomeScreen() {
               resizeMode="contain"
             />
           )}
-          <NotificationBell href="/(customer)/notifications" />
+          <View style={styles.headerActions}>
+            <NotificationBell href="/(customer)/notifications" />
+            <HeaderAvatar href="/(customer)/profile" />
+          </View>
         </View>
 
         {/* Search */}
@@ -275,6 +279,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 12,
     marginBottom: 4,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerLogo: {
     width: 90,

@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import HeaderAvatar from '../../components/HeaderAvatar';
+import NotificationBell from '../../components/NotificationBell';
 import supabase from '../../lib/supabase';
 
 type OrderStatus =
@@ -162,6 +164,10 @@ export default function CustomerOrdersScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Orders</Text>
+        <View style={styles.headerActions}>
+          <NotificationBell href="/(customer)/notifications" />
+          <HeaderAvatar href="/(customer)/profile" />
+        </View>
       </View>
 
       <ScrollView
@@ -261,6 +267,9 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center' },
 
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: H_PADDING,
     paddingVertical: 16,
     backgroundColor: '#fff',
@@ -268,6 +277,11 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
 
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },

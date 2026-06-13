@@ -42,10 +42,7 @@ export default function ProviderLayout() {
         />
         <Tabs.Screen
           name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ color, size }) => <Feather name="user" color={color} size={size} />,
-          }}
+          options={{ href: null }}
         />
         <Tabs.Screen
           name="topup"

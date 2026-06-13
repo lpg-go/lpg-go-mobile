@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import HeaderAvatar from '../../components/HeaderAvatar';
 import NotificationBell from '../../components/NotificationBell';
 import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
@@ -522,6 +523,7 @@ export default function ProviderIncomingOrdersScreen() {
             )}
           </TouchableOpacity>
           <NotificationBell href="/(provider)/notifications" />
+          <HeaderAvatar href="/(provider)/profile" />
         </View>
       </View>
 
