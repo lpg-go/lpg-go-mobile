@@ -14,11 +14,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import HeaderAvatar from '../../components/HeaderAvatar';
-import HeaderOrders from '../../components/HeaderOrders';
-import NotificationBell from '../../components/NotificationBell';
+import AppHeader from '../../components/AppHeader';
+import CustomerHeaderActions from '../../components/CustomerHeaderActions';
 import supabase from '../../lib/supabase';
-import { useAppLogo } from '../../lib/useAppLogo';
 
 type Brand = {
   id: string;
@@ -51,7 +49,6 @@ function getInitials(name: string): string {
 export default function CustomerHomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { logoUrl } = useAppLogo();
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState('');
@@ -141,26 +138,13 @@ export default function CustomerHomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.headerRow}>
-          {logoUrl ? (
-            <Image
-              source={{ uri: logoUrl }}
-              style={styles.headerLogoDynamic}
-              resizeMode="contain"
-            />
-          ) : (
-            <Image
-              source={require('../../assets/images/logo.png')}
-              style={styles.headerLogo}
-              resizeMode="contain"
-            />
-          )}
-          <View style={styles.headerActions}>
-            <HeaderOrders href="/(customer)/orders" />
-            <NotificationBell href="/(customer)/notifications" />
-            <HeaderAvatar href="/(customer)/profile" />
-          </View>
-        </View>
+        <AppHeader
+          variant="inline"
+          showLogo
+          logoHref="/(customer)"
+          noHorizontalPadding
+          right={<CustomerHeaderActions />}
+        />
 
         {/* Search */}
         <View style={styles.searchRow}>
@@ -273,28 +257,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingBottom: 32 },
-
-  // Header
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  headerLogo: {
-    width: 90,
-    height: 36,
-  },
-  headerLogoDynamic: {
-    width: 140,
-    height: 56,
-  },
 
   // Search
   searchRow: {

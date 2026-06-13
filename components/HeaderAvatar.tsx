@@ -1,11 +1,20 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import supabase from '../lib/supabase';
 
 const PRIMARY = '#16A34A';
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+}
 
 type Props = {
   href: '/(customer)/profile' | '/(provider)/profile';
@@ -18,6 +27,7 @@ type Props = {
 // signed-in user's avatar_url itself, and routes to the Profile screen on tap.
 export default function HeaderAvatar({ href, online }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -26,15 +36,19 @@ export default function HeaderAvatar({ href, online }: Props) {
       if (!user) return;
       const { data } = await supabase
         .from('profiles')
-        .select('avatar_url')
+        .select('avatar_url, full_name')
         .eq('id', user.id)
         .single();
       // avatar_url already carries a ?t= cache-buster baked in at upload time
       // (see profile.tsx), so we use it as-is.
-      if (active && data?.avatar_url) setAvatarUrl(data.avatar_url);
+      if (!active || !data) return;
+      if (data.avatar_url) setAvatarUrl(data.avatar_url);
+      if (data.full_name) setFullName(data.full_name);
     })();
     return () => { active = false; };
   }, []);
+
+  const initials = fullName ? getInitials(fullName) : '';
 
   return (
     <TouchableOpacity
@@ -47,7 +61,11 @@ export default function HeaderAvatar({ href, online }: Props) {
           <Image key={avatarUrl} source={{ uri: avatarUrl }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatar, styles.fallback]}>
-            <Feather name="user" size={18} color={PRIMARY} />
+            {initials ? (
+              <Text style={styles.initials}>{initials}</Text>
+            ) : (
+              <Feather name="user" size={18} color={PRIMARY} />
+            )}
           </View>
         )}
         {online != null && (
@@ -71,6 +89,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  initials: { fontSize: 13, fontWeight: '700', color: PRIMARY },
   statusDot: {
     position: 'absolute',
     bottom: -1,

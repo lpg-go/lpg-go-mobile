@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AppHeader from './AppHeader';
 import supabase from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,11 +31,15 @@ type Props = {
   orderId: string;
   currentUserId: string;
   otherUserName: string;
+  // When set, the header shows a tappable logo (→ this route) + headerRight.
+  // When omitted (provider fallback), it shows back + the other user's name.
+  homeHref?: '/(customer)' | '/(provider)';
+  headerRight?: ReactNode;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ChatScreen({ orderId, currentUserId, otherUserName }: Props) {
+export default function ChatScreen({ orderId, currentUserId, otherUserName, homeHref, headerRight }: Props) {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,16 +135,15 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName }: Pr
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <Feather name="chevron-left" size={26} color="#111827" />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{otherUserName}</Text>
-          <Text style={styles.headerSubtitle}>Order #{orderId.slice(-8).toUpperCase()}</Text>
-        </View>
-        <View style={{ width: 34 }} />
-      </View>
+      {homeHref ? (
+        <AppHeader showLogo logoHref={homeHref} right={headerRight} />
+      ) : (
+        <AppHeader
+          showBack
+          title={otherUserName}
+          subtitle={`Order #${orderId.slice(-8).toUpperCase()}`}
+        />
+      )}
 
       {/* Messages */}
       {loading ? (
@@ -200,21 +204,6 @@ const PRIMARY = '#16A34A';
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  backButton: { width: 34 },
-  headerCenter: { alignItems: 'center', flex: 1 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  headerSubtitle: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
 
   // Loading
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },

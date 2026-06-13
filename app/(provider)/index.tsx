@@ -484,19 +484,21 @@ export default function ProviderIncomingOrdersScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        {logoUrl ? (
-          <Image
-            source={{ uri: logoUrl }}
-            style={styles.headerLogoDynamic}
-            resizeMode="contain"
-          />
-        ) : (
-          <Image
-            source={require('../../assets/images/logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-          />
-        )}
+        <TouchableOpacity onPress={() => router.replace('/(provider)')} activeOpacity={0.7}>
+          {logoUrl ? (
+            <Image
+              source={{ uri: logoUrl }}
+              style={styles.headerLogoDynamic}
+              resizeMode="contain"
+            />
+          ) : (
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+          )}
+        </TouchableOpacity>
         <View style={styles.onlineRow}>
           <NotificationBell href="/(provider)/notifications" />
           <HeaderAvatar href="/(provider)/profile" online={isOnline} />

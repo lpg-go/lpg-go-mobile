@@ -11,9 +11,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import HeaderAvatar from '../../components/HeaderAvatar';
-import HeaderOrders from '../../components/HeaderOrders';
-import NotificationBell from '../../components/NotificationBell';
+import AppHeader from '../../components/AppHeader';
+import CustomerHeaderActions from '../../components/CustomerHeaderActions';
 import supabase from '../../lib/supabase';
 
 type OrderStatus =
@@ -162,15 +161,11 @@ export default function CustomerOrdersScreen() {
   const recentOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Orders</Text>
-        <View style={styles.headerActions}>
-          <HeaderOrders href="/(customer)/orders" />
-          <NotificationBell href="/(customer)/notifications" />
-          <HeaderAvatar href="/(customer)/profile" />
-        </View>
-      </View>
+    <View style={styles.screen}>
+      <AppHeader
+        showLogo
+        right={<CustomerHeaderActions />}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -267,23 +262,6 @@ const PRIMARY = '#16A34A';
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F9FAFB' },
   centered: { alignItems: 'center', justifyContent: 'center' },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
 
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import ChatScreen from '../../../components/ChatScreen';
+import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
 import supabase from '../../../lib/supabase';
 
 export default function CustomerChatScreen() {
@@ -50,6 +51,8 @@ export default function CustomerChatScreen() {
       orderId={orderId}
       currentUserId={currentUserId}
       otherUserName={providerName}
+      homeHref="/(customer)"
+      headerRight={<CustomerHeaderActions />}
     />
   );
 }

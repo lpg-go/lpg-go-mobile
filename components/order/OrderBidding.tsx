@@ -226,14 +226,6 @@ export default function OrderBidding({
                 <Text style={styles.confirmOrderBtnText}>Confirm Order</Text>
               )}
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.paymentCancelBtn}
-              onPress={onClosePayment}
-              disabled={selectingProvider !== null}
-            >
-              <Text style={styles.paymentCancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -483,10 +475,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   confirmOrderBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  paymentCancelBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  paymentCancelBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
 });

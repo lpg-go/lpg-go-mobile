@@ -1,3 +1,4 @@
+import CustomerHeaderActions from '../../components/CustomerHeaderActions';
 import NotificationsScreen from '../../components/NotificationsScreen';
 
 export default function CustomerNotifications() {
@@ -5,6 +6,8 @@ export default function CustomerNotifications() {
     <NotificationsScreen
       orderRoute="/(customer)/order/[id]"
       chatRoute="/(customer)/chat/[orderId]"
+      homeHref="/(customer)"
+      headerRight={<CustomerHeaderActions />}
     />
   );
 }

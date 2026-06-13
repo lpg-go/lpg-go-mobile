@@ -11,8 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AppHeader from '../../../components/AppHeader';
+import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
 import supabase from '../../../lib/supabase';
 
 type Product = {
@@ -34,7 +35,6 @@ const CARD_WIDTH = (Dimensions.get('window').width - H_PADDING * 2 - GRID_GAP * 
 
 export default function BrandProductsScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
-  const insets = useSafeAreaInsets();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,15 +124,8 @@ export default function BrandProductsScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <Feather name="chevron-left" size={26} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{name}</Text>
-        <View style={{ width: 30 }} />
-      </View>
+    <View style={styles.screen}>
+      <AppHeader showLogo right={<CustomerHeaderActions />} />
 
       {/* Content */}
       {loading ? (
@@ -203,17 +196,6 @@ function ProductCard({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  backButton: { marginRight: 8 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111827' },
 
   // States
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },

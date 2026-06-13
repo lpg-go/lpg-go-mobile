@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { ReactNode } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -7,19 +8,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Notification, useNotifications } from '../lib/notificationsStore';
+import AppHeader from './AppHeader';
 
 const PRIMARY = '#16A34A';
 
 type Props = {
   orderRoute?: '/(customer)/order/[id]' | '/(provider)/active/[id]';
   chatRoute?: '/(customer)/chat/[orderId]' | '/(provider)/chat/[orderId]';
+  // When set, the header shows a tappable logo (→ this route) + headerRight.
+  // When omitted (provider fallback), it shows a back button + "Notifications".
+  homeHref?: '/(customer)' | '/(provider)';
+  headerRight?: ReactNode;
 };
 
-export default function NotificationsScreen({ orderRoute, chatRoute }: Props) {
-  const insets = useSafeAreaInsets();
+export default function NotificationsScreen({ orderRoute, chatRoute, homeHref, headerRight }: Props) {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   function handleTap(n: Notification) {
@@ -33,15 +37,15 @@ export default function NotificationsScreen({ orderRoute, chatRoute }: Props) {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Feather name="arrow-left" size={22} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
+    <View style={styles.screen}>
+      {homeHref ? (
+        <AppHeader showLogo logoHref={homeHref} right={headerRight} />
+      ) : (
+        <AppHeader showBack title="Notifications" right={headerRight} />
+      )}
+
+      {/* Mark all read — moved below the header (no header action slot anymore) */}
+      <View style={styles.markAllRow}>
         <TouchableOpacity
           onPress={markAllAsRead}
           disabled={unreadCount === 0}
@@ -108,17 +112,12 @@ function timeAgo(iso: string): string {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  markAllRow: {
+    alignItems: 'flex-end',
     paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    paddingTop: 10,
+    paddingBottom: 4,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
   markAllText: { fontSize: 13, fontWeight: '600', color: PRIMARY },
   markAllTextDisabled: { color: '#9CA3AF' },
 

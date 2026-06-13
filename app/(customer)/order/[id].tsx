@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AppHeader from '../../../components/AppHeader';
+import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
 import OrderBidding from '../../../components/order/OrderBidding';
 import OrderTracking from '../../../components/order/OrderTracking';
 import { sendOrderNotification } from '../../../lib/notifications';
@@ -668,15 +670,8 @@ export default function OrderTrackingScreen() {
     order.status !== 'cancelled';
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace('/(customer)/orders')} style={styles.backButton} hitSlop={8}>
-          <Feather name="chevron-left" size={26} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Status</Text>
-        <View style={{ width: 34 }} />
-      </View>
+    <View style={styles.screen}>
+      <AppHeader showLogo right={<CustomerHeaderActions />} />
 
       <OrderTracking
         order={order}
@@ -751,19 +746,6 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center' },
   errorText: { fontSize: 15, color: '#6B7280' },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  backButton: { width: 34 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
 
   // Scroll
   scroll: { flex: 1 },
