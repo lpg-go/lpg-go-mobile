@@ -29,6 +29,7 @@ type Profile = {
   business_name: string | null;
   avg_delivery_minutes: number | null;
   created_at: string;
+  is_online: boolean;
 };
 
 const H_PADDING = 20;
@@ -67,6 +68,7 @@ export default function ProviderProfileScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avgRating, setAvgRating] = useState<number | null>(null);
   const [reviewCount, setReviewCount] = useState(0);
+  const [togglingOnline, setTogglingOnline] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -99,7 +101,7 @@ export default function ProviderProfileScreen() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, avatar_url, provider_type, business_name, avg_delivery_minutes, created_at')
+      .select('id, full_name, phone, avatar_url, provider_type, business_name, avg_delivery_minutes, created_at, is_online')
       .eq('id', user.id)
       .single();
 
@@ -111,6 +113,21 @@ export default function ProviderProfileScreen() {
 
     await fetchReviewStats(user.id);
     setLoading(false);
+  }
+
+  async function handleToggleOnline(value: boolean) {
+    if (!profile) return;
+    setTogglingOnline(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_online: value })
+      .eq('id', profile.id);
+    setTogglingOnline(false);
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      setProfile((prev) => prev ? { ...prev, is_online: value } : prev);
+    }
   }
 
   async function fetchReviewStats(uid: string) {
@@ -270,6 +287,40 @@ export default function ProviderProfileScreen() {
           </TouchableOpacity>
           <Text style={styles.avatarName}>{profile?.full_name}</Text>
           <Text style={styles.avatarSub}>{isDealer ? 'Dealer' : 'Rider'}</Text>
+        </View>
+
+        {/* Status */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Status</Text>
+          <View style={styles.card}>
+            <View style={styles.statusRow}>
+              <View style={styles.statusInfo}>
+                <Text style={styles.statusLabel}>Availability</Text>
+                <Text style={styles.statusHint}>
+                  {profile?.is_online
+                    ? 'You are receiving new orders'
+                    : 'You are not receiving new orders'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.onlinePill, { backgroundColor: profile?.is_online ? '#DCFCE7' : '#F3F4F6' }]}
+                onPress={() => handleToggleOnline(!profile?.is_online)}
+                disabled={togglingOnline}
+                activeOpacity={0.7}
+              >
+                {togglingOnline ? (
+                  <ActivityIndicator size="small" color={profile?.is_online ? PRIMARY : '#9CA3AF'} />
+                ) : (
+                  <>
+                    <View style={[styles.onlineDot, { backgroundColor: profile?.is_online ? PRIMARY : '#9CA3AF' }]} />
+                    <Text style={[styles.onlineLabel, { color: profile?.is_online ? PRIMARY : '#9CA3AF' }]}>
+                      {profile?.is_online ? 'Online' : 'Offline'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Personal info */}
@@ -456,6 +507,30 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   rowDivider: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 48 },
+
+  // Status row + online pill
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  statusInfo: { flex: 1 },
+  statusLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  statusHint: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  onlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    minHeight: 30,
+  },
+  onlineDot: { width: 8, height: 8, borderRadius: 4 },
+  onlineLabel: { fontSize: 13, fontWeight: '600' },
 
   // Info row
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },

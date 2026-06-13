@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderAvatar from '../../components/HeaderAvatar';
+import HeaderOrders from '../../components/HeaderOrders';
 import NotificationBell from '../../components/NotificationBell';
 import supabase from '../../lib/supabase';
 
@@ -165,6 +166,7 @@ export default function CustomerOrdersScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Orders</Text>
         <View style={styles.headerActions}>
+          <HeaderOrders href="/(customer)/orders" />
           <NotificationBell href="/(customer)/notifications" />
           <HeaderAvatar href="/(customer)/profile" />
         </View>

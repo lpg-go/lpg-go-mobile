@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderAvatar from '../../components/HeaderAvatar';
+import HeaderOrders from '../../components/HeaderOrders';
 import NotificationBell from '../../components/NotificationBell';
 import supabase from '../../lib/supabase';
 import { useAppLogo } from '../../lib/useAppLogo';
@@ -155,6 +156,7 @@ export default function CustomerHomeScreen() {
             />
           )}
           <View style={styles.headerActions}>
+            <HeaderOrders href="/(customer)/orders" />
             <NotificationBell href="/(customer)/notifications" />
             <HeaderAvatar href="/(customer)/profile" />
           </View>

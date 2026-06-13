@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -77,7 +77,6 @@ export default function ProviderIncomingOrdersScreen() {
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [togglingOnline, setTogglingOnline] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
 
   const providerIdRef = useRef<string | null>(null);
@@ -94,6 +93,15 @@ export default function ProviderIncomingOrdersScreen() {
     fetchActiveOrders();
     fetchRecentOrders();
   }, [providerId]);
+
+  // Re-sync online status (and balance) whenever the screen regains focus — e.g.
+  // after toggling availability on the Profile screen — so order gating stays correct.
+  useFocusEffect(
+    useCallback(() => {
+      const uid = providerIdRef.current;
+      if (uid) fetchProfile(uid);
+    }, [])
+  );
 
   // Realtime subscription (mount/unmount only)
   useEffect(() => {
@@ -372,21 +380,6 @@ export default function ProviderIncomingOrdersScreen() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function handleToggleOnline(value: boolean) {
-    if (!providerId) return;
-    setTogglingOnline(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_online: value })
-      .eq('id', providerId);
-    setTogglingOnline(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setIsOnline(value);
-    }
-  }
-
   async function handleAccept(orderId: string) {
     if (!providerId) return;
 
@@ -505,25 +498,8 @@ export default function ProviderIncomingOrdersScreen() {
           />
         )}
         <View style={styles.onlineRow}>
-          <TouchableOpacity
-            style={[styles.onlinePill, { backgroundColor: isOnline ? '#DCFCE7' : '#F3F4F6' }]}
-            onPress={() => handleToggleOnline(!isOnline)}
-            disabled={togglingOnline}
-            activeOpacity={0.7}
-          >
-            {togglingOnline ? (
-              <ActivityIndicator size="small" color={isOnline ? PRIMARY : '#9CA3AF'} />
-            ) : (
-              <>
-                <View style={[styles.onlineDot, { backgroundColor: isOnline ? PRIMARY : '#9CA3AF' }]} />
-                <Text style={[styles.onlineLabel, { color: isOnline ? PRIMARY : '#9CA3AF' }]}>
-                  {isOnline ? 'Online' : 'Offline'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
           <NotificationBell href="/(provider)/notifications" />
-          <HeaderAvatar href="/(provider)/profile" />
+          <HeaderAvatar href="/(provider)/profile" online={isOnline} />
         </View>
       </View>
 
@@ -716,17 +692,6 @@ const styles = StyleSheet.create({
     height: 56,
   },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  onlinePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    minHeight: 30,
-  },
-  onlineDot: { width: 8, height: 8, borderRadius: 4 },
-  onlineLabel: { fontSize: 13, fontWeight: '600' },
 
   // Scroll
   scroll: { flex: 1 },

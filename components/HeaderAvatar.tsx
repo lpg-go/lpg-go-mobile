@@ -9,11 +9,14 @@ const PRIMARY = '#16A34A';
 
 type Props = {
   href: '/(customer)/profile' | '/(provider)/profile';
+  // When provided, a status dot is shown (green = online, grey = offline).
+  // Omit it (customers) to render no dot.
+  online?: boolean | null;
 };
 
 // Circular profile avatar for the customer/provider headers. Fetches the
 // signed-in user's avatar_url itself, and routes to the Profile screen on tap.
-export default function HeaderAvatar({ href }: Props) {
+export default function HeaderAvatar({ href, online }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,18 +42,24 @@ export default function HeaderAvatar({ href }: Props) {
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      {avatarUrl ? (
-        <Image key={avatarUrl} source={{ uri: avatarUrl }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatar, styles.fallback]}>
-          <Feather name="user" size={18} color={PRIMARY} />
-        </View>
-      )}
+      <View style={styles.wrap}>
+        {avatarUrl ? (
+          <Image key={avatarUrl} source={{ uri: avatarUrl }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.fallback]}>
+            <Feather name="user" size={18} color={PRIMARY} />
+          </View>
+        )}
+        {online != null && (
+          <View style={[styles.statusDot, { backgroundColor: online ? PRIMARY : '#9CA3AF' }]} />
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: { position: 'relative' },
   avatar: {
     width: 34,
     height: 34,
@@ -61,5 +70,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  statusDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
 });
