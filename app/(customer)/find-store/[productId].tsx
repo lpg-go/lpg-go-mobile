@@ -87,6 +87,7 @@ export default function FindStoreScreen() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
 
   const [placing, setPlacing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
 
   const [phase, setPhase] = useState<'form' | 'bidding'>('form');
@@ -478,6 +479,40 @@ export default function FindStoreScreen() {
     if (error) Alert.alert('Error', error.message);
   }
 
+  function confirmCancelOrder() {
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        { text: 'Yes, Cancel', style: 'destructive', onPress: cancelOrder },
+      ]
+    );
+  }
+
+  async function cancelOrder() {
+    if (!orderId) return;
+    setCancelling(true);
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'cancelled', cancelled_by: 'customer' })
+      .eq('id', orderId);
+    setCancelling(false);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    sendOrderNotification(orderId, 'order_cancelled');
+    // Stop polling before leaving the bidding screen
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    router.replace('/(customer)/orders');
+  }
+
   async function handleFindStore() {
     setError('');
 
@@ -729,13 +764,26 @@ export default function FindStoreScreen() {
             )}
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={[styles.placeOrderButton, !selectedProviderId && styles.selectProviderDisabled]}
-            onPress={() => selectedProviderId && setPendingProviderId(selectedProviderId)}
-            disabled={!selectedProviderId}
-          >
-            <Text style={styles.placeOrderText}>Select Provider</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.placeOrderButton, !selectedProviderId && styles.selectProviderDisabled]}
+              onPress={() => selectedProviderId && setPendingProviderId(selectedProviderId)}
+              disabled={!selectedProviderId}
+            >
+              <Text style={styles.placeOrderText}>Select Provider</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.cancelBtn, cancelling && { opacity: 0.5 }]}
+              onPress={confirmCancelOrder}
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <ActivityIndicator size="small" color="#DC2626" />
+              ) : (
+                <Text style={styles.cancelBtnText}>Cancel Order</Text>
+              )}
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -1053,4 +1101,15 @@ const styles = StyleSheet.create({
   placeOrderButtonDisabled: { opacity: 0.6 },
   selectProviderDisabled: { opacity: 0.5 },
   placeOrderText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Cancel (matches provider order status cancel button)
+  cancelBtn: {
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
 });

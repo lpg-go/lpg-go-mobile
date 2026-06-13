@@ -13,10 +13,38 @@ export type Notification = {
   created_at: string;
 };
 
+// Notification types that surface a transient in-app banner. Excludes
+// new_message — the chat screens render their own message banner.
+const BANNER_TYPES = new Set([
+  'new_order',
+  'dealer_accepted',
+  'multiple_dealers_accepted',
+  'dealer_selected',
+  'order_cancelled',
+  'in_transit',
+  'awaiting_confirmation',
+  'delivery_confirmed',
+  'low_balance',
+  'low_stock',
+  'provider_unavailable',
+  'new_message',
+]);
+
+const BANNER_DURATION_MS = 4000;
+
 type NotificationsContextValue = {
   notifications: Notification[];
   unreadCount: number;
   loading: boolean;
+  bannerNotification: Notification | null;
+  dismissBanner: () => void;
+  // Global chat sheet — openChat(orderId, name?) makes the app-level
+  // <GlobalChatModal> slide up the chat for that order; clearChat() closes it.
+  // The optional name seeds the header immediately (no "Chat" placeholder flash).
+  pendingChatOrderId: string | null;
+  pendingChatName: string | null;
+  openChat: (orderId: string, name?: string) => void;
+  clearChat: () => void;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -27,7 +55,28 @@ const NotificationsContext = createContext<NotificationsContextValue | null>(nul
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bannerNotification, setBannerNotification] = useState<Notification | null>(null);
   const userIdRef = useRef<string | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissBanner = useCallback(() => {
+    if (bannerTimerRef.current) {
+      clearTimeout(bannerTimerRef.current);
+      bannerTimerRef.current = null;
+    }
+    setBannerNotification(null);
+  }, []);
+
+  const [pendingChatOrderId, setPendingChatOrderId] = useState<string | null>(null);
+  const [pendingChatName, setPendingChatName] = useState<string | null>(null);
+  const openChat = useCallback((orderId: string, name?: string) => {
+    setPendingChatName(name ?? null);
+    setPendingChatOrderId(orderId);
+  }, []);
+  const clearChat = useCallback(() => {
+    setPendingChatOrderId(null);
+    setPendingChatName(null);
+  }, []);
 
   const fetchNotifications = useCallback(async (uid: string) => {
     const { data } = await supabase
@@ -72,9 +121,21 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           },
           (payload) => {
             const next = payload.new as Notification;
+            console.log('[notif] received type:', next.type, '| banners?', BANNER_TYPES.has(next.type));
             setNotifications((prev) =>
               prev.some((n) => n.id === next.id) ? prev : [next, ...prev]
             );
+
+            // Surface a transient in-app banner for actionable types.
+            if (BANNER_TYPES.has(next.type)) {
+              console.log('[notif] banner SET:', next.type);
+              if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+              setBannerNotification(next);
+              bannerTimerRef.current = setTimeout(
+                () => setBannerNotification(null),
+                BANNER_DURATION_MS
+              );
+            }
           }
         )
         .subscribe();
@@ -83,6 +144,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
   }, [fetchNotifications]);
 
@@ -108,7 +170,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationsContext.Provider
-      value={{ notifications, unreadCount, loading, markAsRead, markAllAsRead, refresh }}
+      value={{ notifications, unreadCount, loading, bannerNotification, dismissBanner, pendingChatOrderId, pendingChatName, openChat, clearChat, markAsRead, markAllAsRead, refresh }}
     >
       {children}
     </NotificationsContext.Provider>

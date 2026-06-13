@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LiveMap from '../LiveMap';
+import SheetHeader from '../SheetHeader';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export type OrderTrackingProps = {
   providerLocation: LatLng | null;
   customerLocation: LatLng | null;
   mapVisible: boolean;
-  newMsgBanner: string | null;
+  unreadCount: number;
 
   // Review
   reviewDone: boolean;
@@ -108,7 +109,7 @@ export default function OrderTracking({
   providerLocation,
   customerLocation,
   mapVisible,
-  newMsgBanner,
+  unreadCount,
   reviewDone,
   existingRating,
   existingComment,
@@ -135,14 +136,6 @@ export default function OrderTracking({
 
   return (
     <>
-      {/* New message banner */}
-      {newMsgBanner && (
-        <TouchableOpacity style={styles.msgBanner} onPress={onChat} activeOpacity={0.85}>
-          <Feather name="message-circle" size={14} color="#fff" />
-          <Text style={styles.msgBannerText} numberOfLines={1}>{newMsgBanner}</Text>
-          <Feather name="chevron-right" size={14} color="#fff" />
-        </TouchableOpacity>
-      )}
 
       <ScrollView
         style={styles.scroll}
@@ -223,8 +216,27 @@ export default function OrderTracking({
                   {selectedProvider.provider_type === 'rider' ? 'Rider' : 'Dealer'}
                 </Text>
               </View>
-              {order.status === 'in_transit' && (
-                <Feather name="chevron-right" size={20} color={PRIMARY} />
+              {(order.status === 'in_transit' || order.status === 'awaiting_confirmation') && (
+              <View style={styles.providerActions}>
+                {selectedProvider.phone ? (
+                  <TouchableOpacity style={styles.providerIconBtn} onPress={onCall} hitSlop={6} activeOpacity={0.7}>
+                    <Feather name="phone" size={22} color={PRIMARY} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={styles.providerIconBtn} onPress={onChat} hitSlop={6} activeOpacity={0.7}>
+                  <Feather name="message-circle" size={22} color={PRIMARY} />
+                  {unreadCount > 0 && (
+                    <View style={styles.chatBadge}>
+                      <Text style={styles.chatBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {order.status === 'in_transit' && (
+                  <TouchableOpacity style={styles.providerIconBtn} onPress={onOpenMap} hitSlop={6} activeOpacity={0.7}>
+                    <Feather name="map-pin" size={22} color={PRIMARY} />
+                  </TouchableOpacity>
+                )}
+              </View>
               )}
             </TouchableOpacity>
           </View>
@@ -306,19 +318,25 @@ export default function OrderTracking({
         {cancelSlot}
       </ScrollView>
 
-      {/* Map modal */}
-      <Modal visible={mapVisible} animationType="slide" onRequestClose={onCloseMap}>
-        <View style={[styles.modalScreen, { paddingTop: insets.top }]}>
-          <LiveMap
-            providerLocation={providerLocation}
-            customerLocation={customerLocation}
-            providerName={selectedProvider?.full_name}
-            businessName={selectedProvider?.business_name ?? undefined}
-            deliveryAddress={order?.delivery_address}
-            onBack={onCloseMap}
-            onChat={() => { onCloseMap(); onChat(); }}
-            onCall={selectedProvider?.phone ? onCall : undefined}
-          />
+      {/* Map popup — bottom sheet, like the chat popup */}
+      <Modal visible={mapVisible} transparent animationType="slide" onRequestClose={onCloseMap}>
+        <View style={styles.mapSheetOverlay}>
+          <View style={styles.mapSheet}>
+            <SheetHeader
+              title={selectedProvider?.business_name || selectedProvider?.full_name || 'Live Tracking'}
+              subtitle={`Order #${shortId}`}
+              onClose={onCloseMap}
+            />
+            <View style={styles.mapSheetBody}>
+              <LiveMap
+                providerLocation={providerLocation}
+                customerLocation={customerLocation}
+                providerName={selectedProvider?.full_name}
+                businessName={selectedProvider?.business_name ?? undefined}
+                deliveryAddress={order?.delivery_address}
+              />
+            </View>
+          </View>
         </View>
       </Modal>
     </>
@@ -334,17 +352,6 @@ const styles = StyleSheet.create({
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16 },
-
-  // Message banner
-  msgBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: PRIMARY,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  msgBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#fff' },
 
   // Status card
   statusCard: {
@@ -464,6 +471,28 @@ const styles = StyleSheet.create({
   providerInfo: { flex: 1 },
   providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
   providerBusiness: { fontSize: 12, color: '#6B7280', marginTop: 1 },
+  providerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  providerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  chatBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
 
   // Order items
   itemsCard: {
@@ -532,6 +561,18 @@ const styles = StyleSheet.create({
   reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
   reviewDoneComment: { fontSize: 12, color: '#6B7280', textAlign: 'center', fontStyle: 'italic' },
 
-  // Map modal
-  modalScreen: { flex: 1, backgroundColor: '#000' },
+  // Map popup — bottom sheet (matches ChatModal)
+  mapSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  mapSheet: {
+    height: '92%',
+    backgroundColor: '#000',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  mapSheetBody: { flex: 1 },
 });

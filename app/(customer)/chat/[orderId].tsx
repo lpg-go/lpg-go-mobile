@@ -1,12 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ChatScreen from '../../../components/ChatScreen';
-import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
 import supabase from '../../../lib/supabase';
 
 export default function CustomerChatScreen() {
+  const insets = useSafeAreaInsets();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [providerName, setProviderName] = useState('Provider');
@@ -47,16 +48,18 @@ export default function CustomerChatScreen() {
   }
 
   return (
-    <ChatScreen
-      orderId={orderId}
-      currentUserId={currentUserId}
-      otherUserName={providerName}
-      homeHref="/(customer)"
-      headerRight={<CustomerHeaderActions />}
-    />
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <ChatScreen
+        orderId={orderId}
+        currentUserId={currentUserId}
+        otherUserName={providerName}
+        onClose={() => router.back()}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  screen: { flex: 1, backgroundColor: '#fff' },
 });

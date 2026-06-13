@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AppHeader from '../../components/AppHeader';
+import ProviderHeaderActions from '../../components/ProviderHeaderActions';
 import supabase from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -252,11 +254,8 @@ export default function ProviderProfileScreen() {
     : '—';
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Profile</Text>
-      </View>
+    <View style={styles.screen}>
+      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
 
       <ScrollView
         style={styles.scroll}
@@ -448,15 +447,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F9FAFB' },
   centered: { alignItems: 'center', justifyContent: 'center' },
 
-  // Header
-  header: {
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
 
   // Scroll
   scroll: { flex: 1 },

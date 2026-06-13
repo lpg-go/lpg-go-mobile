@@ -16,11 +16,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import HeaderAvatar from '../../components/HeaderAvatar';
-import NotificationBell from '../../components/NotificationBell';
+import AppHeader from '../../components/AppHeader';
+import ProviderHeaderActions from '../../components/ProviderHeaderActions';
 import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
-import { useAppLogo } from '../../lib/useAppLogo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,7 +62,6 @@ const H_PADDING = 20;
 
 export default function ProviderIncomingOrdersScreen() {
   const insets = useSafeAreaInsets();
-  const { logoUrl } = useAppLogo();
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -481,29 +479,8 @@ export default function ProviderIncomingOrdersScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace('/(provider)')} activeOpacity={0.7}>
-          {logoUrl ? (
-            <Image
-              source={{ uri: logoUrl }}
-              style={styles.headerLogoDynamic}
-              resizeMode="contain"
-            />
-          ) : (
-            <Image
-              source={require('../../assets/images/logo.png')}
-              style={styles.headerLogo}
-              resizeMode="contain"
-            />
-          )}
-        </TouchableOpacity>
-        <View style={styles.onlineRow}>
-          <NotificationBell href="/(provider)/notifications" />
-          <HeaderAvatar href="/(provider)/profile" online={isOnline} />
-        </View>
-      </View>
+    <View style={styles.screen}>
+      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
 
       <ScrollView
         style={styles.scroll}
@@ -673,27 +650,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F9FAFB' },
   centered: { alignItems: 'center', justifyContent: 'center' },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  headerLogo: {
-    width: 90,
-    height: 36,
-  },
-  headerLogoDynamic: {
-    width: 140,
-    height: 56,
-  },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 
   // Scroll
   scroll: { flex: 1 },

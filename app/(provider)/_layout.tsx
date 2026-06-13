@@ -1,10 +1,8 @@
-import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
+import GlobalChatModal from '../../components/GlobalChatModal';
+import NotificationBanner from '../../components/NotificationBanner';
 import { NotificationsProvider } from '../../lib/notificationsStore';
-
-const PRIMARY = '#16A34A';
-const INACTIVE = '#9CA3AF';
 
 export default function ProviderLayout() {
   return (
@@ -12,33 +10,22 @@ export default function ProviderLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: PRIMARY,
-          tabBarInactiveTintColor: INACTIVE,
-          tabBarStyle: { borderTopColor: '#E5E7EB' },
+          // Credit + Products live in the header (ProviderHeaderActions) now, so
+          // there are no visible bottom tabs — hide the tab bar entirely.
+          tabBarStyle: { display: 'none' },
         }}
       >
         <Tabs.Screen
           name="index"
-          options={{
-            title: 'Incoming',
-            tabBarIcon: ({ color, size }) => <Feather name="inbox" color={color} size={size} />,
-          }}
+          options={{ href: null }}
         />
         <Tabs.Screen
           name="earnings"
-          options={{
-            title: 'Credit',
-            tabBarIcon: ({ color, size }) => (
-              <Feather name="credit-card" color={color} size={size} />
-            ),
-          }}
+          options={{ href: null }}
         />
         <Tabs.Screen
           name="products"
-          options={{
-            title: 'Products',
-            tabBarIcon: ({ color, size }) => <Feather name="box" color={color} size={size} />,
-          }}
+          options={{ href: null }}
         />
         <Tabs.Screen
           name="profile"
@@ -65,6 +52,8 @@ export default function ProviderLayout() {
           options={{ href: null, tabBarStyle: { display: 'none' } }}
         />
       </Tabs>
+      <GlobalChatModal />
+      <NotificationBanner />
     </NotificationsProvider>
   );
 }

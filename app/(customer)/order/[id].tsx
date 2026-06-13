@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppHeader from '../../../components/AppHeader';
+import ChatModal from '../../../components/ChatModal';
 import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
 import OrderBidding from '../../../components/order/OrderBidding';
 import OrderTracking from '../../../components/order/OrderTracking';
@@ -135,7 +136,7 @@ export default function OrderTrackingScreen() {
   }, [id]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [newMsgBanner, setNewMsgBanner] = useState<string | null>(null);
+  const [chatVisible, setChatVisible] = useState(false);
 
   // Location tracking
   const [providerLocation, setProviderLocation] = useState<LatLng | null>(null);
@@ -143,7 +144,6 @@ export default function OrderTrackingScreen() {
   const [mapVisible, setMapVisible] = useState(false);
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const orderRef = useRef<Order | null>(null);   // latest order, for detecting reverts in realtime
   const revertRedirectRef = useRef(false);        // guard: only redirect once on a provider-cancel revert
 
@@ -274,19 +274,15 @@ export default function OrderTrackingScreen() {
           const msg = payload.new as { sender_id: string };
           if (msg.sender_id === currentUserId) return;
 
+          // Bumps the chat unread badge. The in-app message banner is now the
+          // global NotificationBanner (driven by the new_message notification row).
           setUnreadCount((prev) => prev + 1);
-
-          const senderName = selectedProvider?.full_name ?? 'Provider';
-          setNewMsgBanner(`New message from ${senderName}`);
-          if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-          bannerTimerRef.current = setTimeout(() => setNewMsgBanner(null), 3000);
         }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
   }, [currentUserId, id]);
 
@@ -625,7 +621,7 @@ export default function OrderTrackingScreen() {
 
   function handleChat() {
     setUnreadCount(0);
-    router.push({ pathname: '/(customer)/chat/[orderId]', params: { orderId: id } });
+    setChatVisible(true);
   }
 
   function handleCall() {
@@ -683,7 +679,7 @@ export default function OrderTrackingScreen() {
         providerLocation={providerLocation}
         customerLocation={customerLocation}
         mapVisible={mapVisible}
-        newMsgBanner={newMsgBanner}
+        unreadCount={unreadCount}
         reviewDone={reviewDone}
         existingRating={existingRating}
         existingComment={existingComment}
@@ -733,6 +729,14 @@ export default function OrderTrackingScreen() {
           onClosePayment={() => setPendingProviderId(null)}
         />
       </OrderTracking>
+
+      <ChatModal
+        visible={chatVisible}
+        onClose={() => { setChatVisible(false); setUnreadCount(0); }}
+        orderId={id}
+        currentUserId={currentUserId ?? ''}
+        otherUserName={selectedProvider?.full_name ?? 'Provider'}
+      />
     </View>
   );
 }

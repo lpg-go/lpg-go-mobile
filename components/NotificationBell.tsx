@@ -7,9 +7,11 @@ import { useNotifications } from '../lib/notificationsStore';
 type Props = {
   href: '/(customer)/notifications' | '/(provider)/notifications';
   color?: string;
+  // When true, the button shows a green ring (it's the current screen).
+  active?: boolean;
 };
 
-export default function NotificationBell({ href, color = '#374151' }: Props) {
+export default function NotificationBell({ href, color = '#374151', active = false }: Props) {
   const { unreadCount } = useNotifications();
 
   return (
@@ -19,7 +21,7 @@ export default function NotificationBell({ href, color = '#374151' }: Props) {
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      <Feather name="bell" size={22} color={color} />
+      <Feather name="bell" size={22} color={active ? '#16A34A' : color} />
       {unreadCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
@@ -43,7 +45,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,

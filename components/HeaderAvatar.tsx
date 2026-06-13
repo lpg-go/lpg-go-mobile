@@ -21,16 +21,18 @@ type Props = {
   // When provided, a status dot is shown (green = online, grey = offline).
   // Omit it (customers) to render no dot.
   online?: boolean | null;
+  // Highlights the avatar with a green ring when it's the current screen.
+  active?: boolean;
 };
 
 // Circular profile avatar for the customer/provider headers. Fetches the
 // signed-in user's avatar_url itself, and routes to the Profile screen on tap.
-export default function HeaderAvatar({ href, online }: Props) {
+export default function HeaderAvatar({ href, online, active = false }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+    let alive = true;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -41,11 +43,11 @@ export default function HeaderAvatar({ href, online }: Props) {
         .single();
       // avatar_url already carries a ?t= cache-buster baked in at upload time
       // (see profile.tsx), so we use it as-is.
-      if (!active || !data) return;
+      if (!alive || !data) return;
       if (data.avatar_url) setAvatarUrl(data.avatar_url);
       if (data.full_name) setFullName(data.full_name);
     })();
-    return () => { active = false; };
+    return () => { alive = false; };
   }, []);
 
   const initials = fullName ? getInitials(fullName) : '';
@@ -58,9 +60,9 @@ export default function HeaderAvatar({ href, online }: Props) {
     >
       <View style={styles.wrap}>
         {avatarUrl ? (
-          <Image key={avatarUrl} source={{ uri: avatarUrl }} style={styles.avatar} />
+          <Image key={avatarUrl} source={{ uri: avatarUrl }} style={[styles.avatar, active && styles.avatarActive]} />
         ) : (
-          <View style={[styles.avatar, styles.fallback]}>
+          <View style={[styles.avatar, styles.fallback, active && styles.avatarActive]}>
             {initials ? (
               <Text style={styles.initials}>{initials}</Text>
             ) : (
@@ -82,6 +84,10 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
+  },
+  avatarActive: {
+    borderWidth: 2,
+    borderColor: PRIMARY,
   },
   fallback: {
     backgroundColor: '#DCFCE7',

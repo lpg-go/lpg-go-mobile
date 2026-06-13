@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppHeader from './AppHeader';
+import SheetHeader from './SheetHeader';
 import supabase from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,15 +32,15 @@ type Props = {
   orderId: string;
   currentUserId: string;
   otherUserName: string;
-  // When set, the header shows a tappable logo (→ this route) + headerRight.
-  // When omitted (provider fallback), it shows back + the other user's name.
-  homeHref?: '/(customer)' | '/(provider)';
-  headerRight?: ReactNode;
+  // Header close control. The sheet (<ChatModal>) closes the sheet; the
+  // full-screen route passes router.back(). Either way the header is the shared
+  // SheetHeader (name + Order # + X), so both presentations look identical.
+  onClose?: () => void;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ChatScreen({ orderId, currentUserId, otherUserName, homeHref, headerRight }: Props) {
+export default function ChatScreen({ orderId, currentUserId, otherUserName, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +49,8 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, home
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
+    console.log('[ChatScreen] subscribe effect run — orderId:', orderId, '| currentUserId:', currentUserId);
+    if (!orderId) return;
     fetchMessages();
 
     const channel = supabase
@@ -134,9 +137,14 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, home
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Header */}
-      {homeHref ? (
-        <AppHeader showLogo logoHref={homeHref} right={headerRight} />
+      {/* Header — shared SheetHeader (name + Order # + X) for both the sheet and
+          the full-screen route. AppHeader is kept only as an unused fallback. */}
+      {onClose ? (
+        <SheetHeader
+          title={otherUserName}
+          subtitle={`Order #${orderId.slice(-8).toUpperCase()}`}
+          onClose={onClose}
+        />
       ) : (
         <AppHeader
           showBack

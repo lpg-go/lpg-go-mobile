@@ -15,13 +15,14 @@ export async function sendOrderNotification(orderId: string, event: string): Pro
       headers: {
         'Content-Type': 'application/json',
         'x-app-secret': APP_SECRET,
+        'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ orderId, event }),
     });
     const text = await res.text();
-    console.log('[sendOrderNotification] full response:', text);
+    console.log('[sendOrderNotification]', event, '→ status', res.status, res.ok ? 'OK' : 'FAIL', '| body:', text);
   } catch (err) {
-    console.error('[sendOrderNotification] fetch error', err);
+    console.error('[sendOrderNotification] fetch THREW for', event, err);
   }
 }
 

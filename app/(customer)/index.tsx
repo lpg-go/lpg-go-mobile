@@ -54,8 +54,13 @@ export default function CustomerHomeScreen() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [gridWidth, setGridWidth] = useState(0);
 
-  const cardWidth = (width - H_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS;
+  // Always lay out COLS columns, sized to the grid's measured width (falls back
+  // to the window width before the first layout pass). Floor so rounding never
+  // pushes the row total past the container and wraps a card to the next line.
+  const availWidth = gridWidth > 0 ? gridWidth : width - H_PADDING * 2;
+  const cardWidth = Math.floor((availWidth - GRID_GAP * (COLS - 1)) / COLS);
 
   // Refetch brands on every screen focus so logo updates and new brands appear immediately
   useFocusEffect(
@@ -160,33 +165,33 @@ export default function CustomerHomeScreen() {
         </View>
 
         {/* Brands section */}
-        <Text style={styles.sectionTitle}>Available Brands</Text>
-
-        {loading ? (
-          <SkeletonGrid cardWidth={cardWidth} />
-        ) : filtered.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="inbox" size={40} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No brands available</Text>
-          </View>
-        ) : (
-          <View style={styles.grid}>
-            {filtered.map((brand) => (
-              <BrandGridCard
-                key={brand.id}
-                brand={brand}
-                cardWidth={cardWidth}
-                onPress={() =>
-                  router.push({
-                    pathname: '/(customer)/brand/[id]',
-                    params: { id: brand.id, name: brand.name },
-                  })
-                }
-                hasActiveProviders={brand.hasActiveProviders}
-              />
-            ))}
-          </View>
-        )}
+        <View onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+          {loading ? (
+            <SkeletonGrid cardWidth={cardWidth} />
+          ) : filtered.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Feather name="inbox" size={40} color="#D1D5DB" />
+              <Text style={styles.emptyText}>No brands available</Text>
+            </View>
+          ) : (
+            <View style={styles.grid}>
+              {filtered.map((brand) => (
+                <BrandGridCard
+                  key={brand.id}
+                  brand={brand}
+                  cardWidth={cardWidth}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(customer)/brand/[id]',
+                      params: { id: brand.id, name: brand.name },
+                    })
+                  }
+                  hasActiveProviders={brand.hasActiveProviders}
+                />
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );

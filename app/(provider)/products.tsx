@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AppHeader from '../../components/AppHeader';
+import ProviderHeaderActions from '../../components/ProviderHeaderActions';
 import supabase from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -178,10 +180,8 @@ export default function ProviderProductsScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Products</Text>
-      </View>
+    <View style={styles.screen}>
+      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
 
       {products.length === 0 ? (
         <ScrollView
@@ -395,18 +395,6 @@ function ProductRow({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F9FAFB' },
   centered: { alignItems: 'center', justifyContent: 'center' },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
 
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },

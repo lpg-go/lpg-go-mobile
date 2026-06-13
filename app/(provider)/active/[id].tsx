@@ -16,7 +16,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AppHeader from '../../../components/AppHeader';
+import ChatModal from '../../../components/ChatModal';
 import LiveMap from '../../../components/LiveMap';
+import SheetHeader from '../../../components/SheetHeader';
+import ProviderHeaderActions from '../../../components/ProviderHeaderActions';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
@@ -79,7 +83,7 @@ export default function ActiveDeliveryScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [customerReview, setCustomerReview] = useState<{ rating: number; comment: string | null; customerName: string | null } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [newMsgBanner, setNewMsgBanner] = useState<string | null>(null);
+  const [chatVisible, setChatVisible] = useState(false);
 
   // Location tracking
   const [providerLocation, setProviderLocation] = useState<LatLng | null>(null);
@@ -88,7 +92,6 @@ export default function ActiveDeliveryScreen() {
   const [mapVisible, setMapVisible] = useState(false);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
 
   // Reset review state whenever the order id changes
@@ -119,18 +122,15 @@ export default function ActiveDeliveryScreen() {
         (payload) => {
           const msg = payload.new as { sender_id: string };
           if (msg.sender_id === currentUserId) return;
+          // Bumps the chat unread badge. The in-app message banner is now the
+          // global NotificationBanner (driven by the new_message notification row).
           setUnreadCount((prev) => prev + 1);
-          const senderName = order?.customer?.full_name ?? 'Customer';
-          setNewMsgBanner(`New message from ${senderName}`);
-          if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-          bannerTimerRef.current = setTimeout(() => setNewMsgBanner(null), 3000);
         }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
   }, [currentUserId, id]);
 
@@ -371,7 +371,7 @@ export default function ActiveDeliveryScreen() {
 
   function handleChat() {
     setUnreadCount(0);
-    router.push({ pathname: '/(provider)/chat/[orderId]', params: { orderId: id } });
+    setChatVisible(true);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -400,24 +400,8 @@ export default function ActiveDeliveryScreen() {
   const isActive = order.status !== 'delivered' && order.status !== 'cancelled';
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace('/(provider)')} style={styles.backButton} hitSlop={8}>
-          <Feather name="chevron-left" size={26} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Status</Text>
-        <View style={{ width: 34 }} />
-      </View>
-
-      {/* New message banner */}
-      {newMsgBanner && (
-        <TouchableOpacity style={styles.msgBanner} onPress={handleChat} activeOpacity={0.85}>
-          <Feather name="message-circle" size={14} color="#fff" />
-          <Text style={styles.msgBannerText} numberOfLines={1}>{newMsgBanner}</Text>
-          <Feather name="chevron-right" size={14} color="#fff" />
-        </TouchableOpacity>
-      )}
+    <View style={styles.screen}>
+      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
 
       <ScrollView
         style={styles.scroll}
@@ -458,8 +442,27 @@ export default function ActiveDeliveryScreen() {
               <View style={styles.customerInfo}>
                 <Text style={styles.customerName}>{order.customer.full_name}</Text>
               </View>
-              {order.status === 'in_transit' && (
-                <Feather name="chevron-right" size={20} color={PRIMARY} />
+              {(order.status === 'in_transit' || order.status === 'awaiting_confirmation') && (
+              <View style={styles.customerActions}>
+                {order.customer.phone ? (
+                  <TouchableOpacity style={styles.customerIconBtn} onPress={handleCall} hitSlop={6} activeOpacity={0.7}>
+                    <Feather name="phone" size={22} color={PRIMARY} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={styles.customerIconBtn} onPress={handleChat} hitSlop={6} activeOpacity={0.7}>
+                  <Feather name="message-circle" size={22} color={PRIMARY} />
+                  {unreadCount > 0 && (
+                    <View style={styles.chatBadge}>
+                      <Text style={styles.chatBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {order.status === 'in_transit' && (
+                  <TouchableOpacity style={styles.customerIconBtn} onPress={() => setMapVisible(true)} hitSlop={6} activeOpacity={0.7}>
+                    <Feather name="map-pin" size={22} color={PRIMARY} />
+                  </TouchableOpacity>
+                )}
+              </View>
               )}
             </TouchableOpacity>
           </View>
@@ -551,21 +554,35 @@ export default function ActiveDeliveryScreen() {
         </View>
       )}
 
-      {/* Map modal */}
-      <Modal visible={mapVisible} animationType="slide" onRequestClose={() => setMapVisible(false)}>
-        <View style={[styles.modalScreen, { paddingTop: insets.top }]}>
-          <LiveMap
-            providerLocation={providerLocation}
-            customerLocation={customerLocation}
-            providerHeading={providerHeading}
-            providerName={order.customer?.full_name}
-            deliveryAddress={order.delivery_address}
-            onBack={() => setMapVisible(false)}
-            onChat={() => { setMapVisible(false); handleChat(); }}
-            onCall={handleCall}
-          />
+      {/* Map popup — bottom sheet, like the chat popup */}
+      <Modal visible={mapVisible} transparent animationType="slide" onRequestClose={() => setMapVisible(false)}>
+        <View style={styles.mapSheetOverlay}>
+          <View style={styles.mapSheet}>
+            <SheetHeader
+              title={order.customer?.full_name || 'Live Tracking'}
+              subtitle={`Order #${id.slice(-8).toUpperCase()}`}
+              onClose={() => setMapVisible(false)}
+            />
+            <View style={styles.mapSheetBody}>
+              <LiveMap
+                providerLocation={providerLocation}
+                customerLocation={customerLocation}
+                providerHeading={providerHeading}
+                providerName={order.customer?.full_name}
+                deliveryAddress={order.delivery_address}
+              />
+            </View>
+          </View>
         </View>
       </Modal>
+
+      <ChatModal
+        visible={chatVisible}
+        onClose={() => { setChatVisible(false); setUnreadCount(0); }}
+        orderId={id}
+        currentUserId={currentUserId ?? ''}
+        otherUserName={order?.customer?.full_name ?? 'Customer'}
+      />
     </View>
   );
 }
@@ -579,19 +596,6 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center' },
   errorText: { fontSize: 15, color: '#6B7280' },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  backButton: { width: 34 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
 
   // Scroll
   scroll: { flex: 1 },
@@ -661,6 +665,28 @@ const styles = StyleSheet.create({
   avatarImage: { width: 40, height: 40, borderRadius: 20 },
   customerInfo: { flex: 1 },
   customerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  customerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  customerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  chatBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
 
   // Chat badge
   chatBtnWrapper: { position: 'relative' },
@@ -702,17 +728,6 @@ const styles = StyleSheet.create({
   },
   itemTotalLabel: { fontSize: 13, fontWeight: '700', color: '#111827' },
   itemTotalValue: { fontSize: 14, fontWeight: '800', color: PRIMARY },
-
-  // Message banner
-  msgBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: PRIMARY,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  msgBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#fff' },
 
   // Mark delivered — fixed bottom bar (matches customer Select Provider button)
   bottomBar: {
@@ -765,5 +780,17 @@ const styles = StyleSheet.create({
   reviewPending: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
 
   // Map modal
-  modalScreen: { flex: 1, backgroundColor: '#000' },
+  mapSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  mapSheet: {
+    height: '92%',
+    backgroundColor: '#000',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  mapSheetBody: { flex: 1 },
 });

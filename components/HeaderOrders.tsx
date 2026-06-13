@@ -49,11 +49,13 @@ function useActiveOrderCount() {
 type Props = {
   href: '/(customer)/orders';
   color?: string;
+  // When true, the button shows a green ring (it's the current screen).
+  active?: boolean;
 };
 
 // Orders icon for the customer header — package glyph with a live active-order
 // count badge. Replaces the former Orders tab.
-export default function HeaderOrders({ href, color = '#374151' }: Props) {
+export default function HeaderOrders({ href, color = '#374151', active = false }: Props) {
   const activeCount = useActiveOrderCount();
 
   return (
@@ -63,7 +65,7 @@ export default function HeaderOrders({ href, color = '#374151' }: Props) {
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      <MaterialCommunityIcons name="cube-outline" size={24} color={color} />
+      <MaterialCommunityIcons name="cube-outline" size={24} color={active ? '#16A34A' : color} />
       {activeCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{activeCount > 99 ? '99+' : activeCount}</Text>
