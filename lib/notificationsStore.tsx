@@ -121,14 +121,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           },
           (payload) => {
             const next = payload.new as Notification;
-            console.log('[notif] received type:', next.type, '| banners?', BANNER_TYPES.has(next.type));
             setNotifications((prev) =>
               prev.some((n) => n.id === next.id) ? prev : [next, ...prev]
             );
 
             // Surface a transient in-app banner for actionable types.
             if (BANNER_TYPES.has(next.type)) {
-              console.log('[notif] banner SET:', next.type);
               if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
               setBannerNotification(next);
               bannerTimerRef.current = setTimeout(

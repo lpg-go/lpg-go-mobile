@@ -49,7 +49,6 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, onCl
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    console.log('[ChatScreen] subscribe effect run — orderId:', orderId, '| currentUserId:', currentUserId);
     if (!orderId) return;
     fetchMessages();
 

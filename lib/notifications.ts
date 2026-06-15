@@ -20,9 +20,9 @@ export async function sendOrderNotification(orderId: string, event: string): Pro
       body: JSON.stringify({ orderId, event }),
     });
     const text = await res.text();
-    console.log('[sendOrderNotification]', event, '→ status', res.status, res.ok ? 'OK' : 'FAIL', '| body:', text);
+    console.log('[sendOrderNotification] full response:', text);
   } catch (err) {
-    console.error('[sendOrderNotification] fetch THREW for', event, err);
+    console.error('[sendOrderNotification] fetch error', err);
   }
 }
 
