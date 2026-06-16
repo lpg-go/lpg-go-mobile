@@ -90,47 +90,21 @@ export default function TopUpScreen() {
 
     if (!userId) return;
 
-    const methodLabel = paymentMethod === 'gcash' ? 'GCash' : 'Card';
-
-    Alert.alert(
-      'Confirm Top Up',
-      `Top up ${amount.toLocaleString('en-PH', { minimumFractionDigits: 0 })} via ${methodLabel}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: () => processTopUp(amount) },
-      ]
-    );
+    processTopUp(amount);
   }
 
-  async function processTopUp(amount: number) {
-    setProcessing(true);
-
-    const { error: txError } = await supabase
-      .from('transactions')
-      .insert({ provider_id: userId, type: 'topup', amount, order_id: null });
-
-    if (txError) {
-      setProcessing(false);
-      Alert.alert('Error', txError.message);
-      return;
-    }
-
-    const newBalance = (balance ?? 0) + amount;
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ balance: newBalance })
-      .eq('id', userId);
-
-    setProcessing(false);
-
-    if (profileError) {
-      Alert.alert('Error', profileError.message);
-      return;
-    }
-
-    Alert.alert('Success', 'Balance topped up successfully!', [
-      { text: 'OK', onPress: () => router.replace('/(provider)/earnings') },
-    ]);
+  // Online top-up is not wired to a payment processor yet (PayMongo integration
+  // pending). Until then we must NOT credit the balance — doing so would let a
+  // provider give themselves free balance. Show a "coming soon" notice instead.
+  // The amount/method UI above is kept intact so PayMongo can be wired in here
+  // later: create a payment/checkout, then credit the balance only after the
+  // payment webhook confirms.
+  async function processTopUp(_amount: number) {
+    Alert.alert(
+      'Coming Soon',
+      'Online top-up is coming soon. Please contact admin to add balance.',
+      [{ text: 'OK' }]
+    );
   }
 
   const amount = getAmount();
