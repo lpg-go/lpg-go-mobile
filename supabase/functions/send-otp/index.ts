@@ -51,11 +51,14 @@ serve(async (req) => {
   // profiles.phone stores the E.164 form WITH '+', while normalizePhone returns
   // digits only — prepend '+' to match. Uses the service-role client, so this
   // SELECT bypasses RLS and sees every account (anon RLS would hide most rows).
+  const lookupPhone = '+' + phone;
   const { data: existingProfile, error: lookupErr } = await supabase
     .from('profiles')
     .select('id')
-    .eq('phone', '+' + phone)
+    .eq('phone', lookupPhone)
     .maybeSingle();
+
+  console.log('[send-otp] purpose:', purpose, 'lookupPhone:', lookupPhone, 'existingProfile:', JSON.stringify(existingProfile), 'lookupErr:', JSON.stringify(lookupErr));
 
   if (lookupErr) {
     console.error('[send-otp] profile lookup error:', lookupErr);
