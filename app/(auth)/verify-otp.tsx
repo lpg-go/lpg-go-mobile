@@ -18,6 +18,14 @@ const VERIFY_OTP_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/ve
 const PRIMARY = '#16A34A';
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
+// Mirror the server's OTP validity window (send-otp sets expires_at = now + 15m).
+const EXPIRY_SECONDS = 15 * 60;
+
+function formatTime(total: number): string {
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
 export default function VerifyOtpScreen() {
   const params = useLocalSearchParams<{
@@ -36,14 +44,24 @@ export default function VerifyOtpScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
+  // Code-expiry countdown, tracked client-side from when this screen mounted
+  // (i.e. right after the OTP was sent). Reset on resend.
+  const [expiry, setExpiry] = useState(EXPIRY_SECONDS);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  // Countdown timer
+  // Resend-cooldown timer
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
+
+  // Code-expiry timer
+  useEffect(() => {
+    if (expiry <= 0) return;
+    const t = setTimeout(() => setExpiry((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [expiry]);
 
   function handleDigitChange(text: string, index: number) {
     const char = text.replace(/\D/g, '').slice(-1);
@@ -67,6 +85,7 @@ export default function VerifyOtpScreen() {
   async function handleResend() {
     setError('');
     setCountdown(RESEND_SECONDS);
+    setExpiry(EXPIRY_SECONDS);
     setDigits(Array(OTP_LENGTH).fill(''));
     inputRefs.current[0]?.focus();
 
@@ -209,16 +228,26 @@ export default function VerifyOtpScreen() {
           )}
         </TouchableOpacity>
 
-        <View style={styles.resendRow}>
-          {countdown > 0 ? (
-            <Text style={styles.resendCountdown}>
-              Resend code in <Text style={styles.resendBold}>{countdown}s</Text>
+        <View style={styles.timerBlock}>
+          {expiry > 0 ? (
+            <Text style={styles.expiryText}>
+              Code expires in <Text style={styles.expiryBold}>{formatTime(expiry)}</Text>
             </Text>
           ) : (
-            <TouchableOpacity onPress={handleResend}>
-              <Text style={styles.resendLink}>Resend code</Text>
-            </TouchableOpacity>
+            <Text style={styles.expiredText}>Code expired. Please resend.</Text>
           )}
+
+          <View style={styles.resendRow}>
+            <TouchableOpacity
+              onPress={handleResend}
+              disabled={countdown > 0}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.resendLink, countdown > 0 && styles.resendLinkDisabled]}>
+                Resend code
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -278,8 +307,11 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  timerBlock: { alignItems: 'center', gap: 8 },
+  expiryText: { fontSize: 14, color: '#6B7280' },
+  expiryBold: { fontWeight: '700', color: '#111827' },
+  expiredText: { fontSize: 14, color: '#EF4444', fontWeight: '600' },
   resendRow: { alignItems: 'center' },
-  resendCountdown: { fontSize: 14, color: '#6B7280' },
-  resendBold: { fontWeight: '600', color: '#374151' },
   resendLink: { fontSize: 14, color: PRIMARY, fontWeight: '600' },
+  resendLinkDisabled: { opacity: 0.4 },
 });

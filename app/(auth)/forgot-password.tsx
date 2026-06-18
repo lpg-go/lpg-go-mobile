@@ -21,11 +21,22 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Keep digits only, drop any leading 0 (the national trunk prefix — "+63" is
+  // already shown), and cap at 10 digits, so "0917..." becomes "917..." and the
+  // stored value matches what the server's normalizePhone expects.
+  function handlePhoneChange(text: string) {
+    setPhone(text.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10));
+  }
+
   async function handleSendOtp() {
     setError('');
     const digits = phone.replace(/\D/g, '');
     if (digits.length !== 10) {
       setError('Enter a valid 10-digit phone number.');
+      return;
+    }
+    if (digits[0] !== '9') {
+      setError('Phone number should start with 9 after +63.');
       return;
     }
 
@@ -35,13 +46,18 @@ export default function ForgotPasswordScreen() {
     const res = await fetch(SEND_OTP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: fullPhone }),
+      body: JSON.stringify({ phone: fullPhone, purpose: 'forgot_password' }),
     });
     const json = await res.json();
     setLoading(false);
 
+    if (json.error === 'not_found') {
+      setError('No account found for this number.');
+      return;
+    }
+
     if (!res.ok || json.error) {
-      setError(json.error ?? 'Failed to send OTP. Try again.');
+      setError(json.message ?? json.error ?? 'Failed to send OTP. Try again.');
       return;
     }
 
@@ -76,7 +92,7 @@ export default function ForgotPasswordScreen() {
             keyboardType="number-pad"
             maxLength={10}
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={handlePhoneChange}
           />
         </View>
 

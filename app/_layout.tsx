@@ -5,6 +5,7 @@ import { router, Slot } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
+import { fetchProviderDocRequired } from '../lib/settings';
 import supabase from '../lib/supabase';
 
 export default function RootLayout() {
@@ -50,9 +51,14 @@ export default function RootLayout() {
     if (profile.role === 'customer') {
       router.replace('/(customer)');
     } else if (profile.role === 'provider') {
-      if (!profile.document_url) {
-        router.replace('/(auth)/upload-document');
-      } else if (!profile.is_approved) {
+      // Approval is the real gate for operating (orders, visibility, RLS).
+      // When a document isn't required, the auto-approve trigger has already set
+      // is_approved=true, so an approved provider goes straight in. An unapproved
+      // provider is sent to upload-document only when documents are required;
+      // otherwise they wait there for admin approval as before.
+      if (profile.is_approved) {
+        router.replace('/(provider)');
+      } else if (await fetchProviderDocRequired()) {
         router.replace('/(auth)/upload-document');
       } else {
         router.replace('/(provider)');

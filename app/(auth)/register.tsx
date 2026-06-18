@@ -32,13 +32,24 @@ export default function RegisterScreen() {
   const [businessName, setBusinessName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+
+  // Keep digits only, drop any leading 0 (the national trunk prefix — the "+63"
+  // is already shown in the UI), and cap at 10 digits. So "0917..." becomes
+  // "917..." automatically and the stored field always matches what the server's
+  // normalizePhone expects (639XXXXXXXXX after +63 is prepended).
+  function handlePhoneChange(text: string) {
+    setPhone(text.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10));
+  }
 
   async function handleRegister() {
     setError('');
+    setAlreadyRegistered(false);
 
     if (!fullName.trim()) { setError('Full name is required.'); return; }
     const digits = phone.replace(/\D/g, '');
     if (digits.length !== 10) { setError('Enter a valid 10-digit phone number.'); return; }
+    if (digits[0] !== '9') { setError('Phone number should start with 9 after +63.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
     if (!role) { setError('Please select your role.'); return; }
@@ -51,21 +62,23 @@ export default function RegisterScreen() {
     const fullPhone = formatPhone(digits);
     setLoading(true);
 
-    // Send OTP first — account created only after verification
+    // The duplicate check now lives in the send-otp Edge Function (service-role,
+    // bypasses RLS) — it returns 409 'already_registered' before sending an SMS.
+    // Account is created only after OTP verification.
     console.log('[send-otp] sending to phone:', fullPhone);
     const res = await fetch(
       'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/send-otp',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: fullPhone }),
+        body: JSON.stringify({ phone: fullPhone, purpose: 'register' }),
       }
     );
 
     const text = await res.text();
     console.log('[send-otp] raw response:', text);
 
-    let json: { success?: boolean; error?: string };
+    let json: { success?: boolean; error?: string; message?: string };
     try {
       json = JSON.parse(text);
     } catch {
@@ -76,8 +89,13 @@ export default function RegisterScreen() {
 
     setLoading(false);
 
+    if (json.error === 'already_registered') {
+      setAlreadyRegistered(true);
+      return;
+    }
+
     if (!res.ok || json.error) {
-      setError(json.error ?? 'Failed to send OTP. Try again.');
+      setError(json.message ?? json.error ?? 'Failed to send OTP. Try again.');
       return;
     }
 
@@ -143,7 +161,7 @@ export default function RegisterScreen() {
             keyboardType="number-pad"
             maxLength={10}
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={handlePhoneChange}
           />
         </View>
 
@@ -227,7 +245,16 @@ export default function RegisterScreen() {
           </>
         )}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {alreadyRegistered ? (
+          <Text style={styles.error}>
+            This number is already registered.{' '}
+            <Text style={styles.linkBold} onPress={() => router.replace('/(auth)/login')}>
+              Please log in.
+            </Text>
+          </Text>
+        ) : error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}

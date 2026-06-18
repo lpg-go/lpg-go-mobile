@@ -31,7 +31,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: CORS });
   }
 
-  let body: { phone?: string };
+  let body: { phone?: string; purpose?: string };
   try {
     body = await req.json();
   } catch {
@@ -41,6 +41,39 @@ serve(async (req) => {
   const phone = normalizePhone(body.phone ?? '');
   if (!phone) {
     return new Response(JSON.stringify({ error: 'Invalid phone number. Use 09XXXXXXXXX or 639XXXXXXXXX.' }), { status: 400, headers: CORS });
+  }
+
+  // 'register' (default) blocks numbers that already have an account;
+  // 'forgot_password' blocks numbers that don't. Defaulting to 'register'
+  // keeps older clients (which send only { phone }) backward-safe.
+  const purpose = body.purpose === 'forgot_password' ? 'forgot_password' : 'register';
+
+  // profiles.phone stores the E.164 form WITH '+', while normalizePhone returns
+  // digits only — prepend '+' to match. Uses the service-role client, so this
+  // SELECT bypasses RLS and sees every account (anon RLS would hide most rows).
+  const { data: existingProfile, error: lookupErr } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('phone', '+' + phone)
+    .maybeSingle();
+
+  if (lookupErr) {
+    console.error('[send-otp] profile lookup error:', lookupErr);
+    return new Response(JSON.stringify({ error: 'Lookup failed.' }), { status: 500, headers: CORS });
+  }
+
+  if (purpose === 'register' && existingProfile) {
+    return new Response(
+      JSON.stringify({ error: 'already_registered', message: 'This number is already registered.' }),
+      { status: 409, headers: CORS }
+    );
+  }
+
+  if (purpose === 'forgot_password' && !existingProfile) {
+    return new Response(
+      JSON.stringify({ error: 'not_found', message: 'No account found for this number.' }),
+      { status: 404, headers: CORS }
+    );
   }
 
   // Generate 6-digit OTP
