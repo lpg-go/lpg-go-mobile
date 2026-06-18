@@ -28,11 +28,22 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Keep digits only, drop any leading 0 (the national trunk prefix — "+63" is
+  // already shown), and cap at 10 digits, so "0917..." becomes "917..." and the
+  // value matches what auth expects after +63 is prepended.
+  function handlePhoneChange(text: string) {
+    setPhone(text.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10));
+  }
+
   async function handleSignIn() {
     setError('');
     const digits = phone.replace(/\D/g, '');
     if (digits.length !== 10) {
       setError('Enter a valid 10-digit phone number.');
+      return;
+    }
+    if (digits[0] !== '9') {
+      setError('Phone number should start with 9 after +63.');
       return;
     }
     if (!password) {
@@ -93,7 +104,7 @@ export default function LoginScreen() {
             keyboardType="number-pad"
             maxLength={10}
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={handlePhoneChange}
           />
         </View>
 
