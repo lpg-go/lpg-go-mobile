@@ -18,10 +18,12 @@
 - supabase/migrations/ — all SQL migrations
 
 ## Test accounts
-- Customer: 0000000000 / 000000
-- Dealer: 1111111111 / 000000
-- Rider: 2222222222 / 000000
-- Admin: admin@lpggo.app / Admin@123
+- Customer One: 09000000001 / 000000
+- Dealer One: 09000000002 / 111111
+- Rider One: 09000000003 / 222222
+- Customer Two: 09560623082 (existing, password unchanged)
+- Dave: 09000000005 (existing, password unchanged)
+- Admin: accounts@lpggodelivery.com / iT3chlpg.25
 
 ## Supabase
 - Project ref: rgqwaiassatyruptsgbs
@@ -34,6 +36,7 @@
 
 ## Key patterns
 - Phone auth uses phone-as-email: 639XXXXXXXXX@lpggo.app
+- profiles.phone is canonical +639XXXXXXXXX (13 chars), enforced by phone_format_check CHECK constraint
 - Always use --legacy-peer-deps when npm install fails
 - Use npx expo install for Expo packages
 - Migrations go in supabase/migrations/ with sequential naming
