@@ -6,11 +6,14 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -69,6 +72,13 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: str
 
 const H_PADDING = 20;
 
+// Pre-delivery safety checklist shown before "Mark as Delivered".
+const SAFETY_ITEMS = [
+  'Seal/cap is intact',
+  'No visible damage on cylinder',
+  'Brand and size matches the order',
+];
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ActiveDeliveryScreen() {
@@ -84,6 +94,11 @@ export default function ActiveDeliveryScreen() {
   const [customerReview, setCustomerReview] = useState<{ rating: number; comment: string | null; customerName: string | null } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatVisible, setChatVisible] = useState(false);
+
+  // Safety check sheet (gates "Mark as Delivered")
+  const [safetyVisible, setSafetyVisible] = useState(false);
+  const [checks, setChecks] = useState<boolean[]>([false, false, false]);
+  const [safetyNotes, setSafetyNotes] = useState('');
 
   // Location tracking
   const [providerLocation, setProviderLocation] = useState<LatLng | null>(null);
@@ -302,17 +317,61 @@ export default function ActiveDeliveryScreen() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function handleMarkDelivered() {
+  // Open the safety check sheet (fresh state each time) instead of marking
+  // the order delivered directly.
+  function openSafetyCheck() {
+    setChecks([false, false, false]);
+    setSafetyNotes('');
+    setSafetyVisible(true);
+  }
+
+  function toggleCheck(index: number) {
+    setChecks((prev) => prev.map((c, i) => (i === index ? !c : c)));
+  }
+
+  async function submitSafetyCheck() {
+    if (!currentUserId) {
+      Alert.alert('Error', 'Unable to identify your account. Please try again.');
+      return;
+    }
+
+    const passed = checks.every(Boolean);
+    const trimmedNotes = safetyNotes.trim();
+
     setMarking(true);
-    const { error } = await supabase
+
+    // 1. Record the safety check first. RLS enforces that only the assigned
+    //    rider can insert, and only while the order is in_transit. A duplicate
+    //    (already-checked) order surfaces here as an insert error.
+    const { error: checkError } = await supabase
+      .from('delivery_safety_checks')
+      .insert({
+        order_id: id,
+        rider_id: currentUserId,
+        passed,
+        notes: trimmedNotes || null,
+      });
+
+    if (checkError) {
+      setMarking(false);
+      Alert.alert('Error', checkError.message);
+      return; // Do NOT update the order if the check failed to record.
+    }
+
+    // 2. Check recorded — proceed with the existing mark-as-delivered flow.
+    const { error: orderError } = await supabase
       .from('orders')
       .update({ status: 'awaiting_confirmation', delivery_completed_at: new Date().toISOString() })
       .eq('id', id);
+
     setMarking(false);
-    if (error) {
-      Alert.alert('Error', error.message);
+
+    if (orderError) {
+      Alert.alert('Error', orderError.message);
       return;
     }
+
+    setSafetyVisible(false);
     sendOrderNotification(id, 'awaiting_confirmation');
   }
 
@@ -398,6 +457,11 @@ export default function ActiveDeliveryScreen() {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
   const isActive = order.status !== 'delivered' && order.status !== 'cancelled';
+
+  // "Confirm Delivery" is allowed when either all items pass (notes optional),
+  // or at least one item failed but the rider explained why in the notes.
+  const allChecked = checks.every(Boolean);
+  const canConfirm = allChecked || safetyNotes.trim().length > 0;
 
   return (
     <View style={styles.screen}>
@@ -542,14 +606,10 @@ export default function ActiveDeliveryScreen() {
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
           <TouchableOpacity
             style={[styles.markDeliveredBtn, marking && { opacity: 0.6 }]}
-            onPress={handleMarkDelivered}
+            onPress={openSafetyCheck}
             disabled={marking}
           >
-            {marking ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.markDeliveredBtnText}>Mark as Delivered</Text>
-            )}
+            <Text style={styles.markDeliveredBtnText}>Mark as Delivered</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -574,6 +634,74 @@ export default function ActiveDeliveryScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Safety check — bottom sheet, gates "Mark as Delivered" */}
+      <Modal
+        visible={safetyVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { if (!marking) setSafetyVisible(false); }}
+      >
+        <KeyboardAvoidingView
+          style={styles.safetyOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.safetySheet, { paddingBottom: insets.bottom + 16 }]}>
+            <Text style={styles.safetyTitle}>Safety Check</Text>
+            <Text style={styles.safetySubtitle}>Please verify before handing over the cylinder</Text>
+
+            <View style={styles.checkList}>
+              {SAFETY_ITEMS.map((label, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.checkRow}
+                  activeOpacity={0.7}
+                  onPress={() => toggleCheck(i)}
+                  disabled={marking}
+                >
+                  <View style={[styles.checkbox, checks[i] && styles.checkboxChecked]}>
+                    {checks[i] && <Feather name="check" size={15} color="#fff" />}
+                  </View>
+                  <Text style={styles.checkLabel}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.notesLabel}>Notes (required if any item failed)</Text>
+            <TextInput
+              style={styles.notesInput}
+              value={safetyNotes}
+              onChangeText={setSafetyNotes}
+              placeholder="Describe any issue with the cylinder..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              maxLength={500}
+              editable={!marking}
+            />
+
+            <View style={styles.safetyActions}>
+              <TouchableOpacity
+                style={[styles.safetyCancelBtn, marking && { opacity: 0.5 }]}
+                onPress={() => setSafetyVisible(false)}
+                disabled={marking}
+              >
+                <Text style={styles.safetyCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.safetyConfirmBtn, (!canConfirm || marking) && styles.safetyConfirmBtnDisabled]}
+                onPress={submitSafetyCheck}
+                disabled={!canConfirm || marking}
+              >
+                {marking ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.safetyConfirmText}>Confirm Delivery</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <ChatModal
@@ -793,4 +921,64 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   mapSheetBody: { flex: 1 },
+
+  // Safety check sheet
+  safetyOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  safetySheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: H_PADDING,
+    paddingTop: 20,
+  },
+  safetyTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  safetySubtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  checkList: { marginTop: 16, gap: 12 },
+  checkRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: { backgroundColor: PRIMARY, borderColor: PRIMARY },
+  checkLabel: { fontSize: 15, color: '#111827', marginLeft: 12, flex: 1 },
+  notesLabel: { fontSize: 13, color: '#6B7280', marginTop: 16, marginBottom: 6 },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    padding: 12,
+    minHeight: 80,
+    fontSize: 14,
+    color: '#111827',
+    textAlignVertical: 'top',
+  },
+  safetyActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  safetyCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  safetyCancelText: { fontSize: 16, fontWeight: '600', color: '#374151' },
+  safetyConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  safetyConfirmBtnDisabled: { opacity: 0.5 },
+  safetyConfirmText: { fontSize: 16, fontWeight: '600', color: '#fff' },
 });
