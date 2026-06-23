@@ -25,6 +25,7 @@ import LiveMap from '../../../components/LiveMap';
 import SheetHeader from '../../../components/SheetHeader';
 import ProviderHeaderActions from '../../../components/ProviderHeaderActions';
 import { sendOrderNotification } from '../../../lib/notifications';
+import { speedLabel } from '../../../lib/reviewSpeed';
 import { SAFETY_ITEMS } from '../../../lib/safety';
 import supabase from '../../../lib/supabase';
 
@@ -86,7 +87,7 @@ export default function ActiveDeliveryScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [providerType, setProviderType] = useState<'dealer' | 'rider' | null>(null);
-  const [customerReview, setCustomerReview] = useState<{ rating: number; comment: string | null; customerName: string | null } | null>(null);
+  const [customerReview, setCustomerReview] = useState<{ rating: number; comment: string | null; delivery_speed: string | null; customerName: string | null } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatVisible, setChatVisible] = useState(false);
 
@@ -175,13 +176,13 @@ export default function ActiveDeliveryScreen() {
     // Initial fetch for THIS specific order
     supabase
       .from('reviews')
-      .select('rating, comment, customer:profiles!customer_id(full_name)')
+      .select('rating, comment, delivery_speed, customer:profiles!customer_id(full_name)')
       .eq('order_id', orderId)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
           const customer = data.customer as { full_name: string } | null;
-          setCustomerReview({ rating: data.rating, comment: data.comment, customerName: customer?.full_name ?? null });
+          setCustomerReview({ rating: data.rating, comment: data.comment, delivery_speed: data.delivery_speed ?? null, customerName: customer?.full_name ?? null });
         }
       });
 
@@ -192,14 +193,14 @@ export default function ActiveDeliveryScreen() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'reviews', filter: `order_id=eq.${orderId}` },
         (payload) => {
-          const r = payload.new as { rating: number; comment: string | null; customer_id: string };
+          const r = payload.new as { rating: number; comment: string | null; delivery_speed: string | null; customer_id: string };
           supabase
             .from('profiles')
             .select('full_name')
             .eq('id', r.customer_id)
             .single()
             .then(({ data }) => {
-              setCustomerReview({ rating: r.rating, comment: r.comment, customerName: data?.full_name ?? null });
+              setCustomerReview({ rating: r.rating, comment: r.comment, delivery_speed: r.delivery_speed ?? null, customerName: data?.full_name ?? null });
             });
         }
       )
@@ -581,6 +582,9 @@ export default function ActiveDeliveryScreen() {
                 {customerReview.comment ? (
                   <Text style={styles.reviewComment}>"{customerReview.comment}"</Text>
                 ) : null}
+                {speedLabel(customerReview.delivery_speed) ? (
+                  <Text style={styles.reviewSpeedText}>Speed: {speedLabel(customerReview.delivery_speed)}</Text>
+                ) : null}
               </>
             ) : (
               <>
@@ -912,6 +916,7 @@ const styles = StyleSheet.create({
   reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
   reviewStarsRow: { flexDirection: 'row', gap: 6 },
   reviewComment: { fontSize: 12, color: '#6B7280', textAlign: 'center' },
+  reviewSpeedText: { fontSize: 12, fontWeight: '600', color: '#374151' },
   reviewPending: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
 
   // Map modal

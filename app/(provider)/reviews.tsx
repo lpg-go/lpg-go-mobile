@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { speedLabel } from '../../lib/reviewSpeed';
 import supabase from '../../lib/supabase';
 
 type Review = {
   id: string;
   rating: number;
   comment: string | null;
+  delivery_speed: string | null;
   created_at: string;
   customer: { full_name: string } | null;
 };
@@ -46,7 +48,7 @@ export default function ProviderReviewsScreen() {
   async function fetchReviews(uid: string) {
     const { data } = await supabase
       .from('reviews')
-      .select('id, rating, comment, created_at, customer:profiles!customer_id(full_name)')
+      .select('id, rating, comment, delivery_speed, created_at, customer:profiles!customer_id(full_name)')
       .eq('provider_id', uid)
       .order('created_at', { ascending: false });
     if (data) setReviews(data as unknown as Review[]);
@@ -155,6 +157,16 @@ function ReviewRow({ review, isLast }: { review: Review; isLast: boolean }) {
       {review.comment ? (
         <Text style={styles.reviewComment}>{review.comment}</Text>
       ) : null}
+      {speedLabel(review.delivery_speed) ? (
+        <View style={styles.speedPill}>
+          <Feather
+            name={review.delivery_speed === 'very_fast' || review.delivery_speed === 'fast' ? 'zap' : 'clock'}
+            size={11}
+            color={PRIMARY}
+          />
+          <Text style={styles.speedPillText}>Speed: {speedLabel(review.delivery_speed)}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -218,6 +230,17 @@ const styles = StyleSheet.create({
   reviewCustomer: { fontSize: 14, fontWeight: '600', color: '#111827' },
   reviewDate: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
   reviewComment: { fontSize: 13, color: '#6B7280', lineHeight: 19 },
+  speedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  speedPillText: { fontSize: 12, fontWeight: '600', color: PRIMARY },
 
   // Empty state
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },

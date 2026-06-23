@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DELIVERY_SPEED_OPTIONS, speedLabel } from '../../lib/reviewSpeed';
 import { SAFETY_ITEMS } from '../../lib/safety';
 import LiveMap from '../LiveMap';
 import SheetHeader from '../SheetHeader';
@@ -75,6 +76,9 @@ export type OrderTrackingProps = {
   existingComment: string | null;
   reviewRating: number;
   reviewComment: string;
+  reviewSpeed: string | null;
+  existingSpeed: string | null;
+  setReviewSpeed: (s: string | null) => void;
   submittingReview: boolean;
 
   // Safety check (pre-delivery, recorded by rider)
@@ -119,6 +123,9 @@ export default function OrderTracking({
   existingComment,
   reviewRating,
   reviewComment,
+  reviewSpeed,
+  existingSpeed,
+  setReviewSpeed,
   submittingReview,
   safetyCheck,
   confirming,
@@ -315,6 +322,11 @@ export default function OrderTracking({
                 {existingComment ? (
                   <Text style={styles.reviewDoneComment}>"{existingComment}"</Text>
                 ) : null}
+                {speedLabel(existingSpeed) ? (
+                  <Text style={styles.reviewDoneSpeed}>
+                    Speed: {speedLabel(existingSpeed)}
+                  </Text>
+                ) : null}
               </View>
             ) : (
               <>
@@ -336,6 +348,24 @@ export default function OrderTracking({
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
+                <Text style={styles.speedHeading}>How was the delivery speed? (optional)</Text>
+                <View style={styles.speedRow}>
+                  {DELIVERY_SPEED_OPTIONS.map((opt) => {
+                    const selected = reviewSpeed === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        style={[styles.speedPill, selected && styles.speedPillSelected]}
+                        onPress={() => setReviewSpeed(selected ? null : opt.value)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.speedPillText, selected && styles.speedPillTextSelected]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
                 <TouchableOpacity
                   style={[styles.reviewSubmitBtn, submittingReview && { opacity: 0.6 }]}
                   onPress={onSubmitReview}
@@ -621,6 +651,22 @@ const styles = StyleSheet.create({
   reviewDoneWrap: { alignItems: 'center', gap: 6 },
   reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
   reviewDoneComment: { fontSize: 12, color: '#6B7280', textAlign: 'center', fontStyle: 'italic' },
+  reviewDoneSpeed: { fontSize: 12, fontWeight: '600', color: '#374151' },
+
+  // Delivery speed picker
+  speedHeading: { fontSize: 12, fontWeight: '600', color: '#374151', textAlign: 'center', marginTop: 2 },
+  speedRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
+  speedPill: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  speedPillSelected: { backgroundColor: PRIMARY, borderColor: PRIMARY },
+  speedPillText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  speedPillTextSelected: { color: '#fff' },
 
   // Map popup — bottom sheet (matches ChatModal)
   mapSheetOverlay: {

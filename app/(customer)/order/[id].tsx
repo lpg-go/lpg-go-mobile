@@ -125,6 +125,8 @@ export default function OrderTrackingScreen() {
   const [reviewDone, setReviewDone] = useState(false);
   const [existingRating, setExistingRating] = useState<number | null>(null);
   const [existingComment, setExistingComment] = useState<string | null>(null);
+  const [reviewSpeed, setReviewSpeed] = useState<string | null>(null);
+  const [existingSpeed, setExistingSpeed] = useState<string | null>(null);
   const [safetyCheck, setSafetyCheck] = useState<{ passed: boolean; notes: string | null; checked_at: string } | null>(null);
 
   // Bug 1 — Reset review state when order id changes
@@ -134,6 +136,8 @@ export default function OrderTrackingScreen() {
     setReviewDone(false);
     setExistingRating(null);
     setExistingComment(null);
+    setReviewSpeed(null);
+    setExistingSpeed(null);
   }, [id]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -384,20 +388,23 @@ export default function OrderTrackingScreen() {
   async function checkReview() {
     const { data } = await supabase
       .from('reviews')
-      .select('rating, comment')
+      .select('rating, comment, delivery_speed')
       .eq('order_id', id)
       .maybeSingle();
     if (data) {
       setExistingRating(data.rating);
       setExistingComment(data.comment ?? null);
+      setExistingSpeed(data.delivery_speed ?? null);
       setReviewRating(data.rating);
       setReviewComment(data.comment ?? '');
+      setReviewSpeed(data.delivery_speed ?? null);
       setReviewDone(true);
     } else {
       // No review yet — ensure form is shown fresh
       setReviewDone(false);
       setExistingRating(null);
       setExistingComment(null);
+      setExistingSpeed(null);
     }
   }
 
@@ -619,6 +626,7 @@ export default function OrderTrackingScreen() {
       provider_id: order.selected_provider_id,
       rating: reviewRating,
       comment: reviewComment.trim() || null,
+      delivery_speed: reviewSpeed || null,
     });
 
     setSubmittingReview(false);
@@ -696,6 +704,9 @@ export default function OrderTrackingScreen() {
         safetyCheck={safetyCheck}
         reviewRating={reviewRating}
         reviewComment={reviewComment}
+        reviewSpeed={reviewSpeed}
+        existingSpeed={existingSpeed}
+        setReviewSpeed={setReviewSpeed}
         submittingReview={submittingReview}
         confirming={confirming}
         onOpenMap={() => setMapVisible(true)}
