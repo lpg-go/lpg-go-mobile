@@ -22,6 +22,7 @@ type Brand = {
   id: string;
   name: string;
   logo_url: string | null;
+  is_preferred: boolean;
   productCount: number;
   hasActiveProviders: boolean;
 };
@@ -74,8 +75,9 @@ export default function CustomerHomeScreen() {
   async function fetchBrands() {
     const { data: brandRows } = await supabase
       .from('brands')
-      .select('id, name, logo_url')
+      .select('id, name, logo_url, is_preferred')
       .eq('is_active', true)
+      .order('is_preferred', { ascending: false })
       .order('name');
 
     if (!brandRows) return;
@@ -110,6 +112,7 @@ export default function CustomerHomeScreen() {
         id: b.id,
         name: b.name,
         logo_url: b.logo_url ?? null,
+        is_preferred: b.is_preferred ?? false,
         productCount: countByBrand[b.id] ?? 0,
         hasActiveProviders: activeBrandIds.has(b.id),
       }))
@@ -212,7 +215,7 @@ function BrandGridCard({
 }) {
   return (
     <TouchableOpacity
-      style={[styles.gridCard, { width: cardWidth }]}
+      style={[styles.gridCard, { width: cardWidth, height: cardWidth }]}
       onPress={onPress}
       activeOpacity={0.75}
     >
@@ -234,9 +237,19 @@ function BrandGridCard({
           </View>
         )}
       </View>
-      <Text style={[styles.gridBrandName, !hasActiveProviders && styles.gridBrandNameUnavailable]} numberOfLines={2}>
+      <Text
+        style={[styles.gridBrandName, !hasActiveProviders && styles.gridBrandNameUnavailable]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
         {brand.name}
       </Text>
+      {brand.is_preferred && (
+        <View style={styles.preferredBadge}>
+          <Feather name="star" size={9} color="#92400E" style={styles.preferredBadgeIcon} />
+          <Text style={styles.preferredBadgeText}>Preferred</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -247,7 +260,7 @@ function SkeletonGrid({ cardWidth }: { cardWidth: number }) {
   return (
     <View style={styles.grid}>
       {[1, 2, 3, 4, 5, 6].map((i) => (
-        <View key={i} style={[styles.gridCard, styles.skeletonCard, { width: cardWidth }]}>
+        <View key={i} style={[styles.gridCard, styles.skeletonCard, { width: cardWidth, height: cardWidth }]}>
           <View style={styles.skeletonLogo} />
           <View style={styles.skeletonName} />
         </View>
@@ -289,18 +302,16 @@ const styles = StyleSheet.create({
     gap: GRID_GAP,
   },
 
-  // Grid card
+  // Grid card — square (height set to cardWidth inline)
   gridCard: {
-    height: 120,
     backgroundColor: '#fff',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 10,
-    gap: 6,
+    justifyContent: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
@@ -308,28 +319,47 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  // Logo
-  logoWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  logoImage: { width: 80, height: 80, borderRadius: 8 },
+  // Logo — fixed 64x64 reserved block
+  logoWrap: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  logoImage: { width: 64, height: 64, borderRadius: 8 },
   logoFallback: {
-    width: 80,
-    height: 80,
+    width: 64,
+    height: 64,
     borderRadius: 8,
     backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoInitials: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  logoInitials: { fontSize: 20, fontWeight: '700', color: '#fff' },
 
-  // Brand name
+  // Brand name — single line, fixed slot
   gridBrandName: {
+    marginTop: 8,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: '700',
+    color: '#111827',
     textAlign: 'center',
-    lineHeight: 15,
+    lineHeight: 16,
+    height: 16,
+    alignSelf: 'stretch',
   },
   gridBrandNameUnavailable: { color: '#9CA3AF' },
+
+  // Preferred badge — top-right, overlapping the logo corner
+  preferredBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    zIndex: 2,
+  },
+  preferredBadgeIcon: { marginRight: 3 },
+  preferredBadgeText: { fontSize: 9, fontWeight: '700', color: '#92400E' },
 
   // Unavailable overlay
   unavailableOverlay: {
