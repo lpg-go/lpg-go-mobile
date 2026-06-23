@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SAFETY_ITEMS } from '../../lib/safety';
 import LiveMap from '../LiveMap';
 import SheetHeader from '../SheetHeader';
 
@@ -76,6 +77,9 @@ export type OrderTrackingProps = {
   reviewComment: string;
   submittingReview: boolean;
 
+  // Safety check (pre-delivery, recorded by rider)
+  safetyCheck: { passed: boolean; notes: string | null; checked_at: string } | null;
+
   // Flags
   confirming: boolean;
 
@@ -116,6 +120,7 @@ export default function OrderTracking({
   reviewRating,
   reviewComment,
   submittingReview,
+  safetyCheck,
   confirming,
   children,
   cancelSlot,
@@ -189,6 +194,38 @@ export default function OrderTracking({
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Safety check result — recorded by the rider before delivery */}
+        {(order.status === 'awaiting_confirmation' || order.status === 'delivered') &&
+          safetyCheck != null && (
+            safetyCheck.passed ? (
+              <View style={styles.safetyCard}>
+                <View style={styles.safetyItemRow}>
+                  <Feather name="shield" size={18} color={PRIMARY} />
+                  <Text style={styles.safetyTitle}>Cylinder safety verified</Text>
+                </View>
+                <Text style={styles.safetySubtitle}>
+                  Your rider verified the following at handover:
+                </Text>
+                {SAFETY_ITEMS.map((label) => (
+                  <View key={label} style={styles.safetyItemRow}>
+                    <Feather name="check" size={14} color={PRIMARY} />
+                    <Text style={styles.safetyItemText}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.safetyCardWarn}>
+                <View style={styles.safetyItemRow}>
+                  <Feather name="alert-triangle" size={18} color="#D97706" />
+                  <Text style={styles.safetyTitle}>Rider reported an issue</Text>
+                </View>
+                {safetyCheck.notes ? (
+                  <Text style={styles.safetyNotesText}>{safetyCheck.notes}</Text>
+                ) : null}
+              </View>
+            )
+          )}
 
         {/* Provider acceptances (bidding) — owned by the parent screen */}
         {children}
@@ -442,6 +479,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   confirmBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Safety check result
+  safetyCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  safetyCardWarn: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  safetyTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  safetySubtitle: { fontSize: 13, color: '#6B7280' },
+  safetyItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 2 },
+  safetyItemText: { fontSize: 14, color: '#374151' },
+  safetyNotesText: { fontSize: 14, color: '#374151' },
 
   // Section
   section: { marginBottom: 20, zIndex: 1 },

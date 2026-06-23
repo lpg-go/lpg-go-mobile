@@ -25,6 +25,7 @@ import LiveMap from '../../../components/LiveMap';
 import SheetHeader from '../../../components/SheetHeader';
 import ProviderHeaderActions from '../../../components/ProviderHeaderActions';
 import { sendOrderNotification } from '../../../lib/notifications';
+import { SAFETY_ITEMS } from '../../../lib/safety';
 import supabase from '../../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -71,13 +72,6 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: str
 };
 
 const H_PADDING = 20;
-
-// Pre-delivery safety checklist shown before "Mark as Delivered".
-const SAFETY_ITEMS = [
-  'Seal/cap is intact',
-  'No visible damage on cylinder',
-  'Brand and size matches the order',
-];
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 

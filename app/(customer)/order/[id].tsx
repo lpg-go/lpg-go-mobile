@@ -125,6 +125,7 @@ export default function OrderTrackingScreen() {
   const [reviewDone, setReviewDone] = useState(false);
   const [existingRating, setExistingRating] = useState<number | null>(null);
   const [existingComment, setExistingComment] = useState<string | null>(null);
+  const [safetyCheck, setSafetyCheck] = useState<{ passed: boolean; notes: string | null; checked_at: string } | null>(null);
 
   // Bug 1 — Reset review state when order id changes
   useEffect(() => {
@@ -367,8 +368,17 @@ export default function OrderTrackingScreen() {
   // ── Data fetching ────────────────────────────────────────────────────────
 
   async function fetchAll() {
-    await Promise.all([fetchOrder(), fetchItems(), fetchOrderAcceptances(), checkReview()]);
+    await Promise.all([fetchOrder(), fetchItems(), fetchOrderAcceptances(), checkReview(), fetchSafetyCheck()]);
     setLoading(false);
+  }
+
+  async function fetchSafetyCheck() {
+    const { data } = await supabase
+      .from('delivery_safety_checks')
+      .select('passed, notes, checked_at')
+      .eq('order_id', id)
+      .maybeSingle();
+    setSafetyCheck(data ?? null);
   }
 
   async function checkReview() {
@@ -683,6 +693,7 @@ export default function OrderTrackingScreen() {
         reviewDone={reviewDone}
         existingRating={existingRating}
         existingComment={existingComment}
+        safetyCheck={safetyCheck}
         reviewRating={reviewRating}
         reviewComment={reviewComment}
         submittingReview={submittingReview}
