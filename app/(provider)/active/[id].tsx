@@ -85,6 +85,7 @@ export default function ActiveDeliveryScreen() {
   const [marking, setMarking] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [providerType, setProviderType] = useState<'dealer' | 'rider' | null>(null);
   const [customerReview, setCustomerReview] = useState<{ rating: number; comment: string | null; customerName: string | null } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatVisible, setChatVisible] = useState(false);
@@ -116,7 +117,15 @@ export default function ActiveDeliveryScreen() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setCurrentUserId(user.id);
+      if (!user) return;
+      setCurrentUserId(user.id);
+      // provider_type never changes after signup — fetch once on mount.
+      supabase
+        .from('profiles')
+        .select('provider_type')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setProviderType((data?.provider_type as 'dealer' | 'rider' | null) ?? null));
     });
   }, []);
 
@@ -143,18 +152,19 @@ export default function ActiveDeliveryScreen() {
     };
   }, [currentUserId, id]);
 
-  // Start / stop GPS tracking based on order status
+  // Start / stop GPS tracking based on order status.
+  // Only riders broadcast location — dealers never share their position.
   useEffect(() => {
     if (!currentUserId || !order) return;
 
-    if (order.status === 'in_transit') {
+    if (order.status === 'in_transit' && providerType === 'rider') {
       startLocationTracking(currentUserId);
     } else {
       stopLocationTracking();
     }
 
     return () => { stopLocationTracking(); };
-  }, [order?.status, currentUserId]);
+  }, [order?.status, currentUserId, providerType]);
 
   // Fetch customer review when order is delivered + listen for new review in realtime
   useEffect(() => {
@@ -451,6 +461,8 @@ export default function ActiveDeliveryScreen() {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
   const isActive = order.status !== 'delivered' && order.status !== 'cancelled';
+  // Dealers don't broadcast location, so the live map serves no purpose for them.
+  const isRider = providerType === 'rider';
 
   // "Confirm Delivery" is allowed when either all items pass (notes optional),
   // or at least one item failed but the rider explained why in the notes.
@@ -489,7 +501,7 @@ export default function ActiveDeliveryScreen() {
               style={styles.customerCard}
               activeOpacity={0.8}
               onPress={() => setMapVisible(true)}
-              disabled={order.status !== 'in_transit'}
+              disabled={order.status !== 'in_transit' || !isRider}
             >
               <View style={styles.customerAvatar}>
                 {order.customer.avatar_url ? (
@@ -516,7 +528,7 @@ export default function ActiveDeliveryScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
-                {order.status === 'in_transit' && (
+                {order.status === 'in_transit' && isRider && (
                   <TouchableOpacity style={styles.customerIconBtn} onPress={() => setMapVisible(true)} hitSlop={6} activeOpacity={0.7}>
                     <Feather name="map-pin" size={22} color={PRIMARY} />
                   </TouchableOpacity>

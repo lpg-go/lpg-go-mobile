@@ -178,7 +178,6 @@ export default function OrderTracking({
         {/* Confirm delivery — shown prominently when provider has marked as delivered */}
         {order.status === 'awaiting_confirmation' && (
           <View style={styles.confirmCard}>
-            <Feather name="check-circle" size={32} color={PRIMARY} />
             <Text style={styles.confirmCardTitle}>Your order has been delivered!</Text>
 
             <TouchableOpacity
@@ -238,7 +237,7 @@ export default function OrderTracking({
               style={styles.selectedProviderCard}
               activeOpacity={0.8}
               onPress={onOpenMap}
-              disabled={order.status !== 'in_transit'}
+              disabled={order.status !== 'in_transit' || selectedProvider?.provider_type !== 'rider'}
             >
               <View style={styles.providerAvatar}>
                 {selectedProvider.avatar_url ? (
@@ -268,7 +267,7 @@ export default function OrderTracking({
                     </View>
                   )}
                 </TouchableOpacity>
-                {order.status === 'in_transit' && (
+                {order.status === 'in_transit' && selectedProvider?.provider_type === 'rider' && (
                   <TouchableOpacity style={styles.providerIconBtn} onPress={onOpenMap} hitSlop={6} activeOpacity={0.7}>
                     <Feather name="map-pin" size={22} color={PRIMARY} />
                   </TouchableOpacity>
