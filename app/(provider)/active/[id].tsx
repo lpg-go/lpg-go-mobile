@@ -461,7 +461,8 @@ export default function ActiveDeliveryScreen() {
   // "Confirm Delivery" is allowed when either all items pass (notes optional),
   // or at least one item failed but the rider explained why in the notes.
   const allChecked = checks.every(Boolean);
-  const canConfirm = allChecked || safetyNotes.trim().length > 0;
+  const notesLong = safetyNotes.trim().length >= 10;
+  const canConfirm = allChecked || notesLong;
 
   return (
     <View style={styles.screen}>
@@ -668,7 +669,7 @@ export default function ActiveDeliveryScreen() {
               ))}
             </View>
 
-            <Text style={styles.notesLabel}>Notes (required if any item failed)</Text>
+            <Text style={styles.notesLabel}>Notes (required if any item failed — describe the issue briefly)</Text>
             <TextInput
               style={styles.notesInput}
               value={safetyNotes}
