@@ -19,7 +19,6 @@ type OrderEvent =
   | 'awaiting_confirmation'
   | 'delivery_confirmed'
   | 'low_balance'
-  | 'low_stock'
   | 'provider_unavailable';
 
 interface RequestBody {
@@ -107,7 +106,7 @@ async function getAcceptingProviderIds(orderId: string): Promise<string[]> {
 async function getPlatformSettings() {
   const { data } = await supabase
     .from('platform_settings')
-    .select('min_balance, min_stock_level')
+    .select('min_balance')
     .single();
   return data;
 }
@@ -127,7 +126,7 @@ async function handleNewOrder(orderId: string): Promise<HandlerResult> {
     .from('provider_products')
     .select('provider_id, provider:profiles!provider_products_provider_id_fkey(is_approved, is_online, expo_push_token)')
     .in('product_id', productIds)
-    .gt('stock', 0);
+    .eq('is_available', true);
 
   const tokenSet = new Set<string>();
   const providerIds = new Set<string>();
@@ -250,26 +249,11 @@ async function handleDeliveryConfirmed(orderId: string): Promise<HandlerResult> 
   const providerId = order.selected_provider_id;
   console.log('[delivery_confirmed] orderId=%s providerId=%s', orderId, providerId);
 
-  // ── 1. Fetch order items ────────────────────────────────────────────────────
-  const { data: items, error: itemsErr } = await supabase
-    .from('order_items')
-    .select('product_id, quantity')
-    .eq('order_id', orderId);
+  // Stock tracking removed (Phase C #1) — availability is a manual is_available
+  // toggle, so there is nothing to deduct on delivery. The admin-fee deduction
+  // from provider balance is handled by the on_order_delivered DB trigger.
 
-  console.log('[delivery_confirmed] items=%o err=%o', items, itemsErr);
-
-  // ── 2. Deduct stock via SECURITY DEFINER RPC (bypasses RLS) ────────────────
-  for (const item of items ?? []) {
-    const { error: stockErr } = await supabase.rpc('deduct_provider_stock', {
-      p_provider_id: providerId,
-      p_product_id: item.product_id,
-      p_quantity: item.quantity,
-    });
-    console.log('[delivery_confirmed] deduct_provider_stock product=%s qty=%d err=%o',
-      item.product_id, item.quantity, stockErr);
-  }
-
-  // ── 3. Fetch updated balance ────────────────────────────────────────────────
+  // ── Fetch updated balance ───────────────────────────────────────────────────
   const { data: profile } = await supabase
     .from('profiles')
     .select('expo_push_token, balance')
@@ -289,12 +273,11 @@ async function handleDeliveryConfirmed(orderId: string): Promise<HandlerResult> 
     ? await sendPush([profile.expo_push_token], title, body, { orderId })
     : null;
 
-  // ── 4. Low balance / low stock checks ──────────────────────────────────────
+  // ── Low balance check ───────────────────────────────────────────────────────
   const settings = await getPlatformSettings();
   if (settings && balance <= Number(settings.min_balance)) {
     await handleLowBalance(providerId);
   }
-  await handleLowStock(providerId);
 
   return { tokensFound: profile?.expo_push_token ? 1 : 0, pushResult };
 }
@@ -313,39 +296,6 @@ async function handleLowBalance(providerId: string): Promise<HandlerResult> {
   const title = 'Low Balance Warning';
   const body = `Your balance (₱${balance.toLocaleString()}) is at or below the minimum (₱${minBalance.toLocaleString()}). Top up to keep receiving orders.`;
   await insertNotifications([providerId], title, body, 'low_balance');
-
-  if (!profile?.expo_push_token) return { tokensFound: 0, pushResult: null };
-
-  const pushResult = await sendPush([profile.expo_push_token], title, body, { providerId });
-  return { tokensFound: 1, pushResult };
-}
-
-async function handleLowStock(providerId: string): Promise<HandlerResult> {
-  const settings = await getPlatformSettings();
-  const minStock = settings?.min_stock_level ?? 0;
-
-  const { data: lowStockProducts } = await supabase
-    .from('provider_products')
-    .select('stock, product:products(name)')
-    .eq('provider_id', providerId)
-    .lte('stock', minStock);
-
-  if (!lowStockProducts || lowStockProducts.length === 0) return { tokensFound: 0, pushResult: null };
-
-  const productNames = lowStockProducts
-    .map((p) => (p.product as { name: string } | null)?.name)
-    .filter(Boolean)
-    .join(', ');
-
-  const title = 'Low Stock Alert';
-  const body = `Stock is running low for: ${productNames}. Update your inventory to keep receiving orders.`;
-  await insertNotifications([providerId], title, body, 'low_stock');
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('expo_push_token')
-    .eq('id', providerId)
-    .single();
 
   if (!profile?.expo_push_token) return { tokensFound: 0, pushResult: null };
 
@@ -406,7 +356,6 @@ serve(async (req) => {
       case 'awaiting_confirmation':  result = await handleAwaitingConfirmation(orderId!); break;
       case 'delivery_confirmed':     result = await handleDeliveryConfirmed(orderId!); break;
       case 'low_balance':            result = await handleLowBalance(providerId!); break;
-      case 'low_stock':              result = await handleLowStock(providerId!); break;
       case 'provider_unavailable':   result = await handleProviderUnavailable(orderId!); break;
       default:
         return new Response(JSON.stringify({ error: `Unknown event: ${event}` }), { status: 400, headers: CORS });

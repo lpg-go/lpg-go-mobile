@@ -71,14 +71,14 @@ export default function ProviderIncomingOrdersScreen() {
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [orders, setOrders] = useState<IncomingOrder[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-  const [stockedProductIds, setStockedProductIds] = useState<string[]>([]);
+  const [availableProductIds, setAvailableProductIds] = useState<string[]>([]);
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
 
   const providerIdRef = useRef<string | null>(null);
-  const stockedProductIdsRef = useRef<string[]>([]);
+  const availableProductIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     boot();
@@ -161,17 +161,6 @@ export default function ProviderIncomingOrdersScreen() {
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
-  async function fetchStockedProducts(uid: string) {
-    const { data } = await supabase
-      .from('provider_products')
-      .select('product_id')
-      .eq('provider_id', uid)
-      .gt('stock', 0);
-    const ids = (data ?? []).map((r) => r.product_id);
-    stockedProductIdsRef.current = ids;
-    setStockedProductIds(ids);
-  }
-
   async function fetchProfile(uid: string) {
     const { data } = await supabase
       .from('profiles')
@@ -196,26 +185,24 @@ export default function ProviderIncomingOrdersScreen() {
     const uid = providerIdRef.current;
     if (!uid) return;
 
-    // 1. Get stocked product IDs
-    const { data: myStockedProducts } = await supabase
+    // 1. Get product IDs this provider has enabled for selling
+    const { data: myAvailableProducts } = await supabase
       .from('provider_products')
       .select('product_id')
       .eq('provider_id', uid)
-      .gt('stock', 0);
+      .eq('is_available', true);
 
-    const myStockedProductIds = myStockedProducts?.map((p) => p.product_id) || [];
+    const myAvailableProductIds = myAvailableProducts?.map((p) => p.product_id) || [];
 
-    console.log('My stocked products:', myStockedProductIds);
-
-    if (myStockedProductIds.length === 0) {
-      stockedProductIdsRef.current = [];
-      setStockedProductIds([]);
+    if (myAvailableProductIds.length === 0) {
+      availableProductIdsRef.current = [];
+      setAvailableProductIds([]);
       setOrders([]);
       return;
     }
 
-    stockedProductIdsRef.current = myStockedProductIds;
-    setStockedProductIds(myStockedProductIds);
+    availableProductIdsRef.current = myAvailableProductIds;
+    setAvailableProductIds(myAvailableProductIds);
 
     // 2. Get orders this provider has withdrawn from
     const { data: withdrawn } = await supabase
@@ -240,16 +227,13 @@ export default function ProviderIncomingOrdersScreen() {
 
     const { data: orderRows } = await query;
 
-    console.log('All orders:', orderRows?.length);
-
-    // 4. Filter client-side to orders the provider can fulfill
+    // 4. Filter client-side to orders the provider can fulfill (has an
+    //    enabled listing for at least one of the ordered products)
     const filteredOrders = orderRows?.filter((order) =>
       (order.order_items as { product_id: string }[])?.some((item) =>
-        myStockedProductIds.includes(item.product_id)
+        myAvailableProductIds.includes(item.product_id)
       )
     ) || [];
-
-    console.log('Filtered orders:', filteredOrders.length);
 
     if (filteredOrders.length === 0) {
       setOrders([]);
@@ -391,7 +375,9 @@ export default function ProviderIncomingOrdersScreen() {
 
     setAccepting(orderId);
 
-    // Verify provider still has stock for at least one item in this order
+    // Re-verify the provider still has an enabled listing for at least one item
+    // in this order (guards the race where availability was toggled off after
+    // the list was fetched). If none, silently hide the order — don't accept.
     const { data: orderItems } = await supabase
       .from('order_items')
       .select('product_id')
@@ -399,16 +385,16 @@ export default function ProviderIncomingOrdersScreen() {
 
     const orderProductIds = (orderItems ?? []).map((i) => i.product_id);
 
-    const { data: freshStock } = await supabase
+    const { data: freshAvailable } = await supabase
       .from('provider_products')
       .select('product_id')
       .eq('provider_id', providerId)
       .in('product_id', orderProductIds.length > 0 ? orderProductIds : [''])
-      .gt('stock', 0);
+      .eq('is_available', true);
 
-    if (!freshStock || freshStock.length === 0) {
+    if (!freshAvailable || freshAvailable.length === 0) {
       setAccepting(null);
-      Alert.alert('Out of Stock', 'You no longer have stock for this product.');
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
       return;
     }
 
@@ -521,8 +507,8 @@ export default function ProviderIncomingOrdersScreen() {
             );
           })}
 
-          {/* New incoming orders — only when online and stocked */}
-          {isOnline && stockedProductIds.length > 0 &&
+          {/* New incoming orders — only when online with at least one enabled product */}
+          {isOnline && availableProductIds.length > 0 &&
             orders.map((order) => (
               <OrderCard
                 key={order.id}
@@ -538,10 +524,10 @@ export default function ProviderIncomingOrdersScreen() {
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>You're offline</Text>
               </View>
-            ) : stockedProductIds.length === 0 ? (
+            ) : availableProductIds.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>
-                  Add stock to your products to start receiving orders.
+                  Enable products in your inventory to start receiving orders.
                 </Text>
               </View>
             ) : orders.length === 0 ? (

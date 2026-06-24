@@ -97,7 +97,7 @@ export default function CustomerHomeScreen() {
       .from('provider_products')
       .select('product_id, provider:profiles!provider_products_provider_id_fkey(is_online, is_approved)')
       .in('product_id', productIds.length > 0 ? productIds : [''])
-      .gt('stock', 0);
+      .eq('is_available', true);
 
     const activeBrandIds = new Set<string>();
     for (const pp of activeProviderRows ?? []) {

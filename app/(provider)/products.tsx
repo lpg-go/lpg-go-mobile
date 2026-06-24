@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -30,7 +31,7 @@ type ProviderProduct = {
   logo_url: string | null;
   image_url: string | null;
   price: number;
-  stock: number;
+  is_available: boolean;
   admin_fee: number;
 };
 
@@ -59,7 +60,6 @@ export default function ProviderProductsScreen() {
   const insets = useSafeAreaInsets();
 
   const [products, setProducts] = useState<ProviderProduct[]>([]);
-  const [minStockLevel, setMinStockLevel] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [collapsedBrands, setCollapsedBrands] = useState<Set<string>>(new Set());
@@ -67,12 +67,6 @@ export default function ProviderProductsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      supabase
-        .from('platform_settings')
-        .select('min_stock_level')
-        .single()
-        .then(({ data }) => { if (data) setMinStockLevel(data.min_stock_level); });
-
       fetchProducts().finally(() => setLoading(false));
 
       let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -104,7 +98,7 @@ export default function ProviderProductsScreen() {
         id,
         product_id,
         price,
-        stock,
+        is_available,
         product:products (
           name,
           size_kg,
@@ -129,7 +123,7 @@ export default function ProviderProductsScreen() {
         logo_url: row.product.brand.logo_url ?? null,
         image_url: row.product.image_url ?? null,
         price: Number(row.price),
-        stock: row.stock,
+        is_available: row.is_available,
         admin_fee: Number(row.product.admin_fee),
       }));
 
@@ -150,8 +144,8 @@ export default function ProviderProductsScreen() {
     setProducts((prev) => prev.map((p) => p.id === id ? { ...p, price: newPrice } : p));
   }
 
-  function handleStockChange(id: string, newStock: number) {
-    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, stock: newStock } : p));
+  function handleAvailabilityChange(id: string, newValue: boolean) {
+    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, is_available: newValue } : p));
   }
 
   function toggleBrand(brandName: string) {
@@ -231,9 +225,8 @@ export default function ProviderProductsScreen() {
                         key={product.id}
                         product={product}
                         isLast={index === group.products.length - 1}
-                        minStockLevel={minStockLevel}
                         onPriceChange={(v) => handlePriceChange(product.id, v)}
-                        onStockChange={(v) => handleStockChange(product.id, v)}
+                        onAvailabilityChange={(v) => handleAvailabilityChange(product.id, v)}
                       />
                     ))}
                   </View>
@@ -252,26 +245,23 @@ export default function ProviderProductsScreen() {
 function ProductRow({
   product,
   isLast,
-  minStockLevel,
   onPriceChange,
-  onStockChange,
+  onAvailabilityChange,
 }: {
   product: ProviderProduct;
   isLast: boolean;
-  minStockLevel: number;
   onPriceChange: (v: number) => void;
-  onStockChange: (v: number) => void;
+  onAvailabilityChange: (v: boolean) => void;
 }) {
   const [priceText, setPriceText] = useState(String(product.price));
-  const [stockText, setStockText] = useState(String(product.stock));
   const [priceSave, setPriceSave] = useState<SaveState>('idle');
-  const [stockSave, setStockSave] = useState<SaveState>('idle');
+  const [available, setAvailable] = useState(product.is_available);
+  const [toggleSaving, setToggleSaving] = useState(false);
 
-  // Sync local text state when parent refreshes data from Realtime
+  // Sync local state when parent refreshes data from Realtime
   useEffect(() => { setPriceText(String(product.price)); }, [product.price]);
-  useEffect(() => { setStockText(String(product.stock)); }, [product.stock]);
+  useEffect(() => { setAvailable(product.is_available); }, [product.is_available]);
   const priceRef = useRef<TextInput>(null);
-  const stockRef = useRef<TextInput>(null);
 
   async function savePrice() {
     const parsed = parseFloat(priceText);
@@ -295,30 +285,22 @@ function ProductRow({
     setTimeout(() => setPriceSave('idle'), 1500);
   }
 
-  async function saveStock() {
-    const parsed = parseInt(stockText, 10);
-    if (isNaN(parsed) || parsed < 0) {
-      setStockText(String(product.stock));
-      return;
-    }
-    setStockSave('saving');
+  // Toggle saves immediately (no blur). Optimistic update with revert on error.
+  async function toggleAvailable(next: boolean) {
+    setAvailable(next);
+    setToggleSaving(true);
     const { error } = await supabase
       .from('provider_products')
-      .update({ stock: parsed })
+      .update({ is_available: next })
       .eq('id', product.id);
+    setToggleSaving(false);
     if (error) {
       Alert.alert('Error', error.message);
-      setStockText(String(product.stock));
-      setStockSave('idle');
+      setAvailable(!next);
       return;
     }
-    onStockChange(parsed);
-    setStockSave('saved');
-    setTimeout(() => setStockSave('idle'), 1500);
+    onAvailabilityChange(next);
   }
-
-  const stockNum = parseInt(stockText, 10);
-  const stockColor = isNaN(stockNum) || stockNum <= minStockLevel ? '#EF4444' : PRIMARY;
 
   return (
     <View style={[styles.productRow, !isLast && styles.productRowBorder]}>
@@ -338,18 +320,19 @@ function ProductRow({
         <Text style={styles.adminFeeText}>Fee: ₱{product.admin_fee.toLocaleString()}</Text>
       </View>
 
-      {/* Price field */}
+      {/* Price field — disabled until the product is enabled for selling */}
       <View style={styles.fieldWrap}>
         <Text style={styles.fieldLabel}>Price</Text>
         <TouchableOpacity
-          style={styles.inputTouchable}
-          onPress={() => priceRef.current?.focus()}
+          style={[styles.inputTouchable, !available && styles.inputTouchableDisabled]}
+          onPress={() => available && priceRef.current?.focus()}
           activeOpacity={1}
+          disabled={!available}
         >
-          <Text style={styles.pesoPrefix}>₱</Text>
+          <Text style={[styles.pesoPrefix, !available && styles.textDisabled]}>₱</Text>
           <TextInput
             ref={priceRef}
-            style={styles.fieldInput}
+            style={[styles.fieldInput, !available && styles.textDisabled]}
             value={priceText}
             onChangeText={setPriceText}
             keyboardType="decimal-pad"
@@ -357,34 +340,24 @@ function ProductRow({
             onBlur={savePrice}
             onSubmitEditing={savePrice}
             selectTextOnFocus
+            editable={available}
           />
           {priceSave === 'saving' && <ActivityIndicator size="small" color="#9CA3AF" style={styles.saveIndicator} />}
           {priceSave === 'saved' && <Feather name="check" size={12} color={PRIMARY} style={styles.saveIndicator} />}
         </TouchableOpacity>
       </View>
 
-      {/* Stock field */}
+      {/* Availability toggle — saves immediately on change */}
       <View style={styles.fieldWrap}>
-        <Text style={styles.fieldLabel}>Stock</Text>
-        <TouchableOpacity
-          style={styles.inputTouchable}
-          onPress={() => stockRef.current?.focus()}
-          activeOpacity={1}
-        >
-          <TextInput
-            ref={stockRef}
-            style={[styles.fieldInput, { color: stockColor, fontWeight: '700' }]}
-            value={stockText}
-            onChangeText={setStockText}
-            keyboardType="number-pad"
-            returnKeyType="done"
-            onBlur={saveStock}
-            onSubmitEditing={saveStock}
-            selectTextOnFocus
-          />
-          {stockSave === 'saving' && <ActivityIndicator size="small" color="#9CA3AF" style={styles.saveIndicator} />}
-          {stockSave === 'saved' && <Feather name="check" size={12} color={PRIMARY} style={styles.saveIndicator} />}
-        </TouchableOpacity>
+        <Text style={styles.fieldLabel}>{available ? 'Selling' : 'Off'}</Text>
+        <Switch
+          value={available}
+          onValueChange={toggleAvailable}
+          disabled={toggleSaving}
+          trackColor={{ false: '#E5E7EB', true: '#86EFAC' }}
+          thumbColor={available ? PRIMARY : '#F3F4F6'}
+          ios_backgroundColor="#E5E7EB"
+        />
       </View>
     </View>
   );
@@ -474,6 +447,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     minWidth: 64,
   },
+  inputTouchableDisabled: { backgroundColor: '#F3F4F6', opacity: 0.6 },
+  textDisabled: { color: '#9CA3AF' },
   pesoPrefix: { fontSize: 12, color: '#6B7280', marginRight: 1 },
   fieldInput: {
     fontSize: 13,

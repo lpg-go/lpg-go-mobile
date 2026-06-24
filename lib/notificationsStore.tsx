@@ -25,7 +25,6 @@ const BANNER_TYPES = new Set([
   'awaiting_confirmation',
   'delivery_confirmed',
   'low_balance',
-  'low_stock',
   'provider_unavailable',
   'new_message',
 ]);

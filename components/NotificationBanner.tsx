@@ -21,7 +21,6 @@ const ICON: Record<string, FeatherName> = {
   awaiting_confirmation: 'check-square',
   delivery_confirmed: 'check-circle',
   low_balance: 'credit-card',
-  low_stock: 'alert-triangle',
   provider_unavailable: 'alert-circle',
   new_message: 'message-circle',
 };
@@ -37,8 +36,6 @@ function hrefFor(n: Notification) {
     case 'delivery_confirmed':
     case 'low_balance':
       return '/(provider)/earnings';
-    case 'low_stock':
-      return '/(provider)/products';
     case 'dealer_accepted':
     case 'multiple_dealers_accepted':
     case 'in_transit':

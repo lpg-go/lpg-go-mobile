@@ -24,7 +24,6 @@ type Product = {
   minPrice: number | null;
   maxPrice: number | null;
   cheapestProviderProductId: string | null;
-  totalStock: number;
 };
 
 const PRIMARY = '#16A34A';
@@ -71,28 +70,27 @@ export default function BrandProductsScreen() {
     // supabase_realtime publication. Until then, useFocusEffect handles refresh on focus.
     const { data: priceRows } = await supabase
       .from('provider_products')
-      .select('id, product_id, price, stock, provider:profiles!provider_products_provider_id_fkey(is_online, is_approved)')
+      .select('id, product_id, price, provider:profiles!provider_products_provider_id_fkey(is_online, is_approved)')
       .in('product_id', productIds)
-      .gt('stock', 0);
+      .eq('is_available', true);
 
     const activeRows = (priceRows ?? []).filter(
       (row) => row.provider?.is_online === true && row.provider?.is_approved === true
     );
 
-    const entriesByProduct: Record<string, { id: string; price: number; stock: number }[]> = {};
+    const entriesByProduct: Record<string, { id: string; price: number }[]> = {};
     for (const row of activeRows) {
       if (!entriesByProduct[row.product_id]) entriesByProduct[row.product_id] = [];
-      entriesByProduct[row.product_id].push({ id: row.id, price: Number(row.price), stock: Number(row.stock) });
+      entriesByProduct[row.product_id].push({ id: row.id, price: Number(row.price) });
     }
 
     setProducts(
       productRows.map((p) => {
         const entries = entriesByProduct[p.id];
         if (!entries || entries.length === 0) {
-          return { id: p.id, name: p.name, size_kg: p.size_kg, image_url: p.image_url ?? null, minPrice: null, maxPrice: null, cheapestProviderProductId: null, totalStock: 0 };
+          return { id: p.id, name: p.name, size_kg: p.size_kg, image_url: p.image_url ?? null, minPrice: null, maxPrice: null, cheapestProviderProductId: null };
         }
         entries.sort((a, b) => a.price - b.price);
-        const totalStock = entries.reduce((sum, e) => sum + e.stock, 0);
         return {
           id: p.id,
           name: p.name,
@@ -101,7 +99,6 @@ export default function BrandProductsScreen() {
           minPrice: entries[0].price,
           maxPrice: entries[entries.length - 1].price,
           cheapestProviderProductId: entries[0].id,
-          totalStock,
         };
       })
     );
