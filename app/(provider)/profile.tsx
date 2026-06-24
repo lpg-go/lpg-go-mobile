@@ -30,6 +30,7 @@ type Profile = {
   provider_type: 'dealer' | 'rider';
   business_name: string | null;
   avg_delivery_minutes: number | null;
+  display_id: string | null;
   created_at: string;
   is_online: boolean;
 };
@@ -103,7 +104,7 @@ export default function ProviderProfileScreen() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, avatar_url, provider_type, business_name, avg_delivery_minutes, created_at, is_online')
+      .select('id, full_name, phone, avatar_url, provider_type, business_name, avg_delivery_minutes, display_id, created_at, is_online')
       .eq('id', user.id)
       .single();
 
@@ -286,6 +287,9 @@ export default function ProviderProfileScreen() {
           </TouchableOpacity>
           <Text style={styles.avatarName}>{profile?.full_name}</Text>
           <Text style={styles.avatarSub}>{isDealer ? 'Dealer' : 'Rider'}</Text>
+          {profile?.display_id ? (
+            <Text style={styles.avatarId}>ID: {profile.display_id}</Text>
+          ) : null}
         </View>
 
         {/* Status */}
@@ -483,6 +487,7 @@ const styles = StyleSheet.create({
   },
   avatarName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 2 },
   avatarSub: { fontSize: 13, color: '#9CA3AF' },
+  avatarId: { fontSize: 12, color: '#9CA3AF', fontFamily: 'monospace', marginTop: 2 },
 
   // Section
   section: { marginBottom: 24 },

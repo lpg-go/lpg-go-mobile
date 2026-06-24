@@ -26,6 +26,7 @@ type Profile = {
   full_name: string;
   phone: string;
   avatar_url: string | null;
+  display_id: string | null;
   created_at: string;
 };
 
@@ -73,7 +74,7 @@ export default function CustomerProfileScreen() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, avatar_url, created_at')
+      .select('id, full_name, phone, avatar_url, display_id, created_at')
       .eq('id', user.id)
       .single();
 
@@ -211,6 +212,9 @@ export default function CustomerProfileScreen() {
           </TouchableOpacity>
           <Text style={styles.avatarName}>{profile?.full_name}</Text>
           <Text style={styles.avatarSub}>Customer</Text>
+          {profile?.display_id ? (
+            <Text style={styles.avatarId}>ID: {profile.display_id}</Text>
+          ) : null}
         </View>
 
         {/* Personal info */}
@@ -327,6 +331,7 @@ const styles = StyleSheet.create({
   },
   avatarName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 2 },
   avatarSub: { fontSize: 13, color: '#9CA3AF' },
+  avatarId: { fontSize: 12, color: '#9CA3AF', fontFamily: 'monospace', marginTop: 2 },
 
   // Section
   section: { marginBottom: 24 },
