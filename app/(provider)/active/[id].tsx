@@ -721,6 +721,7 @@ export default function ActiveDeliveryScreen() {
         orderId={id}
         currentUserId={currentUserId ?? ''}
         otherUserName={order?.customer?.full_name ?? 'Customer'}
+        role="provider"
       />
     </View>
   );

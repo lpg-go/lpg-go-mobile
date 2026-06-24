@@ -758,6 +758,7 @@ export default function OrderTrackingScreen() {
         orderId={id}
         currentUserId={currentUserId ?? ''}
         otherUserName={selectedProvider?.full_name ?? 'Provider'}
+        role="customer"
       />
     </View>
   );

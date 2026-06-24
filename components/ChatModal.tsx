@@ -1,6 +1,7 @@
 import { Modal, StyleSheet, View } from 'react-native';
 
 import ChatScreen from './ChatScreen';
+import { type ChatRole } from '../lib/chatReplies';
 
 type Props = {
   visible: boolean;
@@ -8,11 +9,12 @@ type Props = {
   orderId: string;
   currentUserId: string;
   otherUserName: string;
+  role: ChatRole;
 };
 
 // Chat as a bottom-sheet popup (like the Choose Payment Method sheet). Mounts the
 // chat only while visible so the realtime subscription is set up / torn down with it.
-export default function ChatModal({ visible, onClose, orderId, currentUserId, otherUserName }: Props) {
+export default function ChatModal({ visible, onClose, orderId, currentUserId, otherUserName, role }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -22,6 +24,7 @@ export default function ChatModal({ visible, onClose, orderId, currentUserId, ot
               orderId={orderId}
               currentUserId={currentUserId}
               otherUserName={otherUserName}
+              role={role}
               onClose={onClose}
             />
           ) : null}

@@ -52,7 +52,7 @@ export default function ProviderLayout() {
           options={{ href: null, tabBarStyle: { display: 'none' } }}
         />
       </Tabs>
-      <GlobalChatModal />
+      <GlobalChatModal role="provider" />
       <NotificationBanner />
     </NotificationsProvider>
   );

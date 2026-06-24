@@ -6,6 +6,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppHeader from './AppHeader';
 import SheetHeader from './SheetHeader';
+import { QUICK_REPLIES, type ChatRole } from '../lib/chatReplies';
 import supabase from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +34,8 @@ type Props = {
   orderId: string;
   currentUserId: string;
   otherUserName: string;
+  // Drives which set of pre-defined quick replies appears above the input.
+  role: ChatRole;
   // Header close control. The sheet (<ChatModal>) closes the sheet; the
   // full-screen route passes router.back(). Either way the header is the shared
   // SheetHeader (name + Order # + X), so both presentations look identical.
@@ -40,13 +44,14 @@ type Props = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ChatScreen({ orderId, currentUserId, otherUserName, onClose }: Props) {
+export default function ChatScreen({ orderId, currentUserId, otherUserName, role, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -98,6 +103,13 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, onCl
 
     setSending(false);
     if (error) setText(trimmed); // restore on failure
+  }
+
+  // Pre-fill the input with a quick reply (overwrites any draft) and focus so
+  // the user can edit/extend or hit send immediately.
+  function handleQuickReply(reply: string) {
+    setText(reply);
+    inputRef.current?.focus();
   }
 
   // ── Render item ───────────────────────────────────────────────────────────
@@ -174,9 +186,30 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, onCl
         />
       )}
 
+      {/* Quick replies — horizontal pills above the input. Sits inside the
+          KeyboardAvoidingView so it rides up with the keyboard. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.quickRepliesWrap}
+        contentContainerStyle={styles.quickReplies}
+        keyboardShouldPersistTaps="handled"
+      >
+        {QUICK_REPLIES[role].map((reply) => (
+          <TouchableOpacity
+            key={reply}
+            style={styles.quickReplyPill}
+            onPress={() => handleQuickReply(reply)}
+          >
+            <Text style={styles.quickReplyText}>{reply}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       {/* Input bar */}
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={text}
           onChangeText={setText}
@@ -246,6 +279,32 @@ const styles = StyleSheet.create({
   timestampMine: { alignSelf: 'flex-end', marginRight: 2 },
   timestampOther: { alignSelf: 'flex-start', marginLeft: 2 },
 
+  // Quick replies
+  quickRepliesWrap: {
+    flexGrow: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  quickReplies: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  quickReplyPill: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  quickReplyText: {
+    color: '#15803D',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
   // Input bar
   inputBar: {
     flexDirection: 'row',
@@ -254,8 +313,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
   },
   input: {
     flex: 1,

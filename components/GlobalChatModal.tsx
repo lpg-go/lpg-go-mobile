@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 
+import { type ChatRole } from '../lib/chatReplies';
 import { useNotifications } from '../lib/notificationsStore';
 import supabase from '../lib/supabase';
 import ChatModal from './ChatModal';
 
+type Props = {
+  // Which app shell mounted this sheet — drives the quick-reply set. Each
+  // (customer)/(provider) layout passes its own role.
+  role: ChatRole;
+};
+
 // App-level chat sheet. Driven by the notificationsStore's pendingChatOrderId
 // (set via openChat). Resolves currentUserId + the other party's name from the
 // order, then slides up the same <ChatModal> sheet used on the order screens.
-export default function GlobalChatModal() {
+export default function GlobalChatModal({ role }: Props) {
   const { pendingChatOrderId, pendingChatName, clearChat } = useNotifications();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [otherUserName, setOtherUserName] = useState('Chat');
@@ -62,6 +69,7 @@ export default function GlobalChatModal() {
       orderId={pendingChatOrderId ?? ''}
       currentUserId={currentUserId ?? ''}
       otherUserName={otherUserName}
+      role={role}
     />
   );
 }

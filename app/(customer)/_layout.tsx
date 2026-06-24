@@ -26,7 +26,7 @@ export default function CustomerLayout() {
         <Tabs.Screen name="chat/[orderId]" options={{ href: null }} />
         <Tabs.Screen name="notifications" options={{ href: null }} />
       </Tabs>
-      <GlobalChatModal />
+      <GlobalChatModal role="customer" />
       <NotificationBanner />
     </NotificationsProvider>
   );

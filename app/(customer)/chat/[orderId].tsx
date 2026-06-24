@@ -53,6 +53,7 @@ export default function CustomerChatScreen() {
         orderId={orderId}
         currentUserId={currentUserId}
         otherUserName={providerName}
+        role="customer"
         onClose={() => router.back()}
       />
     </View>
