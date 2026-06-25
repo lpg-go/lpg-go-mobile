@@ -224,7 +224,7 @@ export default function OrderTracking({
               <View style={styles.safetyCardWarn}>
                 <View style={styles.safetyItemRow}>
                   <Feather name="alert-triangle" size={18} color="#D97706" />
-                  <Text style={styles.safetyTitle}>Rider reported an issue</Text>
+                  <Text style={styles.safetyTitle}>LPG Provider reported an issue</Text>
                 </View>
                 {safetyCheck.notes ? (
                   <Text style={styles.safetyNotesText}>{safetyCheck.notes}</Text>
@@ -256,7 +256,7 @@ export default function OrderTracking({
               <View style={styles.providerInfo}>
                 <Text style={styles.providerName}>{selectedProvider.business_name || selectedProvider.full_name}</Text>
                 <Text style={styles.providerBusiness}>
-                  {selectedProvider.provider_type === 'rider' ? 'Rider' : 'Dealer'}
+                  LPG Provider
                 </Text>
               </View>
               {(order.status === 'in_transit' || order.status === 'awaiting_confirmation') && (

@@ -113,32 +113,42 @@ export default function RegisterScreen() {
     });
   }
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
+  // Inline messages: already-registered link, or generic error.
+  function renderMessages() {
+    if (alreadyRegistered) {
+      return (
+        <Text style={styles.error}>
+          This number is already registered.{' '}
+          <Text style={styles.linkBold} onPress={() => router.replace('/(auth)/login')}>
+            Please log in.
+          </Text>
+        </Text>
+      );
+    }
+    if (error) return <Text style={styles.error}>{error}</Text>;
+    return null;
+  }
+
+  function renderSubmitButton() {
+    return (
+      <TouchableOpacity
+        style={[styles.button, loading && styles.buttonDisabled]}
+        onPress={handleRegister}
+        disabled={loading}
       >
-        {logoUrl ? (
-          <Image
-            source={{ uri: logoUrl }}
-            style={styles.logoDynamic}
-            resizeMode="contain"
-          />
+        {loading ? (
+          <ActivityIndicator color="#fff" />
         ) : (
-          <Image
-            source={require('../../assets/images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <Text style={styles.buttonText}>Register</Text>
         )}
+      </TouchableOpacity>
+    );
+  }
 
-        <Text style={styles.title}>Create account</Text>
-        <Text style={styles.subtitle}>Join LPG Go to get started.</Text>
-
+  // Shared fields collected for every role.
+  function renderSharedFields() {
+    return (
+      <>
         {/* Full name */}
         <Text style={styles.label}>Full name</Text>
         <TextInput
@@ -196,6 +206,35 @@ export default function RegisterScreen() {
             <Text style={styles.eyeText}>{showConfirm ? 'Hide' : 'Show'}</Text>
           </TouchableOpacity>
         </View>
+      </>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        {logoUrl ? (
+          <Image
+            source={{ uri: logoUrl }}
+            style={styles.logoDynamic}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        )}
+
+        <Text style={styles.title}>Create account</Text>
+        <Text style={styles.subtitle}>Join LPG Go to get started.</Text>
 
         {/* Role selection */}
         <Text style={styles.label}>I am...</Text>
@@ -245,28 +284,10 @@ export default function RegisterScreen() {
           </>
         )}
 
-        {alreadyRegistered ? (
-          <Text style={styles.error}>
-            This number is already registered.{' '}
-            <Text style={styles.linkBold} onPress={() => router.replace('/(auth)/login')}>
-              Please log in.
-            </Text>
-          </Text>
-        ) : error ? (
-          <Text style={styles.error}>{error}</Text>
-        ) : null}
+        {renderSharedFields()}
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleRegister}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Register</Text>
-          )}
-        </TouchableOpacity>
+        {renderMessages()}
+        {renderSubmitButton()}
 
         <TouchableOpacity
           style={styles.linkRow}
