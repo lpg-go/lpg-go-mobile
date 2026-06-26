@@ -28,6 +28,12 @@ export default function NotificationsScreen({ orderRoute, chatRoute, homeHref, h
 
   function handleTap(n: Notification) {
     if (!n.is_read) markAsRead(n.id);
+    // Signup promo credit → provider earnings (no order_id; route before the
+    // order_id early return below).
+    if (n.type === 'signup_promo') {
+      router.push('/(provider)/earnings');
+      return;
+    }
     if (!n.order_id) return;
     if (n.type === 'new_message' && chatRoute) {
       router.push({ pathname: chatRoute, params: { orderId: n.order_id } });

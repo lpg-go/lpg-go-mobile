@@ -20,7 +20,7 @@ import supabase from '../../lib/supabase';
 
 type Transaction = {
   id: string;
-  type: 'topup' | 'fee_deduction';
+  type: 'topup' | 'promo' | 'fee_deduction';
   amount: number;
   order_id: string | null;
   created_at: string;
@@ -225,7 +225,9 @@ export default function ProviderEarningsScreen() {
 // ─── Transaction row ──────────────────────────────────────────────────────────
 
 function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
-  const isTopUp = tx.type === 'topup';
+  // Both top-ups and promo credits add to balance (credit, + sign).
+  const isCredit = tx.type === 'topup' || tx.type === 'promo';
+  const typeLabel = tx.type === 'topup' ? 'Top Up' : tx.type === 'promo' ? 'Promo' : 'Fee';
   const date = new Date(tx.created_at).toLocaleString('en-PH', {
     month: 'short',
     day: 'numeric',
@@ -237,9 +239,9 @@ function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
   return (
     <View style={[styles.txRow, !isLast && styles.txRowBorder]}>
       <View style={styles.txTop}>
-        <Text style={styles.txType}>{isTopUp ? 'Top Up' : 'Fee'}{!isTopUp && shortRef ? ` · #${shortRef}` : ''}</Text>
-        <Text style={[styles.txAmount, { color: isTopUp ? PRIMARY : '#DC2626' }]}>
-          {isTopUp ? '+' : '-'}{Number(tx.amount).toLocaleString('en-PH', { minimumFractionDigits: 0 })}
+        <Text style={styles.txType}>{typeLabel}{!isCredit && shortRef ? ` · #${shortRef}` : ''}</Text>
+        <Text style={[styles.txAmount, { color: isCredit ? PRIMARY : '#DC2626' }]}>
+          {isCredit ? '+' : '-'}{Number(tx.amount).toLocaleString('en-PH', { minimumFractionDigits: 0 })}
         </Text>
       </View>
       <Text style={styles.txDate}>{date}</Text>
