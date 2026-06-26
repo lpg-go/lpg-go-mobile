@@ -197,7 +197,7 @@ export default function UploadDocumentScreen() {
   const descriptionText =
     providerType === 'rider'
       ? "Please upload your Driver's License to complete your registration."
-      : 'Please upload your DTI or SEC registration document to complete your registration.';
+      : "Please upload any one of the following to complete your registration: Mayor's Permit, DTI, or SEC registration.";
 
   return (
     <ScrollView
