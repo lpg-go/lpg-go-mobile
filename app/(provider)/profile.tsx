@@ -31,8 +31,17 @@ type Profile = {
   business_name: string | null;
   avg_delivery_minutes: number | null;
   display_id: string | null;
+  loyalty_tier: string | null;
   created_at: string;
   is_online: boolean;
+};
+
+// VIP loyalty tier → pill color. Tier value from DB is lowercase.
+const TIER_COLORS: Record<string, string> = {
+  bronze: '#CD7F32',
+  silver: '#9CA3AF',
+  gold: '#D4AF37',
+  platinum: '#64748B',
 };
 
 const H_PADDING = 20;
@@ -104,7 +113,7 @@ export default function ProviderProfileScreen() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, avatar_url, provider_type, business_name, avg_delivery_minutes, display_id, created_at, is_online')
+      .select('id, full_name, phone, avatar_url, provider_type, business_name, avg_delivery_minutes, display_id, loyalty_tier, created_at, is_online')
       .eq('id', user.id)
       .single();
 
@@ -289,6 +298,13 @@ export default function ProviderProfileScreen() {
           <Text style={styles.avatarSub}>{isDealer ? 'Dealer' : 'Rider'}</Text>
           {profile?.display_id ? (
             <Text style={styles.avatarId}>ID: {profile.display_id}</Text>
+          ) : null}
+          {profile?.loyalty_tier ? (
+            <View style={[styles.tierBadge, { backgroundColor: TIER_COLORS[profile.loyalty_tier] ?? '#9CA3AF' }]}>
+              <Text style={styles.tierBadgeText}>
+                {profile.loyalty_tier.charAt(0).toUpperCase() + profile.loyalty_tier.slice(1)}
+              </Text>
+            </View>
           ) : null}
         </View>
 
@@ -487,6 +503,8 @@ const styles = StyleSheet.create({
   },
   avatarName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 2 },
   avatarSub: { fontSize: 13, color: '#9CA3AF' },
+  tierBadge: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, alignSelf: 'center' },
+  tierBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
   avatarId: { fontSize: 12, color: '#9CA3AF', fontFamily: 'monospace', marginTop: 2 },
 
   // Section

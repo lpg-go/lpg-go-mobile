@@ -20,7 +20,7 @@ import supabase from '../../lib/supabase';
 
 type Transaction = {
   id: string;
-  type: 'topup' | 'promo' | 'fee_deduction';
+  type: 'topup' | 'promo' | 'loyalty' | 'fee_deduction';
   amount: number;
   order_id: string | null;
   created_at: string;
@@ -226,8 +226,12 @@ export default function ProviderEarningsScreen() {
 
 function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
   // Both top-ups and promo credits add to balance (credit, + sign).
-  const isCredit = tx.type === 'topup' || tx.type === 'promo';
-  const typeLabel = tx.type === 'topup' ? 'Top Up' : tx.type === 'promo' ? 'Promo' : 'Fee';
+  const isCredit = tx.type === 'topup' || tx.type === 'promo' || tx.type === 'loyalty';
+  const typeLabel =
+    tx.type === 'topup' ? 'Top Up'
+    : tx.type === 'promo' ? 'Promo'
+    : tx.type === 'loyalty' ? 'Loyalty'
+    : 'Fee';
   const date = new Date(tx.created_at).toLocaleString('en-PH', {
     month: 'short',
     day: 'numeric',
