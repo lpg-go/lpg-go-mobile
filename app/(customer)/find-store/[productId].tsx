@@ -280,7 +280,12 @@ export default function FindStoreScreen() {
       .from('provider_products')
       .select('provider_id, product_id, price')
       .in('provider_id', providerIds)
-      .in('product_id', productIds);
+      .in('product_id', productIds)
+      // Defense in depth: only live, priced listings are biddable so a
+      // 0-price/unavailable row can never reach checkout (mirrors the DB
+      // constraint chk_available_requires_price and the RPC guard).
+      .eq('is_available', true)
+      .gt('price', 0);
 
     // Fetch reviews for all providers to compute avg rating
     const { data: reviewRows } = await supabase

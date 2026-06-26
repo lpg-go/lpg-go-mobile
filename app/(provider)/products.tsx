@@ -269,6 +269,13 @@ function ProductRow({
       setPriceText(String(product.price));
       return;
     }
+    // An already-live product can't be zeroed out — it would violate the DB
+    // constraint chk_available_requires_price (is_available => price > 0).
+    if (available && parsed <= 0) {
+      Alert.alert('Invalid price', 'Available products must have a price greater than ₱0.');
+      setPriceText(String(product.price));
+      return;
+    }
     setPriceSave('saving');
     const { error } = await supabase
       .from('provider_products')
@@ -287,6 +294,17 @@ function ProductRow({
 
   // Toggle saves immediately (no blur). Optimistic update with revert on error.
   async function toggleAvailable(next: boolean) {
+    // Enabling requires a price > 0 (DB constraint chk_available_requires_price).
+    // Turning off is always allowed. Check the current price before writing so
+    // the provider never hits the raw constraint error.
+    if (next) {
+      const current = parseFloat(priceText);
+      if (isNaN(current) || current <= 0) {
+        Alert.alert('Set a price first', 'Please set a price before making this product available.');
+        setAvailable(false);
+        return;
+      }
+    }
     setAvailable(next);
     setToggleSaving(true);
     const { error } = await supabase
@@ -320,19 +338,19 @@ function ProductRow({
         <Text style={styles.adminFeeText}>Fee: ₱{product.admin_fee.toLocaleString()}</Text>
       </View>
 
-      {/* Price field — disabled until the product is enabled for selling */}
+      {/* Price field — always editable so a provider can set a price while the
+          product is OFF, then enable "Selling" (which requires price > 0). */}
       <View style={styles.fieldWrap}>
         <Text style={styles.fieldLabel}>Price</Text>
         <TouchableOpacity
-          style={[styles.inputTouchable, !available && styles.inputTouchableDisabled]}
-          onPress={() => available && priceRef.current?.focus()}
+          style={styles.inputTouchable}
+          onPress={() => priceRef.current?.focus()}
           activeOpacity={1}
-          disabled={!available}
         >
-          <Text style={[styles.pesoPrefix, !available && styles.textDisabled]}>₱</Text>
+          <Text style={styles.pesoPrefix}>₱</Text>
           <TextInput
             ref={priceRef}
-            style={[styles.fieldInput, !available && styles.textDisabled]}
+            style={styles.fieldInput}
             value={priceText}
             onChangeText={setPriceText}
             keyboardType="decimal-pad"
@@ -340,7 +358,6 @@ function ProductRow({
             onBlur={savePrice}
             onSubmitEditing={savePrice}
             selectTextOnFocus
-            editable={available}
           />
           {priceSave === 'saving' && <ActivityIndicator size="small" color="#9CA3AF" style={styles.saveIndicator} />}
           {priceSave === 'saved' && <Feather name="check" size={12} color={PRIMARY} style={styles.saveIndicator} />}
