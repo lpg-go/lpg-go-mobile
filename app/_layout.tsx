@@ -5,6 +5,7 @@ import { router, Slot } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
+import { registerForPushNotificationsAsync } from '../lib/notifications';
 import { fetchProviderDocRequired } from '../lib/settings';
 import supabase from '../lib/supabase';
 
@@ -32,6 +33,11 @@ export default function RootLayout() {
       router.replace('/(auth)/login');
       return;
     }
+
+    // Register the Expo push token on session restore too, not just login —
+    // a user who keeps an existing session would otherwise never get a token.
+    // Fire-and-forget; idempotent upsert, and it no-ops safely in Expo Go.
+    registerForPushNotificationsAsync();
 
     redirectByRole(session.user.id);
   }, [session, loading]);
