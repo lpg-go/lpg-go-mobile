@@ -33,6 +33,8 @@ type Order = {
   status: OrderStatus;
   delivery_address: string;
   total_amount: number;
+  is_express: boolean;
+  express_fee: number;
   selected_provider_id: string | null;
   cancelled_by: string | null;
 };
@@ -163,6 +165,12 @@ export default function OrderTracking({
           </View>
           <Text style={styles.orderId}>Order #{shortId}</Text>
           <Text style={styles.placedAt}>Placed {placedAt}</Text>
+          {order.is_express && (
+            <View style={styles.expressBadge}>
+              <Feather name="zap" size={11} color="#fff" />
+              <Text style={styles.expressBadgeText}>EXPRESS</Text>
+            </View>
+          )}
           <View style={styles.addressRow}>
             <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
           </View>
@@ -300,6 +308,12 @@ export default function OrderTracking({
                 <Text style={styles.itemSubtotal}>₱{Number(item.subtotal).toLocaleString()}</Text>
               </View>
             ))}
+            {order.is_express && (
+              <View style={styles.expressFeeRow}>
+                <Text style={styles.expressFeeLabel}>Express delivery</Text>
+                <Text style={styles.expressFeeValue}>+₱{Number(order.express_fee).toLocaleString()}</Text>
+              </View>
+            )}
             <View style={styles.itemTotalRow}>
               <Text style={styles.itemTotalLabel}>Total</Text>
               <Text style={styles.itemTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
@@ -438,6 +452,19 @@ const styles = StyleSheet.create({
   statusBadgeText: { fontSize: 16, fontWeight: '700' },
   orderId: { fontSize: 13, fontWeight: '400', color: '#6B7280', marginBottom: 2 },
   placedAt: { fontSize: 12, color: '#9CA3AF', marginBottom: 10 },
+
+  // Express badge — amber/orange priority pill (shared shape across screens)
+  expressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F59E0B',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 10,
+  },
+  expressBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
   addressRow: {
     flexDirection: 'row',
     gap: 6,
@@ -603,6 +630,17 @@ const styles = StyleSheet.create({
   itemName: { flex: 1, fontSize: 13, color: '#374151' },
   itemQty: { fontSize: 13, color: '#9CA3AF', marginHorizontal: 12 },
   itemSubtotal: { fontSize: 13, fontWeight: '600', color: '#111827', minWidth: 64, textAlign: 'right' },
+  expressFeeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  expressFeeLabel: { fontSize: 13, color: '#B45309', fontWeight: '600' },
+  expressFeeValue: { fontSize: 13, fontWeight: '700', color: '#B45309' },
   itemTotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

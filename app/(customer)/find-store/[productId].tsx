@@ -103,6 +103,11 @@ export default function FindStoreScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<{ allow_cash_payment: boolean; allow_card_payment: boolean } | null>(null);
   const [maxActiveOrders, setMaxActiveOrders] = useState(0); // 0 = unlimited
+
+  // Express Delivery — admin-configured offer; toggle defaults OFF per order.
+  const [expressEnabled, setExpressEnabled] = useState(false);
+  const [expressFee, setExpressFee] = useState(0);
+  const [isExpress, setIsExpress] = useState(false);
   const [activeOrderCount, setActiveOrderCount] = useState(0);
 
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -229,13 +234,15 @@ export default function FindStoreScreen() {
   useEffect(() => {
     supabase
       .from('platform_settings')
-      .select('allow_cash_payment, allow_card_payment, max_active_orders_per_customer')
+      .select('allow_cash_payment, allow_card_payment, max_active_orders_per_customer, express_enabled, express_delivery_fee')
       .single()
       .then(({ data }) => {
         if (data) {
           setPaymentSettings(data);
           setPaymentMethod(data.allow_cash_payment ? 'cash' : data.allow_card_payment ? 'card' : null);
           setMaxActiveOrders(Number(data.max_active_orders_per_customer ?? 0));
+          setExpressEnabled(Boolean(data.express_enabled));
+          setExpressFee(Number(data.express_delivery_fee ?? 0));
         }
       });
   }, []);
@@ -450,10 +457,16 @@ export default function FindStoreScreen() {
     if (!pendingProviderId || !paymentMethod || !orderId) return;
     setSelectingProvider(pendingProviderId);
 
-    // Save the chosen payment method first
+    // Save the chosen payment method + express selection first. The express
+    // fee must land on the order BEFORE select_provider_for_order runs, because
+    // the RPC folds express_fee into the recomputed total_amount.
     const { error: paymentError } = await supabase
       .from('orders')
-      .update({ payment_method: paymentMethod })
+      .update({
+        payment_method: paymentMethod,
+        is_express: isExpress,
+        express_fee: isExpress ? expressFee : 0,
+      })
       .eq('id', orderId);
 
     if (paymentError) {
@@ -733,13 +746,17 @@ export default function FindStoreScreen() {
           paymentMethod={paymentMethod}
           paymentSettings={paymentSettings}
           selectingProvider={selectingProvider}
+          expressEnabled={expressEnabled}
+          expressFee={expressFee}
+          isExpress={isExpress}
+          onToggleExpress={setIsExpress}
           onToggleSortDropdown={() => setSortDropdownOpen((v) => !v)}
           onSetSortBy={(key) => { setSortBy(key); setSortDropdownOpen(false); }}
           onSelectCard={(providerId) => setSelectedProviderId(providerId)}
           onOpenPayment={() => selectedProviderId && setPendingProviderId(selectedProviderId)}
           onSetPaymentMethod={setPaymentMethod}
           onConfirmSelection={confirmSelection}
-          onClosePayment={() => setPendingProviderId(null)}
+          onClosePayment={() => { setPendingProviderId(null); setIsExpress(false); }}
         />
       </ScrollView>
 

@@ -28,6 +28,7 @@ type IncomingOrder = {
   status: 'pending' | 'awaiting_dealer_selection';
   delivery_address: string;
   total_amount: number;
+  is_express: boolean;
   created_at: string;
   customerName: string;
   itemSummary: string;
@@ -216,9 +217,11 @@ export default function ProviderIncomingOrdersScreen() {
     // 3. Fetch pending / awaiting orders with their items
     let query = supabase
       .from('orders')
-      .select('id, status, delivery_address, total_amount, created_at, customer:profiles!customer_id(full_name), order_items(product_id)')
+      .select('id, status, delivery_address, total_amount, is_express, created_at, customer:profiles!customer_id(full_name), order_items(product_id)')
       .in('status', ['pending', 'awaiting_dealer_selection'])
       .is('selected_provider_id', null)
+      // Express orders surface first (priority handling), then newest-first.
+      .order('is_express', { ascending: false })
       .order('created_at', { ascending: false });
 
     if (withdrawnIds.length > 0) {
@@ -275,6 +278,7 @@ export default function ProviderIncomingOrdersScreen() {
           status: o.status as IncomingOrder['status'],
           delivery_address: o.delivery_address,
           total_amount: o.total_amount,
+          is_express: Boolean(o.is_express),
           created_at: o.created_at,
           customerName: customer?.full_name ?? 'New Customer',
           itemSummary: summaryByOrder[o.id] ?? 'LPG Gas',
@@ -612,8 +616,16 @@ function OrderCard({
     >
       <View style={styles.recentCardTop}>
         <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
-        <View style={styles.newBadge}>
-          <Text style={styles.newBadgeText}>{order.alreadyAccepted ? 'Accepted' : 'New'}</Text>
+        <View style={styles.badgeRow}>
+          {order.is_express && (
+            <View style={styles.expressBadge}>
+              <Feather name="zap" size={10} color="#fff" />
+              <Text style={styles.expressBadgeText}>EXPRESS</Text>
+            </View>
+          )}
+          <View style={styles.newBadge}>
+            <Text style={styles.newBadgeText}>{order.alreadyAccepted ? 'Accepted' : 'New'}</Text>
+          </View>
         </View>
       </View>
       <View style={styles.recentCardBottom}>
@@ -682,6 +694,18 @@ const styles = StyleSheet.create({
   recentBadgeText: { fontSize: 11, fontWeight: '600' },
   newBadge: { backgroundColor: PRIMARY, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
   newBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+  // Express badge — amber/orange priority pill (shared shape across screens)
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+  expressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  expressBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
   recentItems: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
   recentCardBottom: {
     flexDirection: 'row',
