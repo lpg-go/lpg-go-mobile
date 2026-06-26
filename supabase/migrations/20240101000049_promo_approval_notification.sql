@@ -47,7 +47,7 @@ BEGIN
     VALUES (
       NEW.id,
       'Free Signup Credit!',
-      'You''ve received ₱' || v_amount || ' free signup credit. Tap to view your balance.',
+      'You''ve received ₱' || trim_scale(v_amount)::text || ' free signup credit. Tap to view your balance.',
       'signup_promo'
     );
 
