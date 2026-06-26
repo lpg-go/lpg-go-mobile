@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { formatPhone } from '../../lib/auth';
+import supabase from '../../lib/supabase';
 import { useAppLogo } from '../../lib/useAppLogo';
 
 type Role = 'customer' | 'provider';
@@ -33,6 +34,24 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  // Provider Compliance & Indemnity Undertaking — admin-editable text/version
+  // pulled from platform_settings; acceptance is mandatory for providers and is
+  // logged as an audit row after the account is created (in verify-otp).
+  const [complianceText, setComplianceText] = useState('');
+  const [complianceVersion, setComplianceVersion] = useState(1);
+  const [complianceAccepted, setComplianceAccepted] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from('platform_settings')
+      .select('compliance_text, compliance_version')
+      .eq('id', 1)
+      .single()
+      .then(({ data }) => {
+        if (data?.compliance_text) setComplianceText(data.compliance_text);
+        if (data?.compliance_version) setComplianceVersion(data.compliance_version);
+      });
+  }, []);
 
   // Keep digits only, drop any leading 0 (the national trunk prefix — the "+63"
   // is already shown in the UI), and cap at 10 digits. So "0917..." becomes
@@ -56,6 +75,10 @@ export default function RegisterScreen() {
     if (role === 'provider' && !providerType) { setError('Please select dealer or rider.'); return; }
     if (role === 'provider' && providerType === 'dealer' && !businessName.trim()) {
       setError('Business name is required for dealers.');
+      return;
+    }
+    if (role === 'provider' && !complianceAccepted) {
+      setError('Please accept the Provider Compliance & Indemnity Undertaking to continue.');
       return;
     }
 
@@ -109,6 +132,9 @@ export default function RegisterScreen() {
         role,
         providerType: providerType ?? '',
         businessName: role === 'provider' && providerType === 'dealer' ? businessName.trim() : '',
+        complianceAccepted: role === 'provider' && complianceAccepted ? 'true' : 'false',
+        complianceVersion: String(complianceVersion),
+        complianceText: role === 'provider' ? complianceText : '',
       },
     });
   }
@@ -130,11 +156,12 @@ export default function RegisterScreen() {
   }
 
   function renderSubmitButton() {
+    const disabled = loading || (role === 'provider' && !complianceAccepted);
     return (
       <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
+        style={[styles.button, disabled && styles.buttonDisabled]}
         onPress={handleRegister}
-        disabled={loading}
+        disabled={disabled}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -142,6 +169,35 @@ export default function RegisterScreen() {
           <Text style={styles.buttonText}>Register</Text>
         )}
       </TouchableOpacity>
+    );
+  }
+
+  // Provider Compliance & Indemnity Undertaking — scrollable legal text plus a
+  // mandatory acceptance checkbox. Shown for providers only; gates the submit.
+  function renderCompliance() {
+    return (
+      <View style={styles.complianceBlock}>
+        <Text style={styles.label}>Provider Compliance & Indemnity Undertaking</Text>
+        <ScrollView
+          style={styles.complianceTextBox}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
+          <Text style={styles.complianceText}>{complianceText}</Text>
+        </ScrollView>
+        <TouchableOpacity
+          style={styles.checkboxRow}
+          onPress={() => setComplianceAccepted((v) => !v)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.checkbox, complianceAccepted && styles.checkboxChecked]}>
+            {complianceAccepted && <Text style={styles.checkmark}>✓</Text>}
+          </View>
+          <Text style={styles.checkboxLabel}>
+            I have read and accept the Provider Compliance & Indemnity Undertaking.
+          </Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
@@ -286,6 +342,8 @@ export default function RegisterScreen() {
 
         {renderSharedFields()}
 
+        {role === 'provider' && renderCompliance()}
+
         {renderMessages()}
         {renderSubmitButton()}
 
@@ -411,6 +469,32 @@ const styles = StyleSheet.create({
   },
   roleOptionText: { fontSize: 15, fontWeight: '500', color: '#374151' },
   roleOptionTextSelected: { color: PRIMARY },
+  complianceBlock: { marginBottom: 16 },
+  complianceTextBox: {
+    maxHeight: 180,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  complianceText: { fontSize: 13, color: '#374151', lineHeight: 19 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 1,
+  },
+  checkboxChecked: { borderColor: PRIMARY, backgroundColor: PRIMARY },
+  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700', lineHeight: 16 },
+  checkboxLabel: { flex: 1, fontSize: 14, color: '#374151', lineHeight: 20 },
   error: { fontSize: 13, color: '#EF4444', marginBottom: 12 },
   button: {
     backgroundColor: PRIMARY,

@@ -36,9 +36,23 @@ export default function VerifyOtpScreen() {
     role?: string;
     providerType?: string;
     businessName?: string;
+    complianceAccepted?: string;
+    complianceVersion?: string;
+    complianceText?: string;
   }>();
 
-  const { action, phone, password, fullName, role, providerType, businessName } = params;
+  const {
+    action,
+    phone,
+    password,
+    fullName,
+    role,
+    providerType,
+    businessName,
+    complianceAccepted,
+    complianceVersion,
+    complianceText,
+  } = params;
 
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
