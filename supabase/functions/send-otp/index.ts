@@ -79,6 +79,48 @@ serve(async (req) => {
     );
   }
 
+  // Per-phone throttle — runs BEFORE generation, insert, or Semaphore call, so a
+  // throttled request costs zero SMS and zero inserts. Uses created_at windows.
+  const now = Date.now();
+  const oneMinuteAgo = new Date(now - 60 * 1000).toISOString();
+  const oneHourAgo = new Date(now - 60 * 60 * 1000).toISOString();
+
+  const { count: lastMinuteCount, error: minuteErr } = await supabase
+    .from('otp_verifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('phone', phone)
+    .gte('created_at', oneMinuteAgo);
+
+  if (minuteErr) {
+    console.error('[send-otp] throttle (minute) error:', minuteErr);
+    return new Response(JSON.stringify({ error: 'Lookup failed.' }), { status: 500, headers: CORS });
+  }
+
+  if ((lastMinuteCount ?? 0) >= 1) {
+    return new Response(
+      JSON.stringify({ error: 'rate_limited', message: 'Please wait before requesting another code.' }),
+      { status: 429, headers: CORS }
+    );
+  }
+
+  const { count: lastHourCount, error: hourErr } = await supabase
+    .from('otp_verifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('phone', phone)
+    .gte('created_at', oneHourAgo);
+
+  if (hourErr) {
+    console.error('[send-otp] throttle (hour) error:', hourErr);
+    return new Response(JSON.stringify({ error: 'Lookup failed.' }), { status: 500, headers: CORS });
+  }
+
+  if ((lastHourCount ?? 0) >= 5) {
+    return new Response(
+      JSON.stringify({ error: 'rate_limited', message: 'Too many requests. Please try again later.' }),
+      { status: 429, headers: CORS }
+    );
+  }
+
   // Generate 6-digit OTP
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();

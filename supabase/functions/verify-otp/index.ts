@@ -44,30 +44,54 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'phone and code are required' }), { status: 400, headers: CORS });
   }
 
-  // Fetch the latest matching unused OTP for this phone + code
+  // Fetch the latest unused OTP for this phone (NOT matched on code — we compare in
+  // JS so we can count failed attempts against this specific row and lock it out).
   const { data, error } = await supabase
     .from('otp_verifications')
-    .select('id, expires_at, used')
+    .select('id, code, expires_at, attempts')
     .eq('phone', phone)
-    .eq('code', code)
     .eq('used', false)
     .order('created_at', { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
-    return new Response(JSON.stringify({ success: false, error: 'Invalid or expired OTP' }), { status: 200, headers: CORS });
+    return new Response(JSON.stringify({ success: false, error: 'Invalid or expired code.' }), { status: 200, headers: CORS });
   }
 
   if (new Date(data.expires_at) < new Date()) {
-    return new Response(JSON.stringify({ success: false, error: 'Invalid or expired OTP' }), { status: 200, headers: CORS });
+    return new Response(JSON.stringify({ success: false, error: 'Code expired.' }), { status: 200, headers: CORS });
   }
 
-  // Mark as used
+  // Locked out — too many prior failures on this code.
+  if ((data.attempts ?? 0) >= 5) {
+    return new Response(JSON.stringify({ success: false, error: 'Too many attempts. Please request a new code.' }), { status: 200, headers: CORS });
+  }
+
+  // Correct code — consume it.
+  if (data.code === code) {
+    await supabase
+      .from('otp_verifications')
+      .update({ used: true })
+      .eq('id', data.id);
+
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS });
+  }
+
+  // Wrong code — burn an attempt. At the 5th failure, also mark used to force a resend.
+  const newAttempts = (data.attempts ?? 0) + 1;
+  const locked = newAttempts >= 5;
   await supabase
     .from('otp_verifications')
-    .update({ used: true })
+    .update({ attempts: newAttempts, used: locked })
     .eq('id', data.id);
 
-  return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS });
+  if (locked) {
+    return new Response(JSON.stringify({ success: false, error: 'Too many attempts. Please request a new code.' }), { status: 200, headers: CORS });
+  }
+
+  return new Response(
+    JSON.stringify({ success: false, error: 'Incorrect code.', attemptsRemaining: 5 - newAttempts }),
+    { status: 200, headers: CORS }
+  );
 });
