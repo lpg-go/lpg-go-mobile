@@ -175,7 +175,6 @@ export default function VerifyOtpScreen() {
         id: userId,
         full_name: fullName?.trim() ?? '',
         phone,
-        role: role ?? 'customer',
         updated_at: new Date().toISOString(),
       };
       if (role === 'provider') {

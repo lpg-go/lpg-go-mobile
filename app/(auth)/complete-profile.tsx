@@ -56,7 +56,6 @@ export default function CompleteProfileScreen() {
     const profileData: Record<string, unknown> = {
       id: user.id,
       full_name: fullName.trim(),
-      role,
       updated_at: new Date().toISOString(),
     };
 

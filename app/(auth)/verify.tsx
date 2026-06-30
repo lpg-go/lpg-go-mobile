@@ -75,7 +75,6 @@ export default function VerifyScreen() {
         id: userId,
         full_name: full_name ?? '',
         phone: phone ?? '',
-        role: role ?? 'customer',
         updated_at: new Date().toISOString(),
       };
       if (provider_type) profileRow.provider_type = provider_type;
