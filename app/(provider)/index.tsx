@@ -402,9 +402,7 @@ export default function ProviderIncomingOrdersScreen() {
       return;
     }
 
-    const { error } = await supabase
-      .from('order_acceptances')
-      .insert({ order_id: orderId, provider_id: providerId });
+    const { error } = await supabase.rpc('accept_order', { p_order_id: orderId });
 
     setAccepting(null);
 
@@ -412,14 +410,6 @@ export default function ProviderIncomingOrdersScreen() {
       Alert.alert('Error', error.message);
       return;
     }
-
-    // Update order status to awaiting_dealer_selection if still pending
-    await supabase
-      .from('orders')
-      .update({ status: 'awaiting_dealer_selection' })
-      .eq('id', orderId)
-      .eq('status', 'pending');
-    // Don't throw if this fails — order may already be awaiting_dealer_selection
 
     // Notify customer — check acceptance count to pick the right event
     const { count } = await supabase

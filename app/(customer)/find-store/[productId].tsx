@@ -457,28 +457,14 @@ export default function FindStoreScreen() {
     if (!pendingProviderId || !paymentMethod || !orderId) return;
     setSelectingProvider(pendingProviderId);
 
-    // Save the chosen payment method + express selection first. The express
-    // fee must land on the order BEFORE select_provider_for_order runs, because
-    // the RPC folds express_fee into the recomputed total_amount.
-    const { error: paymentError } = await supabase
-      .from('orders')
-      .update({
-        payment_method: paymentMethod,
-        is_express: isExpress,
-        express_fee: isExpress ? expressFee : 0,
-      })
-      .eq('id', orderId);
-
-    if (paymentError) {
-      setSelectingProvider(null);
-      Alert.alert('Error', paymentError.message);
-      return;
-    }
-
-    // Then run the provider selection RPC
+    // Provider selection is fully server-side: the RPC records payment_method +
+    // is_express and derives express_fee from platform settings, so there is no
+    // pre-write to the order (which previously caused a false revert alert).
     const { error } = await supabase.rpc('select_provider_for_order', {
       p_order_id: orderId,
       p_provider_id: pendingProviderId,
+      p_payment_method: paymentMethod,
+      p_is_express: isExpress,
     });
 
     setSelectingProvider(null);
@@ -511,10 +497,7 @@ export default function FindStoreScreen() {
   async function cancelOrder() {
     if (!orderId) return;
     setCancelling(true);
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'cancelled', cancelled_by: 'customer' })
-      .eq('id', orderId);
+    const { error } = await supabase.rpc('cancel_order', { p_order_id: orderId });
     setCancelling(false);
 
     if (error) {

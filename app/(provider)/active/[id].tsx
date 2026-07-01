@@ -366,10 +366,7 @@ export default function ActiveDeliveryScreen() {
     }
 
     // 2. Check recorded — proceed with the existing mark-as-delivered flow.
-    const { error: orderError } = await supabase
-      .from('orders')
-      .update({ status: 'awaiting_confirmation', delivery_completed_at: new Date().toISOString() })
-      .eq('id', id);
+    const { error: orderError } = await supabase.rpc('mark_delivered', { p_order_id: id });
 
     setMarking(false);
 
@@ -400,10 +397,7 @@ export default function ActiveDeliveryScreen() {
     console.log('Cancel delivery — Order ID:', id);
     console.log('Cancel delivery — Current user:', user?.id);
 
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'awaiting_dealer_selection', selected_provider_id: null })
-      .eq('id', id);
+    const { error } = await supabase.rpc('provider_withdraw', { p_order_id: id });
 
     console.log('Cancel error:', JSON.stringify(error));
     setCancelling(false);
@@ -414,14 +408,6 @@ export default function ActiveDeliveryScreen() {
         `Error: ${error.message}\nCode: ${error.code}\nOrder: ${id}\nUser: ${user?.id}`
       );
       return;
-    }
-
-    if (user?.id) {
-      await supabase
-        .from('order_acceptances')
-        .update({ withdrawn_at: new Date().toISOString() })
-        .eq('order_id', id)
-        .eq('provider_id', user.id);
     }
 
     sendOrderNotification(id, 'provider_unavailable');

@@ -525,22 +525,15 @@ export default function OrderTrackingScreen() {
     if (!pendingProviderId || !paymentMethod) return;
     setSelectingProvider(pendingProviderId);
 
-    // Save the chosen payment method first
-    const { error: paymentError } = await supabase
-      .from('orders')
-      .update({ payment_method: paymentMethod })
-      .eq('id', id);
-
-    if (paymentError) {
-      setSelectingProvider(null);
-      Alert.alert('Error', paymentError.message);
-      return;
-    }
-
-    // Then run the provider selection RPC
+    // Provider selection is fully server-side: the RPC records payment_method +
+    // is_express and derives express_fee from platform settings, so there is no
+    // pre-write to the order (which previously caused a false revert alert).
+    // This screen has no express toggle — preserve the order's existing flag.
     const { error } = await supabase.rpc('select_provider_for_order', {
       p_order_id: id,
       p_provider_id: pendingProviderId,
+      p_payment_method: paymentMethod,
+      p_is_express: order?.is_express ?? false,
     });
 
     setSelectingProvider(null);
@@ -566,10 +559,7 @@ export default function OrderTrackingScreen() {
 
   async function cancelOrder() {
     setCancelling(true);
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'cancelled', cancelled_by: 'customer' })
-      .eq('id', id);
+    const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
     setCancelling(false);
 
     if (error) {
@@ -599,10 +589,7 @@ export default function OrderTrackingScreen() {
 
   async function confirmDelivery() {
     setConfirming(true);
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'delivered' })
-      .eq('id', id);
+    const { error } = await supabase.rpc('confirm_delivery', { p_order_id: id });
     setConfirming(false);
 
     if (error) {
