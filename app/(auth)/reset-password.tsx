@@ -16,7 +16,7 @@ const PRIMARY = '#16A34A';
 const RESET_PASSWORD_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/reset-password';
 
 export default function ResetPasswordScreen() {
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { phone, code } = useLocalSearchParams<{ phone: string; code: string }>();
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -42,7 +42,7 @@ export default function ResetPasswordScreen() {
     const res = await fetch(RESET_PASSWORD_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, newPassword }),
+      body: JSON.stringify({ phone, code, newPassword }),
     });
     const json = await res.json();
     setLoading(false);

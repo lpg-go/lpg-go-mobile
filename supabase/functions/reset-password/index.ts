@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { normalizePhone, verifyAndConsumeOtp } from '../_shared/otp.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -13,13 +14,6 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-function normalizePhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '');
-  if (digits.startsWith('639') && digits.length === 12) return digits;
-  if (digits.startsWith('09') && digits.length === 11) return '63' + digits.slice(1);
-  return null;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -32,7 +26,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: CORS });
   }
 
-  let body: { phone?: string; newPassword?: string };
+  let body: { phone?: string; code?: string; newPassword?: string };
   try {
     body = await req.json();
   } catch {
@@ -40,11 +34,12 @@ serve(async (req) => {
   }
 
   const phone = normalizePhone(body.phone ?? '');
+  const code = (body.code ?? '').trim();
   const newPassword = body.newPassword ?? '';
 
-  if (!phone || !newPassword) {
+  if (!phone || !code || !newPassword) {
     return new Response(
-      JSON.stringify({ error: 'phone and newPassword are required' }),
+      JSON.stringify({ error: 'phone, code and newPassword are required' }),
       { status: 400, headers: CORS }
     );
   }
@@ -53,6 +48,18 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ error: 'Password must be at least 6 characters' }),
       { status: 400, headers: CORS }
+    );
+  }
+
+  // C4: gate the reset on a genuinely consumed OTP. This is the SINGLE consume
+  // point for the forgot-password flow — the client no longer calls verify-otp
+  // separately (that would burn the code before we get here). Uses the same
+  // hardened expiry + lockout logic as signup verification.
+  const otpResult = await verifyAndConsumeOtp(adminClient, phone, code);
+  if (!otpResult.ok) {
+    return new Response(
+      JSON.stringify({ error: otpResult.error ?? 'Invalid or expired code.' }),
+      { status: 401, headers: CORS }
     );
   }
 

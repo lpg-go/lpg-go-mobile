@@ -124,7 +124,17 @@ export default function VerifyOtpScreen() {
     setError('');
     setLoading(true);
 
-    // 1. Verify the OTP
+    // Forgot password: do NOT verify/consume the OTP here. reset-password is the
+    // single consume point — it verifies + burns the code server-side before
+    // updating the password. Consuming here would mark the code used and make the
+    // subsequent reset fail. Just carry the entered code through.
+    if (action === 'forgot_password') {
+      setLoading(false);
+      router.replace({ pathname: '/(auth)/reset-password', params: { phone, code } });
+      return;
+    }
+
+    // Registration: verify + consume the OTP now, then create the account.
     const verifyRes = await fetch(VERIFY_OTP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -138,14 +148,7 @@ export default function VerifyOtpScreen() {
       return;
     }
 
-    // 2a. Forgot password — go to reset screen
-    if (action === 'forgot_password') {
-      setLoading(false);
-      router.replace({ pathname: '/(auth)/reset-password', params: { phone } });
-      return;
-    }
-
-    // 2b. OTP verified — register the user
+    // OTP verified — register the user
     const phoneAsEmail = `${phone.replace(/^\+/, '')}@lpggo.app`;
     const metadata: Record<string, string> = {
       full_name: fullName ?? '',
