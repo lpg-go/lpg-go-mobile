@@ -38,7 +38,7 @@ export default function UploadDocumentScreen() {
         .select('provider_type, document_url, is_approved, rejected_at, rejection_reason')
         .eq('id', user.id)
         .single()
-        .then(({ data }) => {
+        .then(async ({ data }) => {
           setProviderType((data?.provider_type as ProviderType) ?? null);
 
           if (data?.is_approved) {
@@ -47,7 +47,11 @@ export default function UploadDocumentScreen() {
             // Rejected — show upload form with rejection message
             setRejectionReason(data.rejection_reason ?? 'Your application was not approved.');
           } else if (data?.document_url) {
-            setSubmittedDocUrl(data.document_url);
+            // document_url is a storage path in the private bucket — sign it to preview.
+            const { data: signed } = await supabase.storage
+              .from('documents')
+              .createSignedUrl(data.document_url, 3600);
+            setSubmittedDocUrl(signed?.signedUrl ?? null);
             startPolling(user.id);
           }
         });
@@ -116,29 +120,31 @@ export default function UploadDocumentScreen() {
       const uri = imageUri;
       const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
       const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
-      const storagePath = `documents/${userId}/document.${ext}`;
+      const storagePath = `${userId}/document.${ext}`;
 
       const response = await fetch(uri);
       const arrayBuffer = await response.arrayBuffer();
 
       const { error: uploadError } = await supabase.storage
-        .from('images')
+        .from('documents')
         .upload(storagePath, arrayBuffer, { contentType, upsert: true });
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('images')
-        .getPublicUrl(storagePath);
-
+      // Store the storage PATH (private bucket — no public URL).
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ document_url: publicUrl, rejected_at: null, rejection_reason: null })
+        .update({ document_url: storagePath, rejected_at: null, rejection_reason: null })
         .eq('id', userId);
 
       if (profileError) throw profileError;
 
-      setSubmittedDocUrl(publicUrl);
+      // Signed URL for the submitted-state preview (1h expiry).
+      const { data: signed } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(storagePath, 3600);
+
+      setSubmittedDocUrl(signed?.signedUrl ?? null);
       startPolling(userId);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
