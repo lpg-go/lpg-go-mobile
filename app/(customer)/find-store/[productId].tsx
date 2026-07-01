@@ -562,83 +562,32 @@ export default function FindStoreScreen() {
 
     setPlacing(true);
 
-    const totalAmount = quantity * unitPriceNum;
-
-    // Fetch admin_fee for this product and calculate total
-    const { data: productRow, error: feesError } = await supabase
-      .from('products')
-      .select('id, admin_fee')
-      .eq('id', productId)
-      .single();
-
-    if (feesError) {
-      setPlacing(false);
-      setError(feesError.message);
-      return;
-    }
-
-    const totalAdminFee = Number(productRow?.admin_fee ?? 0) * quantity;
-
-    const expiryMinutes = settings?.order_expiry_minutes ?? 10;
-    // 0 means "never expire" — leave expires_at null so the cron skips it.
-    const expiresAt =
-      expiryMinutes > 0
-        ? new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString()
-        : null;
-
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        customer_id: user.id,
-        status: 'pending',
-        delivery_address: address.trim(),
-        delivery_lat: lat,
-        delivery_lng: lng,
-        total_amount: totalAmount,
-        admin_fee: totalAdminFee,
-        expires_at: expiresAt,
-      })
-      .select('id')
-      .single();
-
-    if (orderError) {
-      setPlacing(false);
-      setError(orderError.message);
-      return;
-    }
-
-    const { error: itemsError } = await supabase.from('order_items').insert({
-      order_id: order.id,
-      product_id: productId,
-      provider_product_id: providerProductId,
-      quantity,
-      unit_price: unitPriceNum,
-      subtotal: quantity * unitPriceNum,
+    // Order creation is fully server-side now (place_order RPC). The server derives
+    // unit_price/admin_fee/total/expires_at and the cheapest provider, inserts the
+    // order + item atomically in 'awaiting_dealer_selection', and enforces the
+    // active-order cap — so the client can no longer set any money/state columns.
+    // payment_method is chosen later at provider selection (confirmSelection), so we
+    // let the RPC default to 'cash' here; it's overwritten at selection like before.
+    const { data: newOrderId, error: orderError } = await supabase.rpc('place_order', {
+      p_product_id: productId,
+      p_quantity: quantity,
+      p_delivery_address: address.trim(),
+      p_delivery_lat: lat,
+      p_delivery_lng: lng,
     });
 
-    if (itemsError) {
-      // Attempt to clean up the orphaned order
-      await supabase.from('orders').delete().eq('id', order.id);
+    if (orderError || !newOrderId) {
       setPlacing(false);
-      setError(itemsError.message);
+      // The RPC raises clear, user-readable messages (e.g. 'No available providers
+      // for this product', 'Too many active orders').
+      setError(orderError?.message ?? 'Could not place order. Please try again.');
       return;
     }
 
-    // Transition to awaiting_dealer_selection now that items are committed
-    const { error: statusError } = await supabase
-      .from('orders')
-      .update({ status: 'awaiting_dealer_selection' })
-      .eq('id', order.id);
-
-    if (statusError) {
-      console.log('[find-store] failed to set awaiting_dealer_selection:', statusError.message);
-      // Non-fatal — order is placed, status will be corrected by the provider flow
-    }
-
-    console.log('[find-store] order placed, sending new_order notification for', order.id);
-    sendOrderNotification(order.id, 'new_order');
+    console.log('[find-store] order placed, sending new_order notification for', newOrderId);
+    sendOrderNotification(newOrderId, 'new_order');
     setPlacing(false);
-    setOrderId(order.id);
+    setOrderId(newOrderId);
     setPhase('bidding');
   }
 
