@@ -16,13 +16,8 @@ CREATE TABLE public.password_reset_tokens (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
-
--- Only service-role (Edge Functions) may read/write. Mirrors otp_verifications.
-CREATE POLICY "password_reset_tokens: service role only"
-  ON public.password_reset_tokens
-  USING (false)
-  WITH CHECK (false);
+-- No RLS needed: this table is only ever read/written by Edge Functions using
+-- the service-role key (which bypasses RLS), never by client sessions.
 
 -- check_otp is no longer used: verify-otp now does the real consume (signup
 -- pattern), so the read-only pre-check on the OTP screen is obsolete.
