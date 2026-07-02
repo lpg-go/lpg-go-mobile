@@ -2,13 +2,16 @@ export default {
   expo: {
     name: 'lpg-go',
     slug: 'lpg-go',
+    owner: 'dtan25',
     version: '1.0.0',
     scheme: 'lpg-go',
     web: { bundler: 'metro' },
     ios: {
+      bundleIdentifier: 'com.iscalestudio.lpggo',
       config: { googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY }
     },
     android: {
+      package: 'com.iscalestudio.lpggo',
       config: { googleMaps: { apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY } }
     },
     plugins: [
