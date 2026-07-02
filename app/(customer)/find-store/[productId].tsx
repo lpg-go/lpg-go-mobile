@@ -117,23 +117,24 @@ export default function FindStoreScreen() {
   const snapshotRef = useRef<{ address: string; lat: number | null; lng: number | null } | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    autoGetLocation();
-  }, []);
-
-  // Reset to a clean form state when opening Find Provider for a new product
-  // (the route component is reused across products, so state would otherwise persist).
-  // Address is intentionally left untouched so it persists across products.
-  // Skipped entirely when resuming an existing order's bidding.
-  useEffect(() => {
-    if (resumeOrderId) return;
+  // Reset all bidding-phase state to a clean form. Address is intentionally left
+  // untouched so it persists across products.
+  const resetBiddingState = useCallback(() => {
     setPhase('form');
     setOrderId(null);
     setAcceptances([]);
     setSelectedProviderId(null);
     setPendingProviderId(null);
+    setSelectingProvider(null);
+    setPlacing(false);
+    setIsExpress(false);
+    setError('');
     setQuantity(1);
-  }, [productId, resumeOrderId]);
+  }, []);
+
+  useEffect(() => {
+    autoGetLocation();
+  }, []);
 
   // Resume an existing order's bidding: jump straight to bidding phase and
   // load the order so the read-only product + address display is populated.
@@ -148,12 +149,18 @@ export default function FindStoreScreen() {
   async function loadResumeOrder(oid: string) {
     const { data: order } = await supabase
       .from('orders')
-      .select('delivery_address')
+      .select('delivery_address, status')
       .eq('id', oid)
       .single();
-    if (order) {
-      setAddress(order.delivery_address ?? '');
+
+    // A sticky/stale resumeOrderId could point at an already-finished order.
+    // Don't reopen it — reset to a clean form instead.
+    if (!order || order.status === 'delivered' || order.status === 'cancelled') {
+      resetBiddingState();
+      return;
     }
+
+    setAddress(order.delivery_address ?? '');
 
     // Single-product order — load its item for the product/quantity display
     const { data: item } = await supabase
@@ -173,7 +180,14 @@ export default function FindStoreScreen() {
     useCallback(() => {
       fetchSettings();
       fetchActiveOrderCount();
-    }, [])
+      // The route component is cached by the Tabs navigator and reused across
+      // visits with the same productId, so state persists unless we clear it.
+      // Reset on every focus so revisiting a product after a completed order
+      // starts clean. Skip when resuming an existing order's bidding.
+      if (!resumeOrderId) {
+        resetBiddingState();
+      }
+    }, [resumeOrderId, resetBiddingState])
   );
 
   // Count the customer's current active orders (for the at-limit check).
