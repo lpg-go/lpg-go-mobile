@@ -134,11 +134,22 @@ export default function VerifyOtpScreen() {
       return;
     }
 
-    // Registration: verify + consume the OTP now, then create the account.
+    // Registration: verify + consume the OTP AND create the account server-side
+    // in one call. The account is created with the service-role admin client
+    // inside verify-otp — the client no longer calls supabase.auth.signUp.
     const verifyRes = await fetch(VERIFY_OTP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({
+        phone,
+        code,
+        password,
+        full_name: fullName ?? '',
+        role: role ?? 'customer',
+        provider_type: role === 'provider' ? (providerType ?? '') : '',
+        business_name:
+          role === 'provider' && providerType === 'dealer' ? (businessName ?? '') : '',
+      }),
     });
     const verifyJson = await verifyRes.json();
 
@@ -148,52 +159,21 @@ export default function VerifyOtpScreen() {
       return;
     }
 
-    // OTP verified — register the user
+    // Account created server-side — sign in now to obtain a client session
+    // (admin.createUser does not return one).
     const phoneAsEmail = `${phone.replace(/^\+/, '')}@lpggo.app`;
-    const metadata: Record<string, string> = {
-      full_name: fullName ?? '',
-      phone,
-      role: role ?? 'customer',
-    };
-    if (role === 'provider' && providerType) {
-      metadata.provider_type = providerType;
-      if (providerType === 'dealer' && businessName) metadata.business_name = businessName;
-    }
-
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email: phoneAsEmail,
       password,
-      options: { data: metadata },
     });
 
-    if (signUpError) {
-      setLoading(false);
-      setError(signUpError.message);
+    setLoading(false);
+
+    if (signInError) {
+      setError(signInError.message);
       return;
     }
 
-    const userId = signUpData.user?.id;
-    if (userId) {
-      const profileRow: Record<string, unknown> = {
-        id: userId,
-        full_name: fullName?.trim() ?? '',
-        phone,
-        updated_at: new Date().toISOString(),
-      };
-      if (role === 'provider') {
-        profileRow.provider_type = providerType;
-        if (providerType === 'dealer' && businessName) profileRow.business_name = businessName;
-      }
-
-      const { error: profileError } = await supabase.from('profiles').upsert(profileRow);
-      if (profileError) {
-        setLoading(false);
-        setError(profileError.message);
-        return;
-      }
-    }
-
-    setLoading(false);
     if (role === 'customer') router.replace('/(customer)');
     else router.replace('/(provider)');
   }
