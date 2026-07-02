@@ -15,15 +15,13 @@ import AppHeader from './AppHeader';
 const PRIMARY = '#16A34A';
 
 type Props = {
-  orderRoute?: '/(customer)/order/[id]' | '/(provider)/active/[id]';
-  chatRoute?: '/(customer)/chat/[orderId]' | '/(provider)/chat/[orderId]';
   // When set, the header shows a tappable logo (→ this route) + headerRight.
   // When omitted (provider fallback), it shows a back button + "Notifications".
   homeHref?: '/(customer)' | '/(provider)';
   headerRight?: ReactNode;
 };
 
-export default function NotificationsScreen({ orderRoute, chatRoute, homeHref, headerRight }: Props) {
+export default function NotificationsScreen({ homeHref, headerRight }: Props) {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   function handleTap(n: Notification) {

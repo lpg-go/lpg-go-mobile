@@ -26,6 +26,17 @@ serve(async (req) => {
     });
   }
 
+  // Internal-only: this function is called server-to-server by order-notifications.
+  // Reject any caller that doesn't present the shared internal secret.
+  const INTERNAL_SECRET = Deno.env.get('INTERNAL_PUSH_SECRET');
+  const callerSecret = req.headers.get('x-internal-secret');
+  if (!INTERNAL_SECRET || callerSecret !== INTERNAL_SECRET) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   let payload: PushRequest;
   try {
     payload = await req.json();

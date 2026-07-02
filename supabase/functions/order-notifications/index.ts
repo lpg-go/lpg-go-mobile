@@ -41,6 +41,7 @@ async function sendPush(tokens: string[], title: string, body: string, data?: ob
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+      'x-internal-secret': Deno.env.get('INTERNAL_PUSH_SECRET') ?? '',
     },
     body: JSON.stringify({ tokens, title, body, data }),
   });
