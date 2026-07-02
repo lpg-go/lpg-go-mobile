@@ -124,13 +124,28 @@ export default function VerifyOtpScreen() {
     setError('');
     setLoading(true);
 
-    // Forgot password: do NOT verify/consume the OTP here. reset-password is the
-    // single consume point — it verifies + burns the code server-side before
-    // updating the password. Consuming here would mark the code used and make the
-    // subsequent reset fail. Just carry the entered code through.
+    // Forgot password: verify-otp is the real consume point (like signup). It
+    // verifies + burns the OTP and, on success, returns a short-lived opaque
+    // reset_token. We carry that token (NOT the code) to reset-password, which
+    // gates the password change on the token.
     if (action === 'forgot_password') {
+      const res = await fetch(VERIFY_OTP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code, purpose: 'forgot_password' }),
+      });
+      const json = await res.json();
       setLoading(false);
-      router.replace({ pathname: '/(auth)/reset-password', params: { phone, code } });
+
+      if (!json.success || !json.reset_token) {
+        setError(json.error ?? 'Invalid or expired OTP.');
+        return;
+      }
+
+      router.replace({
+        pathname: '/(auth)/reset-password',
+        params: { phone, reset_token: json.reset_token },
+      });
       return;
     }
 

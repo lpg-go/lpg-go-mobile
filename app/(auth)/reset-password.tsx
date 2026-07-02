@@ -1,8 +1,8 @@
-import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -16,7 +16,7 @@ const PRIMARY = '#16A34A';
 const RESET_PASSWORD_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/reset-password';
 
 export default function ResetPasswordScreen() {
-  const { phone, code } = useLocalSearchParams<{ phone: string; code: string }>();
+  const { phone, reset_token } = useLocalSearchParams<{ phone: string; reset_token: string }>();
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -24,7 +24,6 @@ export default function ResetPasswordScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
   async function handleReset() {
     if (newPassword.length < 6) {
@@ -42,7 +41,7 @@ export default function ResetPasswordScreen() {
     const res = await fetch(RESET_PASSWORD_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code, newPassword }),
+      body: JSON.stringify({ phone, reset_token, newPassword }),
     });
     const json = await res.json();
     setLoading(false);
@@ -52,29 +51,9 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    setSuccess(true);
-  }
-
-  if (success) {
-    return (
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.container}>
-          <View style={styles.successBox}>
-            <View style={styles.successIcon}>
-              <Feather name="check" size={26} color="#fff" />
-            </View>
-            <Text style={styles.successTitle}>Password reset!</Text>
-
-            <TouchableOpacity
-              style={[styles.button, { alignSelf: 'stretch' }]}
-              onPress={() => router.replace('/(auth)/login')}
-            >
-              <Text style={styles.buttonText}>Back to Sign In</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    );
+    // Land the user on the login screen so they can sign in with the new password.
+    Alert.alert('Password reset!', 'Sign in with your new password.');
+    router.replace('/(auth)/login');
   }
 
   return (

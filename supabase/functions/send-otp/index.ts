@@ -122,7 +122,7 @@ serve(async (req) => {
   }
 
   // Generate 6-digit OTP
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000);
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
   // Invalidate any existing unused OTPs for this phone

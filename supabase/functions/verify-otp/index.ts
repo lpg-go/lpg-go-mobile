@@ -29,6 +29,7 @@ serve(async (req) => {
   let body: {
     phone?: string;
     code?: string;
+    purpose?: string;
     password?: string;
     full_name?: string;
     role?: string;
@@ -59,6 +60,37 @@ serve(async (req) => {
 
   if (!phone || !code) {
     return new Response(JSON.stringify({ error: 'phone and code are required' }), { status: 400, headers: CORS });
+  }
+
+  // Forgot-password: this is the REAL consume point for that flow. Verify +
+  // consume the OTP exactly like signup, then issue a short-lived opaque reset
+  // token. reset-password gates the password change on that token, not the code.
+  if (body.purpose === 'forgot_password') {
+    const result = await verifyAndConsumeOtp(supabase, phone, code);
+    if (!result.ok) {
+      return new Response(JSON.stringify({ success: false, error: result.error }), { status: 200, headers: CORS });
+    }
+
+    // phone is digits-only (639XXXXXXXXX); reset-password normalizes its input the
+    // same way before comparing, so the token stays phone-bound.
+    const { data: tokenRow, error: tokenErr } = await supabase
+      .from('password_reset_tokens')
+      .insert({ phone })
+      .select('id')
+      .single();
+
+    if (tokenErr || !tokenRow) {
+      console.error('[verify-otp] reset token insert failed:', tokenErr);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Failed to issue reset token.' }),
+        { status: 200, headers: CORS }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, reset_token: tokenRow.id }),
+      { status: 200, headers: CORS }
+    );
   }
 
   // Validate the password BEFORE consuming the OTP, so bad input doesn't burn a

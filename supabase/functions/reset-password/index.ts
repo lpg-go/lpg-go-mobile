@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { normalizePhone, verifyAndConsumeOtp } from '../_shared/otp.ts';
+import { normalizePhone } from '../_shared/otp.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -26,7 +26,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: CORS });
   }
 
-  let body: { phone?: string; code?: string; newPassword?: string };
+  let body: { phone?: string; reset_token?: string; newPassword?: string };
   try {
     body = await req.json();
   } catch {
@@ -34,12 +34,12 @@ serve(async (req) => {
   }
 
   const phone = normalizePhone(body.phone ?? '');
-  const code = (body.code ?? '').trim();
+  const resetToken = (body.reset_token ?? '').trim();
   const newPassword = body.newPassword ?? '';
 
-  if (!phone || !code || !newPassword) {
+  if (!phone || !resetToken || !newPassword) {
     return new Response(
-      JSON.stringify({ error: 'phone, code and newPassword are required' }),
+      JSON.stringify({ error: 'phone, reset_token and newPassword are required' }),
       { status: 400, headers: CORS }
     );
   }
@@ -51,14 +51,24 @@ serve(async (req) => {
     );
   }
 
-  // C4: gate the reset on a genuinely consumed OTP. This is the SINGLE consume
-  // point for the forgot-password flow — the client no longer calls verify-otp
-  // separately (that would burn the code before we get here). Uses the same
-  // hardened expiry + lockout logic as signup verification.
-  const otpResult = await verifyAndConsumeOtp(adminClient, phone, code);
-  if (!otpResult.ok) {
+  // Gate the reset on the opaque token verify-otp issued after it consumed the
+  // OTP. A single guarded UPDATE verifies (exists + not used + not expired + phone
+  // matches) AND marks used in one atomic statement — so the token is strictly
+  // single-use even under concurrent requests. An invalid/expired/already-used
+  // token, a phone mismatch, or a malformed (non-uuid) token all yield no row.
+  const { data: consumedToken, error: tokenErr } = await adminClient
+    .from('password_reset_tokens')
+    .update({ used: true })
+    .eq('id', resetToken)
+    .eq('phone', phone)
+    .eq('used', false)
+    .gt('expires_at', new Date().toISOString())
+    .select('id')
+    .maybeSingle();
+
+  if (tokenErr || !consumedToken) {
     return new Response(
-      JSON.stringify({ error: otpResult.error ?? 'Invalid or expired code.' }),
+      JSON.stringify({ error: 'Invalid or expired reset token.' }),
       { status: 401, headers: CORS }
     );
   }
