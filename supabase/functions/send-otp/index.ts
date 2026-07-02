@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { normalizePhone } from '../_shared/otp.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -11,13 +12,6 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Content-Type': 'application/json',
 };
-
-function normalizePhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '');
-  if (digits.startsWith('639') && digits.length === 12) return digits;
-  if (digits.startsWith('09') && digits.length === 11) return '63' + digits.slice(1);
-  return null;
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -158,6 +152,30 @@ serve(async (req) => {
   console.log('[send-otp] semaphore response:', smsRes.status, smsBody);
 
   if (!smsRes.ok) {
+    return new Response(JSON.stringify({ error: 'Failed to send SMS.', details: smsBody }), { status: 502, headers: CORS });
+  }
+
+  // Semaphore returns HTTP 200 even on logical failures (insufficient credit,
+  // rejected number), so smsRes.ok alone is not enough. A successful send is a
+  // NON-EMPTY ARRAY of message objects, each with a per-message "status" (e.g.
+  // "Pending"/"Queued"/"Sent"). Errors come back as an object with a message/
+  // error field, or an array whose status is "Failed"/"Rejected". Anything that
+  // isn't an array of accepted messages is treated as a send failure.
+  const SEMAPHORE_FAILURE_STATUSES = ['failed', 'rejected', 'refunded'];
+  let smsOk = false;
+  try {
+    const parsed = JSON.parse(smsBody);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Accepted unless any message explicitly carries a failure status.
+      smsOk = !parsed.some((m) =>
+        SEMAPHORE_FAILURE_STATUSES.includes(String(m?.status ?? '').toLowerCase())
+      );
+    }
+  } catch {
+    smsOk = false;
+  }
+
+  if (!smsOk) {
     return new Response(JSON.stringify({ error: 'Failed to send SMS.', details: smsBody }), { status: 502, headers: CORS });
   }
 
