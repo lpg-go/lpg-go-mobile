@@ -143,7 +143,7 @@ async function handleNewOrder(orderId: string): Promise<HandlerResult> {
   await insertNotifications([...providerIds], title, body, 'new_order', orderId);
 
   const tokens = [...tokenSet];
-  const pushResult = await sendPush(tokens, title, body, { orderId });
+  const pushResult = await sendPush(tokens, title, body, { orderId, type: 'new_order' });
   return { tokensFound: tokens.length, pushResult };
 }
 
@@ -155,7 +155,7 @@ async function handleDealerAccepted(orderId: string): Promise<HandlerResult> {
   await insertNotifications([order.customer_id], title, body, 'dealer_accepted', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], title, body, { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId, type: 'dealer_accepted' });
   return { tokensFound: 1, pushResult };
 }
 
@@ -167,7 +167,7 @@ async function handleMultipleDealersAccepted(orderId: string): Promise<HandlerRe
   await insertNotifications([order.customer_id], title, body, 'multiple_dealers_accepted', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], title, body, { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId, type: 'multiple_dealers_accepted' });
   return { tokensFound: 1, pushResult };
 }
 
@@ -192,13 +192,13 @@ async function handleDealerSelected(orderId: string): Promise<HandlerResult> {
   const selectedToken = await getToken(order.selected_provider_id);
   if (selectedToken) {
     tokensFound++;
-    results.push(await sendPush([selectedToken], selectedTitle, selectedBody, { orderId }));
+    results.push(await sendPush([selectedToken], selectedTitle, selectedBody, { orderId, type: 'dealer_selected' }));
   }
 
   const otherTokens = await getTokens(otherProviderIds);
   if (otherTokens.length > 0) {
     tokensFound += otherTokens.length;
-    results.push(await sendPush(otherTokens, otherTitle, otherBody, { orderId }));
+    results.push(await sendPush(otherTokens, otherTitle, otherBody, { orderId, type: 'dealer_selected' }));
   }
 
   return { tokensFound, pushResult: results };
@@ -211,7 +211,7 @@ async function handleOrderCancelled(orderId: string): Promise<HandlerResult> {
   await insertNotifications(providerIds, title, body, 'order_cancelled', orderId);
   const tokens = await getTokens(providerIds);
   if (tokens.length === 0) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush(tokens, title, body, { orderId });
+  const pushResult = await sendPush(tokens, title, body, { orderId, type: 'order_cancelled' });
   return { tokensFound: tokens.length, pushResult };
 }
 
@@ -223,7 +223,7 @@ async function handleInTransit(orderId: string): Promise<HandlerResult> {
   await insertNotifications([order.customer_id], title, body, 'in_transit', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], title, body, { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId, type: 'in_transit' });
   return { tokensFound: 1, pushResult };
 }
 
@@ -235,7 +235,7 @@ async function handleAwaitingConfirmation(orderId: string): Promise<HandlerResul
   await insertNotifications([order.customer_id], title, body, 'awaiting_confirmation', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], title, body, { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId, type: 'awaiting_confirmation' });
   return { tokensFound: 1, pushResult };
 }
 
@@ -270,7 +270,7 @@ async function handleDeliveryConfirmed(orderId: string): Promise<HandlerResult> 
   await insertNotifications([providerId], title, body, 'delivery_confirmed', orderId);
 
   const pushResult = profile?.expo_push_token
-    ? await sendPush([profile.expo_push_token], title, body, { orderId })
+    ? await sendPush([profile.expo_push_token], title, body, { orderId, type: 'delivery_confirmed' })
     : null;
 
   // ── Low balance check ───────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ async function handleLowBalance(providerId: string): Promise<HandlerResult> {
 
   if (!profile?.expo_push_token) return { tokensFound: 0, pushResult: null };
 
-  const pushResult = await sendPush([profile.expo_push_token], title, body, { providerId });
+  const pushResult = await sendPush([profile.expo_push_token], title, body, { providerId, type: 'low_balance' });
   return { tokensFound: 1, pushResult };
 }
 
@@ -311,7 +311,7 @@ async function handleProviderUnavailable(orderId: string): Promise<HandlerResult
   await insertNotifications([order.customer_id], title, body, 'provider_unavailable', orderId);
   const token = await getToken(order.customer_id);
   if (!token) return { tokensFound: 0, pushResult: null };
-  const pushResult = await sendPush([token], title, body, { orderId });
+  const pushResult = await sendPush([token], title, body, { orderId, type: 'provider_unavailable' });
   return { tokensFound: 1, pushResult };
 }
 
