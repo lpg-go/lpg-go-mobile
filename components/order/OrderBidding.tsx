@@ -43,6 +43,9 @@ export type OrderBiddingProps = {
   paymentMethod: PaymentMethod | null;
   paymentSettings: PaymentSettings;
   selectingProvider: string | null;
+  // When set, provider cards surface an express-priority ETA hint. Optional:
+  // call sites for non-express orders simply omit it.
+  isExpress?: boolean;
   // When true, the internal "Select Provider" button is not rendered (the host
   // screen provides its own, e.g. a pinned bottom bar).
   hideSelectButton?: boolean;
@@ -69,6 +72,7 @@ export default function OrderBidding({
   paymentMethod,
   paymentSettings,
   selectingProvider,
+  isExpress = false,
   hideSelectButton = false,
   onToggleSortDropdown,
   onSetSortBy,
@@ -138,6 +142,7 @@ export default function OrderBidding({
                   key={acc.id}
                   acceptance={acc}
                   selected={selectedProviderId === acc.provider_id}
+                  isExpress={isExpress}
                   onSelect={() => onSelectCard(acc.provider_id)}
                 />
               ))
@@ -238,10 +243,12 @@ export default function OrderBidding({
 function ProviderCard({
   acceptance,
   selected,
+  isExpress,
   onSelect,
 }: {
   acceptance: Acceptance;
   selected: boolean;
+  isExpress: boolean;
   onSelect: () => void;
 }) {
   const provider = acceptance.provider;
@@ -275,12 +282,24 @@ function ProviderCard({
           ) : (
             <Text style={styles.ratingNew}>New</Text>
           )}
-          {acceptance.avgDeliveryMinutes !== null && (
+          {isExpress ? (
             <>
               <Text style={styles.ratingDot}>·</Text>
-              <Feather name="clock" size={12} color="#9CA3AF" />
-              <Text style={styles.ratingCount}>~{acceptance.avgDeliveryMinutes} mins</Text>
+              <Feather name="zap" size={12} color="#B45309" />
+              <Text style={styles.expressPriority}>
+                {acceptance.avgDeliveryMinutes !== null
+                  ? `~${acceptance.avgDeliveryMinutes} mins · Express priority`
+                  : 'Express priority'}
+              </Text>
             </>
+          ) : (
+            acceptance.avgDeliveryMinutes !== null && (
+              <>
+                <Text style={styles.ratingDot}>·</Text>
+                <Feather name="clock" size={12} color="#9CA3AF" />
+                <Text style={styles.ratingCount}>~{acceptance.avgDeliveryMinutes} mins</Text>
+              </>
+            )
           )}
         </View>
       </View>
@@ -394,6 +413,7 @@ const styles = StyleSheet.create({
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3, flexWrap: 'wrap' },
   ratingText: { fontSize: 12, fontWeight: '600', color: '#374151' },
   ratingCount: { fontSize: 11, fontWeight: '400', color: '#9CA3AF' },
+  expressPriority: { fontSize: 11, fontWeight: '600', color: '#B45309' },
   ratingNew: { fontSize: 12, color: '#9CA3AF' },
   ratingDot: { fontSize: 12, color: '#D1D5DB' },
 

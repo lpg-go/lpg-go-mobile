@@ -719,6 +719,7 @@ export default function FindStoreScreen() {
           paymentMethod={paymentMethod}
           paymentSettings={paymentSettings}
           selectingProvider={selectingProvider}
+          isExpress={isExpress}
           onToggleSortDropdown={() => setSortDropdownOpen((v) => !v)}
           onSetSortBy={(key) => { setSortBy(key); setSortDropdownOpen(false); }}
           onSelectCard={(providerId) => setSelectedProviderId(providerId)}
