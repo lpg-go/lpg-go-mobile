@@ -194,7 +194,7 @@ export default function RegisterScreen() {
             {complianceAccepted && <Text style={styles.checkmark}>✓</Text>}
           </View>
           <Text style={styles.checkboxLabel}>
-            I have read and accept the Provider Compliance & Indemnity Undertaking.
+            I have read, understood and affirm compliance.
           </Text>
         </TouchableOpacity>
       </View>
