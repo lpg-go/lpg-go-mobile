@@ -4,7 +4,6 @@ import {
   Image,
   Modal,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -44,12 +43,6 @@ export type OrderBiddingProps = {
   paymentMethod: PaymentMethod | null;
   paymentSettings: PaymentSettings;
   selectingProvider: string | null;
-  // Express Delivery — admin-configured optional priority handling fee.
-  // Optional: call sites that don't offer express simply omit these (the
-  // toggle and breakdown are then hidden).
-  expressEnabled?: boolean;
-  expressFee?: number;
-  isExpress?: boolean;
   // When true, the internal "Select Provider" button is not rendered (the host
   // screen provides its own, e.g. a pinned bottom bar).
   hideSelectButton?: boolean;
@@ -60,7 +53,6 @@ export type OrderBiddingProps = {
   onSelectCard: (providerId: string) => void;
   onOpenPayment: () => void;
   onSetPaymentMethod: (method: PaymentMethod) => void;
-  onToggleExpress?: (value: boolean) => void;
   onConfirmSelection: () => void;
   onClosePayment: () => void;
 };
@@ -77,26 +69,16 @@ export default function OrderBidding({
   paymentMethod,
   paymentSettings,
   selectingProvider,
-  expressEnabled = false,
-  expressFee = 0,
-  isExpress = false,
   hideSelectButton = false,
   onToggleSortDropdown,
   onSetSortBy,
   onSelectCard,
   onOpenPayment,
   onSetPaymentMethod,
-  onToggleExpress = () => {},
   onConfirmSelection,
   onClosePayment,
 }: OrderBiddingProps) {
   const insets = useSafeAreaInsets();
-
-  // Goods-only total of the provider being confirmed; the express fee is added
-  // on top to show the customer the same total the RPC will charge.
-  const pendingAcceptance = acceptances.find((a) => a.provider_id === pendingProviderId);
-  const goodsTotal = pendingAcceptance?.provider_total ?? 0;
-  const orderTotal = goodsTotal + (isExpress ? expressFee : 0);
 
   return (
     <>
@@ -229,56 +211,6 @@ export default function OrderBidding({
                 </TouchableOpacity>
               )}
             </View>
-
-            {/* Express Delivery — only when the admin has enabled the offer */}
-            {expressEnabled && (
-              <TouchableOpacity
-                style={[styles.expressRow, isExpress && styles.expressRowSelected]}
-                onPress={() => onToggleExpress(!isExpress)}
-                activeOpacity={0.8}
-              >
-                <Feather
-                  name="zap"
-                  size={18}
-                  color={isExpress ? PRIMARY : '#6B7280'}
-                  style={{ marginRight: 10 }}
-                />
-                <View style={styles.expressTextWrap}>
-                  <Text style={[styles.expressLabel, isExpress && styles.expressLabelSelected]}>
-                    Express Delivery
-                  </Text>
-                  <Text style={styles.expressSub}>
-                    +₱{expressFee.toLocaleString()} priority handling
-                  </Text>
-                </View>
-                <Switch
-                  value={isExpress}
-                  onValueChange={onToggleExpress}
-                  trackColor={{ false: '#D1D5DB', true: PRIMARY }}
-                  thumbColor="#fff"
-                />
-              </TouchableOpacity>
-            )}
-
-            {/* Total breakdown — goods + express fee = total */}
-            {goodsTotal > 0 && (
-              <View style={styles.totalBreakdown}>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Goods</Text>
-                  <Text style={styles.breakdownValue}>₱{goodsTotal.toLocaleString()}</Text>
-                </View>
-                {isExpress && (
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Express delivery</Text>
-                    <Text style={styles.breakdownValue}>₱{expressFee.toLocaleString()}</Text>
-                  </View>
-                )}
-                <View style={[styles.breakdownRow, styles.breakdownTotalRow]}>
-                  <Text style={styles.breakdownTotalLabel}>Total</Text>
-                  <Text style={styles.breakdownTotalValue}>₱{orderTotal.toLocaleString()}</Text>
-                </View>
-              </View>
-            )}
 
             <TouchableOpacity
               style={[
@@ -536,50 +468,6 @@ const styles = StyleSheet.create({
   },
   paymentLabel: { fontSize: 14, fontWeight: '500', color: '#374151' },
   paymentLabelSelected: { color: PRIMARY, fontWeight: '600' },
-
-  // Express delivery toggle
-  expressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  expressRowSelected: { borderColor: PRIMARY, backgroundColor: '#F0FDF4' },
-  expressTextWrap: { flex: 1 },
-  expressLabel: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  expressLabelSelected: { color: PRIMARY },
-  expressSub: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-
-  // Total breakdown
-  totalBreakdown: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  breakdownLabel: { fontSize: 13, color: '#6B7280' },
-  breakdownValue: { fontSize: 13, fontWeight: '500', color: '#374151' },
-  breakdownTotalRow: {
-    marginBottom: 0,
-    marginTop: 4,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  breakdownTotalLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  breakdownTotalValue: { fontSize: 15, fontWeight: '700', color: PRIMARY },
 
   confirmOrderBtn: {
     backgroundColor: PRIMARY,

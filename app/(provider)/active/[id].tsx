@@ -286,13 +286,13 @@ export default function ActiveDeliveryScreen() {
       // express ETA. Fire-and-forget — set_order_eta is best-effort and returns
       // silently for non-express / non-rider orders, so a failure here must
       // never block location tracking.
-      supabase.rpc('set_order_eta', { p_order_id: id }).catch(() => {});
+      void supabase.rpc('set_order_eta', { p_order_id: id });
 
       // Give set_order_eta a few seconds to finish, then re-fetch so the ETA
       // fields (eta_minutes / eta_deadline) show up on the card.
       if (order?.is_express) {
         setTimeout(() => {
-          supabase.rpc('set_order_eta', { p_order_id: id }).catch(() => {});
+          void supabase.rpc('set_order_eta', { p_order_id: id });
           fetchOrder();
         }, 8000);
       }

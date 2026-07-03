@@ -9,6 +9,7 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -488,7 +489,7 @@ export default function FindStoreScreen() {
       // Nudge the backend to compute the express ETA once the rider has had a
       // moment to push a first location fix. Fire-and-forget, best-effort.
       if (isExpress) {
-        setTimeout(() => supabase.rpc('set_order_eta', { p_order_id: orderId }).catch(() => {}), 5000);
+        setTimeout(() => void supabase.rpc('set_order_eta', { p_order_id: orderId }), 5000);
       }
       setPendingProviderId(null);
       // Stop polling before leaving the bidding screen
@@ -683,6 +684,26 @@ export default function FindStoreScreen() {
           </Text>
         </View>
 
+        {/* Express Delivery — only when the admin has enabled the offer */}
+        {expressEnabled && (
+          <View style={styles.section}>
+            <View style={styles.expressRow}>
+              <View style={styles.expressTextWrap}>
+                <Text style={styles.expressLabel}>Express Delivery</Text>
+                <Text style={styles.expressSub}>
+                  +₱{expressFee.toLocaleString()} priority rider delivery
+                </Text>
+              </View>
+              <Switch
+                value={isExpress}
+                onValueChange={setIsExpress}
+                trackColor={{ false: '#D1D5DB', true: PRIMARY }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+        )}
+
         {phase === 'form' && error ? <Text style={styles.error}>{error}</Text> : null}
 
         {/* Bidding content — provider acceptances (shared component) */}
@@ -697,10 +718,6 @@ export default function FindStoreScreen() {
           paymentMethod={paymentMethod}
           paymentSettings={paymentSettings}
           selectingProvider={selectingProvider}
-          expressEnabled={expressEnabled}
-          expressFee={expressFee}
-          isExpress={isExpress}
-          onToggleExpress={setIsExpress}
           onToggleSortDropdown={() => setSortDropdownOpen((v) => !v)}
           onSetSortBy={(key) => { setSortBy(key); setSortDropdownOpen(false); }}
           onSelectCard={(providerId) => setSelectedProviderId(providerId)}
@@ -1029,6 +1046,21 @@ const styles = StyleSheet.create({
 
   // Helper note
   estimateNote: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
+
+  // Express delivery toggle
+  expressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  expressTextWrap: { flex: 1 },
+  expressLabel: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  expressSub: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
 
   // Error
   error: {
