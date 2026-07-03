@@ -77,7 +77,9 @@ export default function CustomerHomeScreen() {
       .from('brands')
       .select('id, name, logo_url, is_preferred')
       .eq('is_active', true)
-      .order('is_preferred', { ascending: false })
+      // Preferred brand sorts LAST: booleans order false < true, so ascending
+      // puts non-preferred (false) first and the preferred brand at the bottom.
+      .order('is_preferred', { ascending: true })
       .order('name');
 
     if (!brandRows) return;
