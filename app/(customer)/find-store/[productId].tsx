@@ -577,6 +577,7 @@ export default function FindStoreScreen() {
       p_delivery_address: address.trim(),
       p_delivery_lat: lat,
       p_delivery_lng: lng,
+      p_is_express: isExpress,
     });
 
     if (orderError || !newOrderId) {
