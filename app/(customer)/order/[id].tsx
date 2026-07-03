@@ -42,6 +42,8 @@ type Order = {
   admin_fee: number;
   is_express: boolean;
   express_fee: number;
+  eta_minutes: number | null;
+  eta_deadline: string | null;
   selected_provider_id: string | null;
   created_at: string;
   expires_at: string | null;
@@ -413,7 +415,7 @@ export default function OrderTrackingScreen() {
   async function fetchOrder() {
     const { data } = await supabase
       .from('orders')
-      .select('id, status, payment_method, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, is_express, express_fee, selected_provider_id, created_at, expires_at, cancelled_by, cancel_reason')
+      .select('id, status, payment_method, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, is_express, express_fee, eta_minutes, eta_deadline, selected_provider_id, created_at, expires_at, cancelled_by, cancel_reason')
       .eq('id', id)
       .single();
     if (data) setOrder(data as Order);

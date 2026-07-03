@@ -48,6 +48,8 @@ type Order = {
   admin_fee: number;
   is_express: boolean;
   express_fee: number;
+  eta_minutes: number | null;
+  eta_deadline: string | null;
   customer_id: string;
   created_at: string;
   customer: { full_name: string; phone: string; avatar_url: string | null } | null;
@@ -229,7 +231,7 @@ export default function ActiveDeliveryScreen() {
   async function fetchOrder() {
     const { data } = await supabase
       .from('orders')
-      .select('id, status, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, is_express, express_fee, customer_id, created_at, customer:profiles!customer_id(full_name, phone, avatar_url)')
+      .select('id, status, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, is_express, express_fee, eta_minutes, eta_deadline, customer_id, created_at, customer:profiles!customer_id(full_name, phone, avatar_url)')
       .eq('id', id)
       .single();
     if (!data) return;
@@ -279,6 +281,21 @@ export default function ActiveDeliveryScreen() {
           { provider_id: uid, lat, lng, updated_at: new Date().toISOString() },
           { onConflict: 'provider_id' }
         );
+
+      // Now that we have a first location fix, ask the backend to compute the
+      // express ETA. Fire-and-forget — set_order_eta is best-effort and returns
+      // silently for non-express / non-rider orders, so a failure here must
+      // never block location tracking.
+      supabase.rpc('set_order_eta', { p_order_id: id }).catch(() => {});
+
+      // Give set_order_eta a few seconds to finish, then re-fetch so the ETA
+      // fields (eta_minutes / eta_deadline) show up on the card.
+      if (order?.is_express) {
+        setTimeout(() => {
+          supabase.rpc('set_order_eta', { p_order_id: id }).catch(() => {});
+          fetchOrder();
+        }, 8000);
+      }
     } catch {
       // Fall through to watch-based updates
     }
@@ -475,6 +492,16 @@ export default function ActiveDeliveryScreen() {
             <View style={styles.expressBadge}>
               <Feather name="zap" size={11} color="#fff" />
               <Text style={styles.expressBadgeText}>EXPRESS</Text>
+            </View>
+          )}
+          {order.is_express && order.eta_deadline && (
+            <View style={styles.etaRow}>
+              <Text style={styles.etaDeadline}>
+                Deliver by {new Date(order.eta_deadline).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}
+              </Text>
+              {order.eta_minutes != null && (
+                <Text style={styles.etaMinutes}>~{order.eta_minutes} mins</Text>
+              )}
             </View>
           )}
           <View style={styles.addressRow}>
@@ -755,6 +782,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   expressBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+
+  // Express ETA — amber to match the EXPRESS badge
+  etaRow: { alignItems: 'center', gap: 2, marginBottom: 10 },
+  etaDeadline: { fontSize: 14, fontWeight: '700', color: '#B45309' },
+  etaMinutes: { fontSize: 12, fontWeight: '600', color: '#D97706' },
 
   addressRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 8 },
   addressText: { fontSize: 13, fontWeight: '700', color: '#6B7280', flex: 1, textAlign: 'center' },

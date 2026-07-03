@@ -35,6 +35,8 @@ type Order = {
   total_amount: number;
   is_express: boolean;
   express_fee: number;
+  eta_minutes: number | null;
+  eta_deadline: string | null;
   selected_provider_id: string | null;
   cancelled_by: string | null;
 };
@@ -170,6 +172,11 @@ export default function OrderTracking({
               <Feather name="zap" size={11} color="#fff" />
               <Text style={styles.expressBadgeText}>EXPRESS</Text>
             </View>
+          )}
+          {order.is_express && order.eta_deadline && order.eta_minutes != null && (
+            <Text style={styles.etaText}>
+              Express ETA: deliver by {new Date(order.eta_deadline).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} (~{order.eta_minutes} mins)
+            </Text>
           )}
           <View style={styles.addressRow}>
             <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
@@ -465,6 +472,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   expressBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  // Express ETA — amber to match the EXPRESS badge
+  etaText: { fontSize: 13, fontWeight: '700', color: '#B45309', textAlign: 'center', marginBottom: 10 },
   addressRow: {
     flexDirection: 'row',
     gap: 6,

@@ -485,6 +485,11 @@ export default function FindStoreScreen() {
     if (!error) {
       sendOrderNotification(orderId, 'dealer_selected');
       sendOrderNotification(orderId, 'in_transit');
+      // Nudge the backend to compute the express ETA once the rider has had a
+      // moment to push a first location fix. Fire-and-forget, best-effort.
+      if (isExpress) {
+        setTimeout(() => supabase.rpc('set_order_eta', { p_order_id: orderId }).catch(() => {}), 5000);
+      }
       setPendingProviderId(null);
       // Stop polling before leaving the bidding screen
       if (pollIntervalRef.current) {
