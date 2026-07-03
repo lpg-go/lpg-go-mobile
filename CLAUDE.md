@@ -23,7 +23,7 @@
 - Rider One: 09000000003 / 222222
 - Customer Two: 09560623082 (existing, password unchanged)
 - Dave: 09000000005 (existing, password unchanged)
-- Admin: accounts@lpggodelivery.com / iT3chlpg.25
+- Admin: [credentials stored in password manager]
 
 ## Supabase
 - Project ref: rgqwaiassatyruptsgbs
