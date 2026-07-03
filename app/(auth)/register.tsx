@@ -296,12 +296,12 @@ export default function RegisterScreen() {
         <Text style={styles.label}>I am...</Text>
         <View style={styles.optionGroup}>
           <RoleOption
-            label="I want to order LPG"
+            label="I'm a Customer"
             selected={role === 'customer'}
             onPress={() => { setRole('customer'); setProviderType(null); }}
           />
           <RoleOption
-            label="I am a provider"
+            label="I'm a Provider"
             selected={role === 'provider'}
             onPress={() => setRole('provider')}
           />

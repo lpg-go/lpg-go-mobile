@@ -13,7 +13,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -95,8 +94,7 @@ export default function ActiveDeliveryScreen() {
 
   // Safety check sheet (gates "Mark as Delivered")
   const [safetyVisible, setSafetyVisible] = useState(false);
-  const [checks, setChecks] = useState<boolean[]>([false, false, false]);
-  const [safetyNotes, setSafetyNotes] = useState('');
+  const [checks, setChecks] = useState<boolean[]>([false, false]);
 
   // Location tracking
   const [providerLocation, setProviderLocation] = useState<LatLng | null>(null);
@@ -327,8 +325,7 @@ export default function ActiveDeliveryScreen() {
   // Open the safety check sheet (fresh state each time) instead of marking
   // the order delivered directly.
   function openSafetyCheck() {
-    setChecks([false, false, false]);
-    setSafetyNotes('');
+    setChecks([false, false]);
     setSafetyVisible(true);
   }
 
@@ -343,7 +340,6 @@ export default function ActiveDeliveryScreen() {
     }
 
     const passed = checks.every(Boolean);
-    const trimmedNotes = safetyNotes.trim();
 
     setMarking(true);
 
@@ -356,7 +352,7 @@ export default function ActiveDeliveryScreen() {
         order_id: id,
         rider_id: currentUserId,
         passed,
-        notes: trimmedNotes || null,
+        notes: null,
       });
 
     if (checkError) {
@@ -453,11 +449,9 @@ export default function ActiveDeliveryScreen() {
   // Dealers don't broadcast location, so the live map serves no purpose for them.
   const isRider = providerType === 'rider';
 
-  // "Confirm Delivery" is allowed when either all items pass (notes optional),
-  // or at least one item failed but the rider explained why in the notes.
+  // "Confirm Delivery" is allowed only when every safety item passes.
   const allChecked = checks.every(Boolean);
-  const notesLong = safetyNotes.trim().length >= 10;
-  const canConfirm = allChecked || notesLong;
+  const canConfirm = allChecked;
 
   return (
     <View style={styles.screen}>
@@ -678,18 +672,6 @@ export default function ActiveDeliveryScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-
-            <Text style={styles.notesLabel}>Notes (required if any item failed — describe the issue briefly)</Text>
-            <TextInput
-              style={styles.notesInput}
-              value={safetyNotes}
-              onChangeText={setSafetyNotes}
-              placeholder="Describe any issue with the cylinder..."
-              placeholderTextColor="#9CA3AF"
-              multiline
-              maxLength={500}
-              editable={!marking}
-            />
 
             <View style={styles.safetyActions}>
               <TouchableOpacity
@@ -988,17 +970,6 @@ const styles = StyleSheet.create({
   },
   checkboxChecked: { backgroundColor: PRIMARY, borderColor: PRIMARY },
   checkLabel: { fontSize: 15, color: '#111827', marginLeft: 12, flex: 1 },
-  notesLabel: { fontSize: 13, color: '#6B7280', marginTop: 16, marginBottom: 6 },
-  notesInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    padding: 12,
-    minHeight: 80,
-    fontSize: 14,
-    color: '#111827',
-    textAlignVertical: 'top',
-  },
   safetyActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
   safetyCancelBtn: {
     flex: 1,
