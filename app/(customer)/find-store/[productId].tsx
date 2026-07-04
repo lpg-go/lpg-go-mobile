@@ -18,9 +18,10 @@ import {
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../../components/AppHeader';
-import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
 import OrderBidding from '../../../components/order/OrderBidding';
+import PrimaryButton from '../../../components/ui/PrimaryButton';
+import StatusBadge from '../../../components/ui/StatusBadge';
+import { colors, radii, spacing, typography, shadows } from '../../../lib/theme';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
@@ -604,108 +605,159 @@ export default function FindStoreScreen() {
   // Lock the form inputs in bidding phase, or when the customer is at their limit.
   const inputsDisabled = phase === 'bidding' || atLimit;
 
+  // Header + summary display helpers (visual only).
+  const orderShort = orderId ? orderId.slice(0, 8) : '';
+  const summaryProduct =
+    [brandName || displayName, sizeKg ? `${sizeKg}kg` : null].filter(Boolean).join(' ') +
+    ` ×${quantity}`;
+  const selectedAcc = acceptances.find((a) => a.provider_id === selectedProviderId);
+  const selectedName =
+    selectedAcc?.provider?.business_name || selectedAcc?.provider?.full_name || 'provider';
+  const selectedTotal = selectedAcc?.provider_total ?? 0;
+
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo right={<CustomerHeaderActions />} />
+      {/* Dark detail header with back button */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={8}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={20} color={colors.headerText} />
+        </TouchableOpacity>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {brandName || displayName}
+          </Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>
+            {phase === 'bidding' ? `Order #${orderShort}` : 'Set delivery details'}
+          </Text>
+        </View>
+        {phase === 'bidding' && isExpress ? <StatusBadge label="Express" tone="express" /> : null}
+      </View>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: 120 + insets.bottom },
+          { paddingBottom: 160 + insets.bottom },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Delivery address */}
-        <View style={[styles.section, { marginBottom: 10 }]}>
-          <Text style={styles.sectionTitle}>Delivery Address</Text>
-
-          <View style={styles.addressInputWrap}>
-            {!inputsDisabled && (
-              <TouchableOpacity
-                style={styles.addressPinWrap}
-                onPress={openPicker}
-                hitSlop={8}
-              >
-                <View style={styles.addressPinButton}>
-                  <Feather name="map-pin" size={20} color="#fff" />
-                </View>
-              </TouchableOpacity>
-            )}
-            <TextInput
-              style={styles.addressInput}
-              placeholder={locationLoading ? 'Getting your location…' : 'Enter your full delivery address'}
-              placeholderTextColor="#9CA3AF"
-              value={address}
-              editable={!inputsDisabled}
-              onChangeText={(text) => {
-                setAddress(text);
-                // Clear stored coords when user edits manually
-                if (lat !== null) { setLat(null); setLng(null); }
-              }}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-
-          {locationError ? <Text style={styles.fieldError}>{locationError}</Text> : null}
-        </View>
-
-        {/* Product summary */}
-        <View style={styles.section}>
-          <View style={styles.productCard}>
-            <View style={styles.productInfo}>
-              <Text style={styles.productName} numberOfLines={1}>{displayName}</Text>
-              <Text style={styles.productPrice}>Est. ₱{totalAmount.toLocaleString()}</Text>
-            </View>
-            <View style={[styles.quantityRow, inputsDisabled && styles.quantityRowDisabled]}>
-              <TouchableOpacity
-                style={[styles.qtyButton, quantity <= 1 && styles.qtyButtonDisabled]}
-                onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1 || inputsDisabled}
-                hitSlop={8}
-              >
-                <Feather name="minus" size={20} color={quantity <= 1 ? '#9CA3AF' : '#fff'} />
-              </TouchableOpacity>
-              <Text style={styles.qtyValue}>{quantity}</Text>
-              <TouchableOpacity
-                style={styles.qtyButton}
-                onPress={() => setQuantity((q) => q + 1)}
-                disabled={inputsDisabled}
-                hitSlop={8}
-              >
-                <Feather name="plus" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </View>
-          <Text style={styles.estimateNote}>
-            Final price depends on the provider you choose.
-          </Text>
-        </View>
-
-        {/* Express Delivery — only when the admin has enabled the offer */}
-        {expressEnabled && (
-          <View style={styles.section}>
-            <View style={styles.expressRow}>
-              <View style={styles.expressTextWrap}>
-                <Text style={styles.expressLabel}>Express Delivery</Text>
-                <Text style={styles.expressSub}>
-                  +₱{expressFee.toLocaleString()} priority rider delivery
-                </Text>
+        {phase === 'form' ? (
+          <>
+            {/* Delivery address */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Delivery Address</Text>
+              <View style={styles.addressCard}>
+                <Feather name="map-pin" size={18} color={colors.primary} style={styles.addressIcon} />
+                <TextInput
+                  style={styles.addressInput}
+                  placeholder={locationLoading ? 'Getting your location…' : 'Enter your full delivery address'}
+                  placeholderTextColor={colors.textMuted}
+                  value={address}
+                  editable={!inputsDisabled}
+                  onChangeText={(text) => {
+                    setAddress(text);
+                    // Clear stored coords when user edits manually
+                    if (lat !== null) { setLat(null); setLng(null); }
+                  }}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+                {!inputsDisabled && (
+                  <TouchableOpacity
+                    style={styles.addressPinButton}
+                    onPress={openPicker}
+                    hitSlop={8}
+                  >
+                    <Feather name="map-pin" size={18} color={colors.headerText} />
+                  </TouchableOpacity>
+                )}
               </View>
-              <Switch
-                value={isExpress}
-                onValueChange={setIsExpress}
-                trackColor={{ false: '#D1D5DB', true: PRIMARY }}
-                thumbColor="#fff"
-              />
+              {locationError ? <Text style={styles.fieldError}>{locationError}</Text> : null}
             </View>
+
+            {/* Product summary + quantity */}
+            <View style={styles.section}>
+              <View style={styles.card}>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={1}>{displayName}</Text>
+                  <Text style={styles.productPrice}>Est. ₱{totalAmount.toLocaleString()}</Text>
+                </View>
+                <View style={[styles.quantityRow, inputsDisabled && styles.quantityRowDisabled]}>
+                  <TouchableOpacity
+                    style={[styles.qtyButtonMinus, quantity <= 1 && styles.qtyButtonDisabled]}
+                    onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+                    disabled={quantity <= 1 || inputsDisabled}
+                    hitSlop={8}
+                  >
+                    <Feather name="minus" size={18} color={quantity <= 1 ? colors.textMuted : colors.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.qtyValue}>{quantity}</Text>
+                  <TouchableOpacity
+                    style={styles.qtyButtonPlus}
+                    onPress={() => setQuantity((q) => q + 1)}
+                    disabled={inputsDisabled}
+                    hitSlop={8}
+                  >
+                    <Feather name="plus" size={18} color={colors.headerText} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.estimateNote}>
+                Final price depends on the provider you choose.
+              </Text>
+            </View>
+
+            {/* Express Delivery — only when the admin has enabled the offer */}
+            {expressEnabled && (
+              <View style={styles.section}>
+                <View style={styles.expressCard}>
+                  <View style={styles.expressIconCircle}>
+                    <Feather name="zap" size={18} color={colors.amberDark} />
+                  </View>
+                  <View style={styles.expressTextWrap}>
+                    <Text style={styles.expressLabel}>Express delivery</Text>
+                    <Text style={styles.expressSub}>
+                      Priority rider · +₱{expressFee.toLocaleString()}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isExpress}
+                    onValueChange={setIsExpress}
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </View>
+            )}
+
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </>
+        ) : (
+          /* Bidding — collapsed read-only summary of the placed order */
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <Feather name="map-pin" size={15} color={colors.textMuted} style={styles.summaryIcon} />
+              <Text style={styles.summaryText} numberOfLines={1}>{address || 'No address'}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Feather name="package" size={15} color={colors.textMuted} style={styles.summaryIcon} />
+              <Text style={styles.summaryText} numberOfLines={1}>{summaryProduct}</Text>
+            </View>
+            {isExpress && (
+              <View style={styles.summaryRow}>
+                <Feather name="zap" size={15} color={colors.amberDark} style={styles.summaryIcon} />
+                <Text style={[styles.summaryText, { color: colors.amberText }]}>Express delivery</Text>
+              </View>
+            )}
           </View>
         )}
-
-        {phase === 'form' && error ? <Text style={styles.error}>{error}</Text> : null}
 
         {/* Bidding content — provider acceptances (shared component) */}
         <OrderBidding
@@ -732,49 +784,41 @@ export default function FindStoreScreen() {
 
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        {phase === 'form' && atLimit && (
-          <View style={styles.limitBanner}>
-            <Feather name="info" size={18} color="#B45309" style={styles.limitBannerIcon} />
-            <Text style={styles.limitBannerText}>
-              Complete or cancel an order to place a new one.
-            </Text>
-          </View>
-        )}
         {phase === 'form' ? (
-          <TouchableOpacity
-            style={[
-              styles.placeOrderButton,
-              (!canFindStore || placing || atLimit) && styles.placeOrderButtonDisabled,
-            ]}
-            onPress={handleFindStore}
-            disabled={!canFindStore || placing || atLimit}
-          >
-            {placing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.placeOrderText}>Find Provider</Text>
+          <>
+            {atLimit && (
+              <View style={styles.limitBanner}>
+                <Feather name="info" size={18} color={colors.amberDark} style={styles.limitBannerIcon} />
+                <Text style={styles.limitBannerText}>
+                  Complete or cancel an order to place a new one.
+                </Text>
+              </View>
             )}
-          </TouchableOpacity>
+            <PrimaryButton
+              label="Find providers"
+              onPress={handleFindStore}
+              loading={placing}
+              disabled={!canFindStore || atLimit}
+            />
+          </>
         ) : (
           <>
-            <TouchableOpacity
-              style={[styles.placeOrderButton, !selectedProviderId && styles.selectProviderDisabled]}
+            <PrimaryButton
+              label={
+                selectedProviderId
+                  ? `Select ${selectedName} · ₱${selectedTotal.toLocaleString()}`
+                  : 'Select provider'
+              }
               onPress={() => selectedProviderId && setPendingProviderId(selectedProviderId)}
               disabled={!selectedProviderId}
-            >
-              <Text style={styles.placeOrderText}>Select Provider</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.cancelBtn, cancelling && { opacity: 0.5 }]}
+            />
+            <View style={styles.buttonGap} />
+            <PrimaryButton
+              label="Cancel order"
+              variant="danger"
               onPress={confirmCancelOrder}
-              disabled={cancelling}
-            >
-              {cancelling ? (
-                <ActivityIndicator size="small" color="#DC2626" />
-              ) : (
-                <Text style={styles.cancelBtnText}>Cancel Order</Text>
-              )}
-            </TouchableOpacity>
+              loading={cancelling}
+            />
           </>
         )}
       </View>
@@ -870,53 +914,80 @@ const DEFAULT_REGION = {
 };
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
+  screen: { flex: 1, backgroundColor: colors.bg },
 
-
-  // Scroll
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16 },
-
-  // Section
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 10,
-  },
-
-  // Product card
-  productCard: {
+  // Dark detail header
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    gap: spacing.md,
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
-  productInfo: { flex: 1 },
-  productName: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  productMeta: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  productPrice: { fontSize: 12, fontWeight: '700', color: PRIMARY, marginTop: 3 },
-
-  // Quantity
-  quantityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginLeft: 12,
-  },
-  qtyButton: {
+  backButton: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: PRIMARY,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qtyButtonDisabled: { backgroundColor: '#F3F4F6' },
+  headerTitleWrap: { flex: 1 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.headerText },
+  headerSubtitle: { ...typography.caption, color: colors.headerSubtext, marginTop: 2 },
+
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
+
+  // Section
+  section: { marginBottom: spacing.lg },
+  label: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
+
+  // Generic white card (product summary)
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    ...shadows.card,
+  },
+  productInfo: { flex: 1 },
+  productName: { ...typography.cardTitle, color: colors.text },
+  productPrice: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 3 },
+
+  // Quantity stepper
+  quantityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginLeft: spacing.md,
+  },
+  qtyButtonMinus: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyButtonPlus: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyButtonDisabled: { opacity: 0.6 },
   qtyValue: {
     minWidth: 24,
     height: 40,
@@ -924,44 +995,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   quantityRowDisabled: { opacity: 0.5 },
 
-  // Address
-  addressInputWrap: {
-    position: 'relative',
-    marginBottom: 10,
+  // Address card
+  addressCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    ...shadows.card,
   },
-  addressPinWrap: {
-    position: 'absolute',
-    right: 14,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    zIndex: 1,
+  addressIcon: { marginTop: 3, marginRight: spacing.sm },
+  addressInput: {
+    flex: 1,
+    minHeight: 44,
+    fontSize: 14,
+    color: colors.text,
+    paddingVertical: 0,
   },
   addressPinButton: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: PRIMARY,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: spacing.sm,
   },
-  addressInput: {
-    backgroundColor: '#fff',
+  fieldError: { fontSize: 12, color: colors.danger, marginTop: 6 },
+
+  // Bidding read-only summary card
+  summaryCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingLeft: 14,
-    paddingRight: 62,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#111827',
-    height: 68,
+    borderColor: colors.cardBorder,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    ...shadows.card,
   },
-  fieldError: { fontSize: 12, color: '#EF4444', marginTop: 6 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center' },
+  summaryIcon: { marginRight: spacing.sm },
+  summaryText: { flex: 1, ...typography.body, color: colors.text },
 
   // Map picker (full-screen modal)
   pickerScreen: { flex: 1, backgroundColor: '#fff' },
@@ -1047,29 +1129,38 @@ const styles = StyleSheet.create({
   },
 
   // Helper note
-  estimateNote: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
+  estimateNote: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm },
 
   // Express delivery toggle
-  expressRow: {
+  expressCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: spacing.md,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.amberTint,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  expressIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.pill,
+    backgroundColor: colors.amberTint,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   expressTextWrap: { flex: 1 },
-  expressLabel: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  expressSub: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  expressLabel: { ...typography.cardTitle, color: colors.text },
+  expressSub: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
 
   // Error
   error: {
     fontSize: 13,
-    color: '#EF4444',
+    color: colors.danger,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
 
   // Bottom bar
@@ -1079,44 +1170,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: H_PADDING,
-    paddingTop: 12,
-    backgroundColor: '#fff',
+    paddingTop: spacing.md,
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: colors.cardBorder,
   },
-  placeOrderButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
+  buttonGap: { height: spacing.sm },
   limitBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: colors.amberTint,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    borderColor: colors.amber,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
-  limitBannerIcon: { marginRight: 8, marginTop: 1 },
-  limitBannerText: { flex: 1, fontSize: 13, lineHeight: 18, color: '#92400E' },
-  placeOrderButtonDisabled: { opacity: 0.6 },
-  selectProviderDisabled: { opacity: 0.5 },
-  placeOrderText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-
-  // Cancel (matches provider order status cancel button)
-  cancelBtn: {
-    borderWidth: 1,
-    borderColor: '#DC2626',
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+  limitBannerIcon: { marginRight: spacing.sm, marginTop: 1 },
+  limitBannerText: { flex: 1, fontSize: 13, lineHeight: 18, color: colors.amberText },
 });
