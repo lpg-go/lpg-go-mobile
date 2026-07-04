@@ -31,7 +31,7 @@ export default function FloatingPillNav({ active, onNavigate }: Props) {
               <Feather
                 name={tab.icon}
                 size={20}
-                color={isActive ? colors.primaryDark : colors.textMuted}
+                color={isActive ? colors.headerText : colors.textMuted}
               />
               {isActive ? (
                 <Text style={styles.labelActive}>{tab.label}</Text>
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
   },
   tabActive: {
-    backgroundColor: colors.primaryTintStrong,
+    backgroundColor: colors.primary,
   },
   label: {
     ...typography.label,
@@ -85,6 +85,6 @@ const styles = StyleSheet.create({
     ...typography.label,
     textTransform: 'none',
     letterSpacing: 0,
-    color: colors.primaryDark,
+    color: colors.headerText,
   },
 });

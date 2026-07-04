@@ -1,21 +1,23 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../components/AppHeader';
-import CustomerHeaderActions from '../../components/CustomerHeaderActions';
+import HeaderDark from '../../components/ui/HeaderDark';
+import AddressBar from '../../components/ui/AddressBar';
+import SearchBar from '../../components/ui/SearchBar';
+import BrandCard from '../../components/ui/BrandCard';
+import FloatingPillNav from '../../components/ui/FloatingPillNav';
+import { colors, spacing, radii, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
 
 type Brand = {
@@ -27,41 +29,53 @@ type Brand = {
   hasActiveProviders: boolean;
 };
 
-const PRIMARY = '#16A34A';
-const H_PADDING = 20;
-const GRID_GAP = 10;
+const H_PADDING = 18;
+const GRID_GAP = 8;
 const COLS = 3;
 
-const AVATAR_COLORS = ['#16A34A', '#2563EB', '#D97706', '#7C3AED', '#DC2626', '#0891B2'];
+// Fetches the signed-in user's name + avatar for the dark header. Mirrors the
+// profile fetch in components/HeaderAvatar.tsx.
+function useProfileHeader() {
+  const [fullName, setFullName] = useState<string>('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-function getBrandColor(name: string): string {
-  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
-}
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url, full_name')
+        .eq('id', user.id)
+        .single();
+      if (!alive || !data) return;
+      if (data.full_name) setFullName(data.full_name);
+      if (data.avatar_url) setAvatarUrl(data.avatar_url);
+    })();
+    return () => { alive = false; };
+  }, []);
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
+  return { fullName, avatarUrl };
 }
 
 export default function CustomerHomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { fullName, avatarUrl } = useProfileHeader();
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [gridWidth, setGridWidth] = useState(0);
 
-  // Always lay out COLS columns, sized to the grid's measured width (falls back
-  // to the window width before the first layout pass). Floor so rounding never
-  // pushes the row total past the container and wraps a card to the next line.
-  const availWidth = gridWidth > 0 ? gridWidth : width - H_PADDING * 2;
-  const cardWidth = Math.floor((availWidth - GRID_GAP * (COLS - 1)) / COLS);
+  // Size cards for exactly COLS columns off the window width: subtract the
+  // container's horizontal padding (both sides) and the inter-card gaps, then
+  // divide. Floor so rounding never pushes the row total past the container and
+  // wraps a card to the next line. => (width - 36 - 16) / 3
+  const cardWidth = Math.floor(
+    (width - H_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS
+  );
 
   // Refetch brands on every screen focus so logo updates and new brands appear immediately
   useFocusEffect(
@@ -70,7 +84,6 @@ export default function CustomerHomeScreen() {
       return () => {};
     }, [])
   );
-
 
   async function fetchBrands() {
     const { data: brandRows } = await supabase
@@ -132,7 +145,7 @@ export default function CustomerHomeScreen() {
   );
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={styles.screen}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -141,118 +154,87 @@ export default function CustomerHomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={PRIMARY}
-            colors={[PRIMARY]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <AppHeader
-          variant="inline"
-          showLogo
-          logoHref="/(customer)"
-          noHorizontalPadding
-          right={<CustomerHeaderActions />}
-        />
+        {/* Green fills the status-bar notch above the header */}
+        <View style={{ height: insets.top, backgroundColor: colors.headerBg }} />
 
-        {/* Search */}
-        <View style={styles.searchRow}>
-          <Feather name="search" size={16} color="#9CA3AF" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search LPG brands..."
-            placeholderTextColor="#9CA3AF"
+        {/* Header */}
+        <HeaderDark
+          name={fullName}
+          avatarUrl={avatarUrl}
+          onBellPress={() => router.push('/(customer)/notifications')}
+          onAvatarPress={() => router.push('/(customer)/profile')}
+        >
+          {/* TODO: wire real delivery address + GPS location picker (feature pending) */}
+          <AddressBar address="Set delivery address" onPress={() => {}} />
+        </HeaderDark>
+
+        {/* Search — overlaps the header's extra bottom padding */}
+        <View style={styles.searchWrap}>
+          <SearchBar
+            placeholder="Search for a brand"
             value={search}
             onChangeText={setSearch}
-            clearButtonMode="while-editing"
           />
         </View>
 
-        {/* Brands section */}
-        <View onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+        {/* Section header */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>Brands</Text>
+          {/* TODO: "See all" — dedicated all-brands screen not built yet */}
+          <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
+            <Text style={styles.seeAll}>See all</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Brands grid */}
+        <View style={styles.gridSection}>
           {loading ? (
             <SkeletonGrid cardWidth={cardWidth} />
           ) : filtered.length === 0 ? (
             <View style={styles.emptyState}>
-              <Feather name="inbox" size={40} color="#D1D5DB" />
+              <Feather name="inbox" size={40} color={colors.textFaint} />
               <Text style={styles.emptyText}>No brands available</Text>
             </View>
           ) : (
             <View style={styles.grid}>
-              {filtered.map((brand) => (
-                <BrandGridCard
-                  key={brand.id}
-                  brand={brand}
-                  cardWidth={cardWidth}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/(customer)/brand/[id]',
-                      params: { id: brand.id, name: brand.name },
-                    })
-                  }
-                  hasActiveProviders={brand.hasActiveProviders}
-                />
+              {filtered.map((brand, index) => (
+                <View key={brand.id} style={{ width: cardWidth }}>
+                  <BrandCard
+                    name={brand.name}
+                    imageUrl={brand.logo_url}
+                    index={index}
+                    isFeatured={brand.is_preferred}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(customer)/brand/[id]',
+                        params: { id: brand.id, name: brand.name },
+                      })
+                    }
+                  />
+                </View>
               ))}
             </View>
           )}
         </View>
       </ScrollView>
+
+      {/* Floating bottom nav */}
+      <FloatingPillNav
+        active="home"
+        onNavigate={(tab) => {
+          if (tab === 'orders') router.push('/(customer)/orders');
+          // TODO: History screen not built yet — routes to Orders for now
+          else if (tab === 'history') router.push('/(customer)/orders');
+          // home → already here
+        }}
+      />
     </View>
-  );
-}
-
-// ─── Brand grid card ──────────────────────────────────────────────────────────
-
-function BrandGridCard({
-  brand,
-  cardWidth,
-  onPress,
-  hasActiveProviders,
-}: {
-  brand: Brand;
-  cardWidth: number;
-  onPress: () => void;
-  hasActiveProviders: boolean;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.gridCard, { width: cardWidth, height: cardWidth }]}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
-      <View style={styles.logoWrap}>
-        {brand.logo_url ? (
-          <Image
-            source={{ uri: brand.logo_url }}
-            style={styles.logoImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.logoFallback}>
-            <Text style={styles.logoInitials}>{getInitials(brand.name)}</Text>
-          </View>
-        )}
-        {!hasActiveProviders && (
-          <View style={styles.unavailableOverlay}>
-            <Text style={styles.unavailableOverlayText}>Unavailable</Text>
-          </View>
-        )}
-      </View>
-      <Text
-        style={[styles.gridBrandName, !hasActiveProviders && styles.gridBrandNameUnavailable]}
-        numberOfLines={1}
-        ellipsizeMode="tail"
-      >
-        {brand.name}
-      </Text>
-      {brand.is_preferred && (
-        <View style={styles.preferredBadge}>
-          <Feather name="star" size={9} color="#92400E" style={styles.preferredBadgeIcon} />
-          <Text style={styles.preferredBadgeText}>Preferred</Text>
-        </View>
-      )}
-    </TouchableOpacity>
   );
 }
 
@@ -262,7 +244,7 @@ function SkeletonGrid({ cardWidth }: { cardWidth: number }) {
   return (
     <View style={styles.grid}>
       {[1, 2, 3, 4, 5, 6].map((i) => (
-        <View key={i} style={[styles.gridCard, styles.skeletonCard, { width: cardWidth, height: cardWidth }]}>
+        <View key={i} style={[styles.skeletonCard, { width: cardWidth }]}>
           <View style={styles.skeletonLogo} />
           <View style={styles.skeletonName} />
         </View>
@@ -274,111 +256,60 @@ function SkeletonGrid({ cardWidth }: { cardWidth: number }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
+  screen: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingBottom: 32 },
+  scrollContent: { paddingBottom: 100 },
 
-  // Search
-  searchRow: {
+  // Search — pulled up to overlap the header's 46px bottom padding
+  searchWrap: {
+    paddingHorizontal: H_PADDING,
+    marginTop: -30,
+  },
+
+  // Section header
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 16,
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PADDING,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.md,
   },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: '#111827', padding: 0 },
+  sectionTitle: {
+    ...typography.sectionHeader,
+    color: colors.text,
+  },
+  seeAll: {
+    ...typography.body,
+    color: colors.primary,
+    fontWeight: '600',
+  },
 
-  // Section title
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 12 },
-
-  // Grid container
+  // Grid
+  gridSection: { paddingHorizontal: H_PADDING },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: GRID_GAP,
   },
 
-  // Grid card — square (height set to cardWidth inline)
-  gridCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-
-  // Logo — fixed 64x64 reserved block
-  logoWrap: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
-  logoImage: { width: 64, height: 64, borderRadius: 8 },
-  logoFallback: {
-    width: 64,
-    height: 64,
-    borderRadius: 8,
-    backgroundColor: '#16A34A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoInitials: { fontSize: 20, fontWeight: '700', color: '#fff' },
-
-  // Brand name — single line, fixed slot
-  gridBrandName: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-    lineHeight: 16,
-    height: 16,
-    alignSelf: 'stretch',
-  },
-  gridBrandNameUnavailable: { color: '#9CA3AF' },
-
-  // Preferred badge — top-right, overlapping the logo corner
-  preferredBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    zIndex: 2,
-  },
-  preferredBadgeIcon: { marginRight: 3 },
-  preferredBadgeText: { fontSize: 9, fontWeight: '700', color: '#92400E' },
-
-  // Unavailable overlay
-  unavailableOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unavailableOverlayText: { fontSize: 9, fontWeight: '700', color: '#fff', textAlign: 'center' },
-
   // Skeleton
-  skeletonCard: { backgroundColor: '#F9FAFB', borderColor: '#F3F4F6' },
-  skeletonLogo: { width: 80, height: 80, borderRadius: 8, backgroundColor: '#E5E7EB' },
-  skeletonName: { width: '60%', height: 10, borderRadius: 5, backgroundColor: '#E5E7EB' },
+  skeletonCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    overflow: 'hidden',
+  },
+  skeletonLogo: { height: 72, backgroundColor: '#E5E7EB' },
+  skeletonName: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E5E7EB',
+    margin: spacing.md,
+  },
 
   // Empty state
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 15, color: '#9CA3AF' },
+  emptyText: { ...typography.body, color: colors.textMuted },
 });

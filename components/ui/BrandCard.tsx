@@ -21,7 +21,7 @@ export default function BrandCard({
 
   return (
     <TouchableOpacity
-      style={[styles.card, isFeatured && styles.cardFeatured]}
+      style={styles.card}
       onPress={onPress}
       activeOpacity={0.85}
     >
@@ -34,7 +34,7 @@ export default function BrandCard({
       </View>
       {isFeatured ? (
         <View style={styles.featuredPill}>
-          <Text style={styles.featuredStar}>★</Text>
+          <Text style={styles.featuredText}>Featured</Text>
         </View>
       ) : null}
       <View style={styles.body}>
@@ -54,12 +54,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
-  cardFeatured: {
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
   imageZone: {
-    height: 58,
+    height: 72,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -73,15 +69,15 @@ const styles = StyleSheet.create({
     right: spacing.sm,
     backgroundColor: colors.primary,
     borderRadius: radii.pill,
-    width: 20,
-    height: 20,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featuredStar: {
+  featuredText: {
     color: colors.headerText,
-    fontSize: 11,
-    lineHeight: 13,
+    fontSize: 9,
+    fontWeight: '700',
   },
   body: {
     paddingHorizontal: spacing.md,
