@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -11,9 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../../components/AppHeader';
-import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
+import { colors, radii, spacing, typography, shadows } from '../../../lib/theme';
 import supabase from '../../../lib/supabase';
 
 type Product = {
@@ -26,7 +26,6 @@ type Product = {
   cheapestProviderProductId: string | null;
 };
 
-const PRIMARY = '#16A34A';
 const COLS = 3;
 const H_PADDING = 16;
 const GRID_GAP = 8;
@@ -34,6 +33,7 @@ const CARD_WIDTH = (Dimensions.get('window').width - H_PADDING * 2 - GRID_GAP * 
 
 export default function BrandProductsScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
+  const insets = useSafeAreaInsets();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,16 +122,30 @@ export default function BrandProductsScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo right={<CustomerHeaderActions />} />
+      {/* Dark detail header with back button */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={8}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={20} color={colors.headerText} />
+        </TouchableOpacity>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{name || 'Brand'}</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>Choose a cylinder size</Text>
+        </View>
+      </View>
 
       {/* Content */}
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={PRIMARY} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : products.length === 0 ? (
         <View style={styles.centered}>
-          <Feather name="inbox" size={40} color="#D1D5DB" />
+          <Feather name="inbox" size={40} color={colors.textFaint} />
           <Text style={styles.emptyText}>No products available</Text>
         </View>
       ) : (
@@ -170,112 +184,98 @@ function ProductCard({
       disabled={!inStock}
       activeOpacity={0.75}
     >
-      <View style={styles.imageWrap}>
+      <View style={styles.imageZone}>
         {product.image_url ? (
           <Image source={{ uri: product.image_url }} style={styles.image} resizeMode="cover" />
         ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.placeholderSizeText}>{product.size_kg}kg</Text>
-          </View>
+          <MaterialCommunityIcons name="gas-cylinder" size={32} color={colors.primary} />
         )}
         {!inStock && (
-          <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockOverlayText}>Unavailable</Text>
+          <View style={styles.unavailableOverlay}>
+            <View style={styles.unavailablePill}>
+              <Text style={styles.unavailablePillText}>Unavailable</Text>
+            </View>
           </View>
         )}
       </View>
 
-      <Text style={[styles.sizeLabel, !inStock && styles.sizeLabelUnavailable]}>{product.size_kg}kg</Text>
+      <View style={styles.cardBottom}>
+        <Text style={[styles.sizeLabel, !inStock && styles.sizeLabelUnavailable]}>
+          {product.size_kg} kg
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
+  screen: { flex: 1, backgroundColor: colors.bg },
 
+  // Dark detail header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: { flex: 1 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.headerText },
+  headerSubtitle: { ...typography.caption, color: colors.headerSubtext, marginTop: 2 },
 
   // States
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyText: { fontSize: 15, color: '#9CA3AF' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  emptyText: { fontSize: 15, color: colors.textMuted },
 
   // List
-  listContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 16 },
+  listContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, paddingBottom: spacing.lg },
   row: { gap: GRID_GAP, marginBottom: GRID_GAP },
 
   // Product card
   card: {
     width: CARD_WIDTH,
-    height: 120,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 10,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+    borderColor: colors.cardBorder,
+    overflow: 'hidden',
+    ...shadows.card,
   },
-  imageWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  image: { width: 64, height: 64, borderRadius: 8 },
-  imagePlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 8,
-    backgroundColor: '#16A34A',
+  cardDisabled: { opacity: 0.5 },
+  imageZone: {
+    height: 58,
+    backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  placeholderSizeText: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  outOfStockOverlay: {
+  image: { width: '100%', height: '100%' },
+  unavailableOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  outOfStockOverlayText: { fontSize: 9, fontWeight: '700', color: '#fff', textAlign: 'center' },
+  unavailablePill: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  unavailablePillText: { fontSize: 9, fontWeight: '700', color: colors.textSecondary },
 
-  // Labels
-  sizeLabel: { fontSize: 13, fontWeight: '700', color: '#111827', textAlign: 'center' },
-  sizeLabelUnavailable: { color: '#9CA3AF' },
-  cardDisabled: { opacity: 0.7 },
-
-  // Floating cart bar
-  floatingBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  viewCartButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  viewCartText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  viewCartBadge: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    minWidth: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  viewCartBadgeText: { fontSize: 12, fontWeight: '700', color: PRIMARY },
+  // Card bottom / label
+  cardBottom: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  sizeLabel: { ...typography.cardTitle, color: colors.text },
+  sizeLabelUnavailable: { color: colors.textMuted },
 });
