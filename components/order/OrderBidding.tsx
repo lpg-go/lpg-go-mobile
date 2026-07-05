@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
+import PrimaryButton from '../ui/PrimaryButton';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Acceptance = {
@@ -101,7 +104,11 @@ export default function OrderBidding({
                   <Text style={styles.sortDropdownBtnText}>
                     {sortBy === 'price' ? 'Price' : 'Distance'}
                   </Text>
-                  <Feather name={sortDropdownOpen ? 'chevron-up' : 'chevron-down'} size={14} color={PRIMARY} />
+                  <Feather
+                    name={sortDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                    size={15}
+                    color={colors.textSecondary}
+                  />
                 </TouchableOpacity>
                 {sortDropdownOpen && (
                   <View style={styles.sortDropdownMenu}>
@@ -114,7 +121,7 @@ export default function OrderBidding({
                         <Text style={[styles.sortDropdownItemText, sortBy === key && styles.sortDropdownItemTextActive]}>
                           {key === 'price' ? 'Price' : 'Distance'}
                         </Text>
-                        {sortBy === key && <Feather name="check" size={13} color={PRIMARY} />}
+                        {sortBy === key && <Feather name="check" size={14} color={colors.primary} />}
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -124,7 +131,7 @@ export default function OrderBidding({
           </View>
           {acceptances.length === 0 ? (
             <View style={styles.emptyProviders}>
-              <ActivityIndicator size="small" color={PRIMARY} />
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={styles.emptyProvidersText}>Waiting for providers to accept...</Text>
             </View>
           ) : (
@@ -149,13 +156,13 @@ export default function OrderBidding({
           )}
 
           {!hideSelectButton && (
-            <TouchableOpacity
-              style={[styles.selectProviderButton, !selectedProviderId && styles.selectProviderButtonDisabled]}
-              onPress={onOpenPayment}
-              disabled={!selectedProviderId}
-            >
-              <Text style={styles.selectProviderText}>Select Provider</Text>
-            </TouchableOpacity>
+            <View style={styles.selectButtonWrap}>
+              <PrimaryButton
+                label="Select provider"
+                onPress={onOpenPayment}
+                disabled={!selectedProviderId}
+              />
+            </View>
           )}
         </View>
       )}
@@ -170,9 +177,9 @@ export default function OrderBidding({
         <View style={styles.paymentModalOverlay}>
           <View style={[styles.paymentModalCard, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.paymentModalHeader}>
-              <Text style={styles.paymentModalTitle}>Choose Payment Method</Text>
-              <TouchableOpacity onPress={onClosePayment} hitSlop={8}>
-                <Feather name="x" size={22} color="#6B7280" />
+              <Text style={styles.paymentModalTitle}>Choose payment method</Text>
+              <TouchableOpacity style={styles.paymentCloseBtn} onPress={onClosePayment} hitSlop={8}>
+                <Feather name="x" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -188,8 +195,8 @@ export default function OrderBidding({
                   <Feather
                     name="dollar-sign"
                     size={18}
-                    color={paymentMethod === 'cash' ? PRIMARY : '#6B7280'}
-                    style={{ marginRight: 10 }}
+                    color={paymentMethod === 'cash' ? colors.primary : colors.textSecondary}
+                    style={styles.paymentIcon}
                   />
                   <Text style={[styles.paymentLabel, paymentMethod === 'cash' && styles.paymentLabelSelected]}>
                     Cash on Delivery
@@ -207,8 +214,8 @@ export default function OrderBidding({
                   <Feather
                     name="credit-card"
                     size={18}
-                    color={paymentMethod === 'card' ? PRIMARY : '#6B7280'}
-                    style={{ marginRight: 10 }}
+                    color={paymentMethod === 'card' ? colors.primary : colors.textSecondary}
+                    style={styles.paymentIcon}
                   />
                   <Text style={[styles.paymentLabel, paymentMethod === 'card' && styles.paymentLabelSelected]}>
                     Card Payment
@@ -217,20 +224,12 @@ export default function OrderBidding({
               )}
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.confirmOrderBtn,
-                (selectingProvider !== null || !paymentMethod) && { opacity: 0.6 },
-              ]}
+            <PrimaryButton
+              label="Confirm order"
               onPress={onConfirmSelection}
-              disabled={selectingProvider !== null || !paymentMethod}
-            >
-              {selectingProvider !== null ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.confirmOrderBtnText}>Confirm Order</Text>
-              )}
-            </TouchableOpacity>
+              loading={selectingProvider !== null}
+              disabled={!paymentMethod}
+            />
           </View>
         </View>
       </Modal>
@@ -252,6 +251,14 @@ function ProviderCard({
   onSelect: () => void;
 }) {
   const provider = acceptance.provider;
+  const name = provider?.business_name || provider?.full_name || 'Provider';
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
 
   return (
     <TouchableOpacity
@@ -263,17 +270,15 @@ function ProviderCard({
         {provider?.avatar_url ? (
           <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
         ) : (
-          <Feather name="user" size={20} color={PRIMARY} />
+          <Text style={styles.providerInitials}>{initials}</Text>
         )}
       </View>
       <View style={styles.providerInfo}>
-        <Text style={styles.providerName}>
-          {provider?.business_name || provider?.full_name || 'Provider'}
-        </Text>
+        <Text style={styles.providerName} numberOfLines={1}>{name}</Text>
         <View style={styles.ratingRow}>
           {acceptance.avgRating !== null ? (
             <>
-              <Feather name="star" size={12} color="#FBBF24" />
+              <Feather name="star" size={12} color={colors.amber} />
               <Text style={styles.ratingText}>
                 {acceptance.avgRating.toFixed(1)}
                 <Text style={styles.ratingCount}> ({acceptance.reviewCount})</Text>
@@ -285,154 +290,161 @@ function ProviderCard({
           {isExpress ? (
             <>
               <Text style={styles.ratingDot}>·</Text>
-              <Feather name="zap" size={12} color="#B45309" />
-              <Text style={styles.expressPriority}>
+              <Feather name="zap" size={12} color={colors.amberDark} />
+              <Text style={styles.expressText}>
                 {acceptance.avgDeliveryMinutes !== null
-                  ? `~${acceptance.avgDeliveryMinutes} mins · Express priority`
-                  : 'Express priority'}
+                  ? `~${acceptance.avgDeliveryMinutes} min · Express`
+                  : 'Express'}
               </Text>
             </>
           ) : (
             acceptance.avgDeliveryMinutes !== null && (
               <>
                 <Text style={styles.ratingDot}>·</Text>
-                <Feather name="clock" size={12} color="#9CA3AF" />
-                <Text style={styles.ratingCount}>~{acceptance.avgDeliveryMinutes} mins</Text>
+                <Feather name="clock" size={12} color={colors.textMuted} />
+                <Text style={styles.etaText}>~{acceptance.avgDeliveryMinutes} min</Text>
               </>
             )
           )}
         </View>
       </View>
-      <Text style={styles.providerPriceText}>
-        {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : '—'}
-      </Text>
+      <View style={styles.providerRight}>
+        <Text style={[styles.providerPrice, acceptance.provider_total <= 0 && styles.providerPriceMuted]}>
+          {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : '—'}
+        </Text>
+        {selected && (
+          <View style={styles.selectedCheck}>
+            <Feather name="check" size={12} color="#fff" />
+          </View>
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#16A34A';
 const H_PADDING = 20;
 
 const styles = StyleSheet.create({
-  // Section — shared shape with OrderTracking (kept in both intentionally)
-  section: { marginBottom: 16, zIndex: 1 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
+  // Section
+  section: { marginBottom: spacing.lg, zIndex: 1 },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: spacing.md,
   },
+  sectionTitle: { ...typography.sectionHeader, color: colors.text },
 
   // Sort dropdown
   sortDropdownBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: PRIMARY,
-    backgroundColor: '#F0FDF4',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
-  sortDropdownBtnText: { fontSize: 12, fontWeight: '600', color: PRIMARY },
+  sortDropdownBtnText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   sortDropdownMenu: {
     position: 'absolute',
-    top: 34,
+    top: 40,
     right: 0,
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 6,
+    borderColor: colors.cardBorder,
+    ...shadows.raised,
     zIndex: 100,
-    minWidth: 130,
+    minWidth: 150,
     overflow: 'hidden',
   },
   sortDropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  sortDropdownItemActive: { backgroundColor: '#F0FDF4' },
-  sortDropdownItemText: { fontSize: 13, fontWeight: '500', color: '#374151' },
-  sortDropdownItemTextActive: { color: PRIMARY, fontWeight: '600' },
+  sortDropdownItemActive: { backgroundColor: colors.primaryTint },
+  sortDropdownItemText: { fontSize: 14, fontWeight: '500', color: colors.textSecondary },
+  sortDropdownItemTextActive: { color: colors.primary, fontWeight: '600' },
 
-  // Provider acceptances
+  // Empty / waiting state
   emptyProviders: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.cardBorder,
+    ...shadows.card,
   },
-  emptyProvidersText: { fontSize: 13, color: '#6B7280' },
+  emptyProvidersText: { fontSize: 13, color: colors.textMuted },
+
+  // Provider card
   providerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.cardBorder,
+    ...shadows.card,
   },
   providerCardSelected: {
-    borderColor: PRIMARY,
-    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
   },
-
-  // Provider avatar/info — shared shape with OrderTracking (kept in both)
   providerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#DCFCE7',
+    width: 46,
+    height: 46,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerBg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
     overflow: 'hidden',
   },
-  avatarImage: { width: 40, height: 40, borderRadius: 20 },
+  avatarImage: { width: 46, height: 46, borderRadius: radii.pill },
+  providerInitials: { fontSize: 16, fontWeight: '700', color: colors.headerAccent },
   providerInfo: { flex: 1 },
-  providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  providerName: { ...typography.cardTitle, color: colors.text },
 
-  // Ratings
+  // Rating / ETA row
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3, flexWrap: 'wrap' },
-  ratingText: { fontSize: 12, fontWeight: '600', color: '#374151' },
-  ratingCount: { fontSize: 11, fontWeight: '400', color: '#9CA3AF' },
-  expressPriority: { fontSize: 11, fontWeight: '600', color: '#B45309' },
-  ratingNew: { fontSize: 12, color: '#9CA3AF' },
-  ratingDot: { fontSize: 12, color: '#D1D5DB' },
+  ratingText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  ratingCount: { fontSize: 11, fontWeight: '400', color: colors.textMuted },
+  ratingNew: { fontSize: 12, color: colors.textMuted },
+  ratingDot: { fontSize: 12, color: colors.border },
+  expressText: { fontSize: 11, fontWeight: '600', color: colors.amberDark },
+  etaText: { fontSize: 11, color: colors.textMuted },
 
-  // Price text (plain, not a button) — matches Find Provider
-  providerPriceText: { fontSize: 15, fontWeight: '700', color: PRIMARY, marginLeft: 12 },
-
-  // Select Provider button (below the providers list)
-  selectProviderButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
-    flexDirection: 'row',
+  // Price + selected check
+  providerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: spacing.sm },
+  providerPrice: { ...typography.price, color: colors.primary },
+  providerPriceMuted: { color: colors.textMuted },
+  selectedCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    marginTop: 4,
   },
-  selectProviderButtonDisabled: { opacity: 0.5 },
-  selectProviderText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Internal Select button (host screens without their own CTA)
+  selectButtonWrap: { marginTop: spacing.xs },
 
   // Payment modal
   paymentModalOverlay: {
@@ -441,59 +453,60 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   paymentModalCard: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
     paddingHorizontal: H_PADDING,
-    paddingTop: 18,
+    paddingTop: spacing.lg,
   },
   paymentModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
-  paymentModalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  paymentOptions: { gap: 10, marginBottom: 16 },
+  paymentModalTitle: { ...typography.sectionHeader, color: colors.text },
+  paymentCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentOptions: { gap: spacing.sm, marginBottom: spacing.lg },
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   paymentOptionSelected: {
-    borderColor: PRIMARY,
-    backgroundColor: '#F0FDF4',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
   },
   radio: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
-  radioSelected: { borderColor: PRIMARY },
+  radioSelected: { borderColor: colors.primary },
   radioDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
-    backgroundColor: PRIMARY,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
   },
-  paymentLabel: { fontSize: 14, fontWeight: '500', color: '#374151' },
-  paymentLabelSelected: { color: PRIMARY, fontWeight: '600' },
-
-  confirmOrderBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  confirmOrderBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  paymentIcon: { marginRight: spacing.sm },
+  paymentLabel: { fontSize: 14, fontWeight: '500', color: colors.textSecondary },
+  paymentLabelSelected: { color: colors.primary, fontWeight: '600' },
 });
