@@ -856,45 +856,50 @@ export default function FindStoreScreen() {
             )}
           </MapView>
 
-          {/* Top bar: close + hint */}
+          {/* Top bar: close + search placeholder */}
           <View style={[styles.pickerTopBar, { top: insets.top + 12 }]}>
             <TouchableOpacity
               style={styles.pickerCloseButton}
               onPress={cancelPicker}
               hitSlop={8}
             >
-              <Feather name="x" size={22} color="#111827" />
+              <Feather name="x" size={22} color={colors.text} />
             </TouchableOpacity>
-            <View style={styles.pickerHint}>
-              <Feather name="move" size={12} color="#6B7280" />
-              <Text style={styles.pickerHintText}>Tap the map or drag the pin</Text>
+            {/* TODO: wire location search — visual placeholder only for now */}
+            <View style={styles.pickerSearchBar}>
+              <Feather name="search" size={16} color={colors.textMuted} />
+              <Text style={styles.pickerSearchText}>Search location</Text>
             </View>
           </View>
 
-          {/* Bottom controls */}
-          <View style={[styles.pickerBottomBar, { paddingBottom: insets.bottom + 12 }]}>
+          {/* Bottom sheet */}
+          <View style={[styles.pickerBottomBar, { paddingBottom: insets.bottom + 16 }]}>
+            {/* Floating current-location button, anchored above the sheet */}
             <TouchableOpacity
-              style={styles.pickerUseLocation}
+              style={styles.pickerLocateBtn}
               onPress={handleUseLocation}
               disabled={locationLoading}
+              activeOpacity={0.8}
             >
               {locationLoading ? (
-                <ActivityIndicator size="small" color={PRIMARY} />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Feather name="navigation" size={16} color={PRIMARY} />
+                <Feather name="navigation" size={20} color={colors.primary} />
               )}
-              <Text style={styles.pickerUseLocationText}>
-                {locationLoading ? 'Getting location...' : 'Use Current Location'}
-              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.confirmButton, lat === null && styles.confirmButtonDisabled]}
+            <Text style={styles.pickerLabel}>Delivery location</Text>
+            <View style={styles.pickerAddressRow}>
+              <Feather name="map-pin" size={18} color={colors.primary} style={styles.pickerAddressIcon} />
+              <Text style={styles.pickerAddressText} numberOfLines={2}>
+                {address || 'Move the map to set your location'}
+              </Text>
+            </View>
+            <PrimaryButton
+              label="Confirm location"
               onPress={confirmPicker}
               disabled={lat === null}
-            >
-              <Text style={styles.confirmButtonText}>Confirm Location</Text>
-            </TouchableOpacity>
+            />
           </View>
         </View>
       </Modal>
@@ -1054,78 +1059,68 @@ const styles = StyleSheet.create({
     right: H_PADDING,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
   },
   pickerCloseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
+    ...shadows.raised,
   },
-  pickerHint: {
+  pickerSearchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
+    gap: spacing.sm,
+    height: 44,
+    backgroundColor: colors.card,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.lg,
+    ...shadows.card,
   },
-  pickerHintText: { fontSize: 12, color: '#6B7280' },
+  pickerSearchText: { fontSize: 14, color: colors.textMuted },
   pickerBottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     paddingHorizontal: H_PADDING,
-    paddingTop: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    gap: 10,
+    paddingTop: spacing.lg,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    gap: spacing.md,
+    ...shadows.nav,
   },
-  pickerUseLocation: {
-    flexDirection: 'row',
+  pickerLocateBtn: {
+    position: 'absolute',
+    top: -56,
+    right: H_PADDING,
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
+    ...shadows.raised,
   },
-  pickerUseLocationText: { fontSize: 14, fontWeight: '600', color: PRIMARY },
-  confirmButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  confirmButtonDisabled: { opacity: 0.6 },
-  confirmButtonText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  pickerLabel: { ...typography.label, color: colors.textMuted },
+  pickerAddressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  pickerAddressIcon: { marginTop: 1 },
+  pickerAddressText: { flex: 1, ...typography.body, color: colors.text },
   deliveryPin: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: PRIMARY,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 4,
+    ...shadows.raised,
   },
 
   // Helper note
