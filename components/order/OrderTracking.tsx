@@ -325,26 +325,11 @@ export default function OrderTracking({
                   <Text style={styles.providerBusiness}>LPG Provider</Text>
                 </View>
               </View>
-              {(order.status === 'in_transit' || order.status === 'awaiting_confirmation') && (
+              {order.status === 'in_transit' && selectedProvider?.provider_type === 'rider' && (
                 <View style={styles.providerActions}>
-                  {selectedProvider.phone ? (
-                    <TouchableOpacity style={styles.actionOutline} onPress={onCall} hitSlop={6} activeOpacity={0.7}>
-                      <Feather name="phone" size={18} color={colors.primary} />
-                    </TouchableOpacity>
-                  ) : null}
-                  <TouchableOpacity style={styles.actionPrimary} onPress={onChat} hitSlop={6} activeOpacity={0.7}>
-                    <Feather name="message-circle" size={18} color="#fff" />
-                    {unreadCount > 0 && (
-                      <View style={styles.chatBadge}>
-                        <Text style={styles.chatBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                      </View>
-                    )}
+                  <TouchableOpacity style={styles.actionOutline} onPress={onOpenMap} hitSlop={6} activeOpacity={0.7}>
+                    <Feather name="map-pin" size={18} color={colors.primary} />
                   </TouchableOpacity>
-                  {order.status === 'in_transit' && selectedProvider?.provider_type === 'rider' && (
-                    <TouchableOpacity style={styles.actionOutline} onPress={onOpenMap} hitSlop={6} activeOpacity={0.7}>
-                      <Feather name="map-pin" size={18} color={colors.primary} />
-                    </TouchableOpacity>
-                  )}
                 </View>
               )}
             </TouchableOpacity>
@@ -504,6 +489,13 @@ export default function OrderTracking({
                 providerName={selectedProvider?.full_name}
                 businessName={selectedProvider?.business_name ?? undefined}
                 deliveryAddress={order?.delivery_address}
+                avatarUrl={selectedProvider?.avatar_url}
+                isExpress={order.is_express}
+                onBack={onCloseMap}
+                onCall={onCall}
+                onChat={onChat}
+                // providerHeading: skipped — provider_locations only stores lat/lng (no heading/bearing).
+                // rating: skipped — OrderTracking has no provider avgRating (contact card shows "LPG Provider", not a score).
               />
             </View>
           </View>

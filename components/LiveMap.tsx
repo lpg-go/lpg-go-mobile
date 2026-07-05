@@ -1,9 +1,10 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 
 import { decodePolyline } from '../lib/decodePolyline';
+import { colors, radii, spacing, typography, shadows } from '../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,12 +20,18 @@ type RouteInfo = {
 type Props = {
   providerLocation: LatLng | null;
   customerLocation: LatLng | null;
-  /** Compass heading (degrees) from watchPositionAsync to rotate the truck icon */
+  /** Compass heading (degrees) from watchPositionAsync to rotate the rider icon */
   providerHeading?: number | null;
   /** Name shown in the bottom card (driver's name for customer view) */
   providerName?: string;
   businessName?: string;
   deliveryAddress?: string;
+  /** Provider rating shown in the drawer meta row when provided */
+  rating?: number | null;
+  /** Provider avatar; falls back to initials when absent */
+  avatarUrl?: string | null;
+  /** Express orders surface a bolt in the ETA pill */
+  isExpress?: boolean;
   onBack?: () => void;
   onChat?: () => void;
   onCall?: () => void;
@@ -32,7 +39,6 @@ type Props = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#16A34A';
 const DEFAULT_DELTA = 0.02;
 const ROUTE_INTERVAL_MS = 30_000;
 const GMAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '';
@@ -55,6 +61,9 @@ export default function LiveMap({
   providerName,
   businessName,
   deliveryAddress,
+  rating,
+  avatarUrl,
+  isExpress,
   onBack,
   onChat,
   onCall,
@@ -204,13 +213,11 @@ export default function LiveMap({
   if (!initialRegion) {
     return (
       <View style={styles.placeholder}>
-        <Feather name="map-pin" size={32} color="#D1D5DB" />
+        <Feather name="map-pin" size={32} color={colors.textFaint} />
         <Text style={styles.placeholderText}>Waiting for location...</Text>
       </View>
     );
   }
-
-  const providerTitle = route ? `Driver · ${route.distanceText} away` : 'Driver';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -235,10 +242,10 @@ export default function LiveMap({
         )}
         {/* Green route */}
         {route && route.coords.length > 0 && (
-          <Polyline coordinates={route.coords} strokeColor={PRIMARY} strokeWidth={6} />
+          <Polyline coordinates={route.coords} strokeColor={colors.primary} strokeWidth={6} />
         )}
 
-        {/* ── Driver marker ── green circle, rotates with heading */}
+        {/* ── Rider marker ── green rounded square, rotates with heading */}
         {providerLocation && (
           <Marker
             coordinate={{ latitude: providerLocation.lat, longitude: providerLocation.lng }}
@@ -248,19 +255,28 @@ export default function LiveMap({
             tracksViewChanges={false}
           >
             <View style={styles.driverMarker}>
-              <Feather name="truck" size={18} color="#fff" />
+              <MaterialCommunityIcons name="motorbike" size={20} color="#fff" />
             </View>
           </Marker>
         )}
 
-        {/* ── Destination marker ── green teardrop pin */}
+        {/* ── Destination marker ── green teardrop pin with pulsing ring */}
         {customerLocation && (
           <Marker
             coordinate={{ latitude: customerLocation.lat, longitude: customerLocation.lng }}
             anchor={{ x: 0.5, y: 1 }}
-            tracksViewChanges={false}
+            // Must track view changes so the Animated pulse ring actually renders
+            // (a static snapshot would freeze it). Cheap here — the pin is fixed.
+            tracksViewChanges={true}
           >
             <View style={styles.destPin}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.pulseRing,
+                  { transform: [{ scale: pulseScale }], opacity: pulseOpacity },
+                ]}
+              />
               <View style={styles.destPinHead}>
                 <View style={styles.destPinDot} />
               </View>
@@ -270,58 +286,90 @@ export default function LiveMap({
         )}
       </MapView>
 
+      {/* ── ETA pill ── top center */}
+      <View style={styles.etaPillWrap} pointerEvents="box-none">
+        {route && (
+          <View style={styles.etaPill}>
+            {isExpress && (
+              <Feather name="zap" size={14} color={colors.amberTint} style={styles.etaPillIcon} />
+            )}
+            <Text style={styles.etaPillText}>Arriving in ~{route.durationText}</Text>
+          </View>
+        )}
+      </View>
+
       {/* ── Back button ── top left */}
       {onBack && (
         <TouchableOpacity style={styles.backBtn} onPress={onBack} hitSlop={8} activeOpacity={0.85}>
-          <Feather name="chevron-left" size={24} color="#374151" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </TouchableOpacity>
       )}
 
       {/* ── Recenter button ── bottom right, above card */}
       <TouchableOpacity style={styles.recenterBtn} onPress={recenter} hitSlop={8} activeOpacity={0.85}>
-        <Feather name="crosshair" size={20} color="#374151" />
+        <Feather name="crosshair" size={20} color={colors.primary} />
       </TouchableOpacity>
 
-      {/* ── Bottom card ── */}
+      {/* ── Bottom drawer ── */}
       <View style={styles.card}>
-        {/* Drag handle */}
         <View style={styles.handle} />
 
-        {/* ETA row */}
-        <View style={styles.etaRow}>
-          <View style={styles.etaLeft}>
-            <Text style={styles.etaTitle}>{providerName ?? 'Driver'}</Text>
-            {deliveryAddress ? (
-              <Text style={styles.etaAddress} numberOfLines={1}>{deliveryAddress}</Text>
-            ) : null}
+        {/* Provider row */}
+        <View style={styles.providerRow}>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatar}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+              ) : (
+                <Text style={styles.avatarInitials}>{initials(providerName)}</Text>
+              )}
+            </View>
+            <View style={styles.onlineDot} />
           </View>
-          {route && (
-            <View style={styles.etaBadge}>
-              <Text style={styles.etaBadgeLabel}>ETA </Text>
-              <Text style={styles.etaBadgeTime}>{route.durationText}</Text>
+
+          <View style={styles.providerInfo}>
+            <Text style={styles.providerName} numberOfLines={1}>{providerName ?? 'Driver'}</Text>
+            <View style={styles.metaRow}>
+              {rating != null && (
+                <>
+                  <Feather name="star" size={12} color={colors.amber} />
+                  <Text style={styles.metaText}>{rating.toFixed(1)}</Text>
+                </>
+              )}
+              {route?.distanceText ? (
+                <Text style={styles.metaText}>
+                  {rating != null ? ' · ' : ''}{route.distanceText} away
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {(onCall || onChat) && (
+            <View style={styles.actionRow}>
+              {onCall && (
+                <TouchableOpacity style={styles.callBtn} onPress={onCall} activeOpacity={0.8}>
+                  <Feather name="phone" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              )}
+              {onChat && (
+                <TouchableOpacity style={styles.chatBtn} onPress={onChat} activeOpacity={0.8}>
+                  <Feather name="message-circle" size={18} color="#fff" />
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
 
-        <View style={styles.divider} />
-
-        {/* Action buttons */}
-        {(onCall || onChat) && (
-          <View style={styles.actionRow}>
-            {onCall && (
-              <TouchableOpacity style={[styles.actionBtn, styles.callBtn]} onPress={onCall} activeOpacity={0.8}>
-                <Feather name="phone" size={16} color="#fff" />
-                <Text style={[styles.actionBtnText, styles.callBtnText]}>Call</Text>
-              </TouchableOpacity>
-            )}
-            {onChat && (
-              <TouchableOpacity style={styles.actionBtn} onPress={onChat} activeOpacity={0.8}>
-                <Feather name="message-circle" size={16} color="#374151" />
-                <Text style={styles.actionBtnText}>Chat</Text>
-              </TouchableOpacity>
-            )}
+        {/* Delivering to strip */}
+        {deliveryAddress ? (
+          <View style={styles.addressStrip}>
+            <Feather name="map-pin" size={16} color={colors.primary} style={styles.addressIcon} />
+            <View style={styles.addressTextWrap}>
+              <Text style={styles.addressLabel}>Delivering to</Text>
+              <Text style={styles.addressText} numberOfLines={2}>{deliveryAddress}</Text>
+            </View>
           </View>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -338,46 +386,46 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: spacing.md,
     backgroundColor: '#F3F4F6',
   },
-  placeholderText: { fontSize: 14, color: '#9CA3AF' },
+  placeholderText: { fontSize: 14, color: colors.textMuted },
 
-  // ── Driver marker ────────────────────────────────────────────────────────
+  // ── Rider marker ─────────────────────────────────────────────────────────
   driverMarker: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#16A34A',
+    width: 36,
+    height: 36,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 6,
+    ...shadows.raised,
   },
 
   // ── Destination marker ───────────────────────────────────────────────────
   destPin: {
     alignItems: 'center',
   },
+  pulseRing: {
+    position: 'absolute',
+    top: 0,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primary,
+  },
   destPinHead: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#16A34A',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 6,
+    ...shadows.raised,
   },
   destPinDot: {
     width: 8,
@@ -393,9 +441,29 @@ const styles = StyleSheet.create({
     borderTopWidth: 10,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#16A34A',
+    borderTopColor: colors.primary,
     marginTop: -1,
   },
+
+  // ── ETA pill (top center) ────────────────────────────────────────────────
+  etaPillWrap: {
+    position: 'absolute',
+    top: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  etaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.headerBg,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    ...shadows.raised,
+  },
+  etaPillIcon: { marginRight: spacing.xs },
+  etaPillText: { fontSize: 13, fontWeight: '700', color: colors.headerText },
 
   // ── Back button ─────────────────────────────────────────────────────────
   backBtn: {
@@ -404,15 +472,11 @@ const styles = StyleSheet.create({
     left: 16,
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: '#fff',
+    borderRadius: radii.pill,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 5,
+    ...shadows.raised,
   },
 
   // ── Recenter button ──────────────────────────────────────────────────────
@@ -422,33 +486,25 @@ const styles = StyleSheet.create({
     bottom: CARD_APPROX_HEIGHT + 16,
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
+    borderRadius: radii.pill,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 5,
+    ...shadows.raised,
   },
 
-  // ── Bottom card ──────────────────────────────────────────────────────────
+  // ── Bottom drawer ────────────────────────────────────────────────────────
   card: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 16,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl,
+    ...shadows.nav,
   },
 
   // Drag handle
@@ -456,83 +512,79 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 16,
-  },
-
-  // ETA row
-  etaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 12,
-  },
-  etaLeft: { flex: 1 },
-  etaTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  etaAddress: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
-  etaBadge: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  etaBadgeLabel: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
-  etaBadgeTime: { fontSize: 14, fontWeight: '700', color: '#111827' },
-
-  divider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-    marginBottom: 16,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
   },
 
   // Provider row
   providerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
+  avatarWrap: { position: 'relative' },
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0FDF4',
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerBg,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#DCFCE7',
+    overflow: 'hidden',
   },
-  avatarText: { fontSize: 16, fontWeight: '700', color: PRIMARY },
+  avatarImg: { width: 48, height: 48, borderRadius: radii.pill },
+  avatarInitials: { fontSize: 16, fontWeight: '700', color: colors.headerAccent },
+  onlineDot: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 13,
+    height: 13,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.card,
+  },
   providerInfo: { flex: 1 },
-  providerName: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  businessName: { fontSize: 12, color: '#6B7280', marginBottom: 2 },
-  distanceText: { fontSize: 14, fontWeight: '700', color: '#374151' },
+  providerName: { ...typography.cardTitle, color: colors.text },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  metaText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
 
   // Action buttons
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  callBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#fff',
   },
-  actionBtnText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  callBtn: { backgroundColor: '#16A34A', borderColor: '#16A34A' },
-  callBtnText: { color: '#fff' },
+  chatBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Delivering-to strip
+  addressStrip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.bg,
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  addressIcon: { marginTop: 1 },
+  addressTextWrap: { flex: 1 },
+  addressLabel: { ...typography.label, color: colors.textMuted, marginBottom: 2 },
+  addressText: { ...typography.body, color: colors.text },
 });
