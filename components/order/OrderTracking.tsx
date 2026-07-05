@@ -1,7 +1,6 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  ActivityIndicator,
   Image,
   Modal,
   ScrollView,
@@ -15,8 +14,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DELIVERY_SPEED_OPTIONS, speedLabel } from '../../lib/reviewSpeed';
 import { SAFETY_ITEMS } from '../../lib/safety';
+import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import LiveMap from '../LiveMap';
 import SheetHeader from '../SheetHeader';
+import PrimaryButton from '../ui/PrimaryButton';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,8 @@ type Order = {
   eta_deadline: string | null;
   selected_provider_id: string | null;
   cancelled_by: string | null;
+  // Passed through by the parent screen; used only for the payment label.
+  payment_method?: string;
 };
 
 type OrderItem = {
@@ -150,43 +153,101 @@ export default function OrderTracking({
   const showSelectedProvider =
     order.selected_provider_id !== null && order.status !== 'cancelled';
 
+  // Timeline progress — how far the order has advanced.
+  //   pending / awaiting_dealer_selection → node 1
+  //   in_transit                          → nodes 1+2
+  //   awaiting_confirmation / delivered   → all nodes
+  const stageIndex =
+    order.status === 'in_transit'
+      ? 1
+      : order.status === 'awaiting_confirmation' || order.status === 'delivered'
+      ? 2
+      : 0;
+  const stages: { label: string; icon: keyof typeof Feather.glyphMap; time: string | null }[] = [
+    { label: 'Order confirmed', icon: 'check', time: placedAt },
+    { label: 'Rider on the way', icon: 'truck', time: null },
+    { label: 'Delivered', icon: 'package', time: null },
+  ];
+
+  const etaTime = order.eta_deadline
+    ? new Date(order.eta_deadline).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })
+    : null;
+
+  const providerLabel =
+    selectedProvider?.business_name || selectedProvider?.full_name || 'Provider';
+  const providerInitials = providerLabel
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+
+  const methodLabel = order.payment_method === 'card' ? 'Card' : 'Cash on delivery';
+
+  const bottomPad = order.status === 'awaiting_confirmation' ? 96 : 40;
+
   return (
     <>
-
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Status card */}
-        <View style={styles.statusCard}>
-          <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
-            <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>
-              {statusCfg.label}
-            </Text>
-          </View>
-          <Text style={styles.orderId}>Order #{shortId}</Text>
-          <Text style={styles.placedAt}>Placed {placedAt}</Text>
-          {order.is_express && (
-            <View style={styles.expressBadge}>
-              <Feather name="zap" size={11} color="#fff" />
-              <Text style={styles.expressBadgeText}>EXPRESS</Text>
+        {/* Status timeline */}
+        {order.status !== 'cancelled' && (
+          <View style={styles.trackCard}>
+            {order.is_express && etaTime && order.eta_minutes != null && (
+              <View style={styles.etaRow}>
+                <Feather name="zap" size={14} color={colors.amberDark} />
+                <Text style={styles.etaText}>
+                  Deliver by {etaTime} · ~{order.eta_minutes} min
+                </Text>
+              </View>
+            )}
+            {stages.map((stage, i) => {
+              const active = i <= stageIndex;
+              const isLast = i === stages.length - 1;
+              const connectorActive = i < stageIndex;
+              return (
+                <View key={stage.label} style={styles.timelineRow}>
+                  <View style={styles.timelineLeft}>
+                    <View style={[styles.node, active ? styles.nodeActive : styles.nodeFuture]}>
+                      <Feather name={stage.icon} size={14} color={active ? '#fff' : colors.textFaint} />
+                    </View>
+                    {!isLast && (
+                      <View
+                        style={[
+                          styles.connector,
+                          connectorActive ? styles.connectorActive : styles.connectorFuture,
+                        ]}
+                      />
+                    )}
+                  </View>
+                  <View style={styles.timelineText}>
+                    <Text style={[styles.timelineLabel, !active && styles.timelineLabelFuture]}>
+                      {stage.label}
+                    </Text>
+                    {active && stage.time ? (
+                      <Text style={styles.timelineTime}>{stage.time}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+            <View style={styles.trackAddressRow}>
+              <Feather name="map-pin" size={14} color={colors.textMuted} />
+              <Text style={styles.trackAddressText} numberOfLines={2}>
+                {order.delivery_address}
+              </Text>
             </View>
-          )}
-          {order.is_express && order.eta_deadline && order.eta_minutes != null && (
-            <Text style={styles.etaText}>
-              Express ETA: deliver by {new Date(order.eta_deadline).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} (~{order.eta_minutes} mins)
-            </Text>
-          )}
-          <View style={styles.addressRow}>
-            <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
           </View>
-        </View>
+        )}
 
         {/* System-expired order notice */}
         {order.status === 'cancelled' && order.cancelled_by === 'system' && (
           <View style={styles.expiredCard}>
-            <Feather name="clock" size={32} color="#DC2626" />
+            <Feather name="clock" size={32} color={colors.danger} />
             <Text style={styles.expiredTitle}>Order Expired</Text>
             <Text style={styles.expiredSubtitle}>
               Your order expired as no provider accepted it in time.
@@ -197,66 +258,55 @@ export default function OrderTracking({
           </View>
         )}
 
-        {/* Confirm delivery — shown prominently when provider has marked as delivered */}
+        {/* Confirm delivery — prompt card; the action button is pinned below */}
         {order.status === 'awaiting_confirmation' && (
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmCardTitle}>Your order has been delivered!</Text>
-
-            <TouchableOpacity
-              style={[styles.confirmBtn, confirming && { opacity: 0.6 }]}
-              onPress={onConfirmDelivery}
-              disabled={confirming}
-            >
-              {confirming ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.confirmBtnText}>Confirm Delivery</Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.confirmIconCircle}>
+              <Feather name="package" size={26} color={colors.primary} />
+            </View>
+            <Text style={styles.confirmCardTitle}>Order delivered?</Text>
+            <Text style={styles.confirmCardSubtitle}>
+              Tap confirm below once you&apos;ve received your order from the rider.
+            </Text>
           </View>
         )}
 
         {/* Safety check result — recorded by the rider before delivery */}
         {(order.status === 'awaiting_confirmation' || order.status === 'delivered') &&
-          safetyCheck != null && (
-            safetyCheck.passed ? (
-              <View style={styles.safetyCard}>
-                <View style={styles.safetyItemRow}>
-                  <Feather name="shield" size={18} color={PRIMARY} />
-                  <Text style={styles.safetyTitle}>Cylinder safety verified</Text>
-                </View>
-                <Text style={styles.safetySubtitle}>
-                  Your rider verified the following at handover:
-                </Text>
-                {SAFETY_ITEMS.map((label) => (
-                  <View key={label} style={styles.safetyItemRow}>
-                    <Feather name="check" size={14} color={PRIMARY} />
-                    <Text style={styles.safetyItemText}>{label}</Text>
+          safetyCheck != null &&
+          (safetyCheck.passed ? (
+            <View style={styles.safetyCard}>
+              <Text style={styles.safetyLabel}>Safety check passed</Text>
+              {SAFETY_ITEMS.map((label) => (
+                <View key={label} style={styles.safetyItemRow}>
+                  <View style={styles.safetyCheckCircle}>
+                    <Feather name="check" size={12} color="#fff" />
                   </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.safetyCardWarn}>
-                <View style={styles.safetyItemRow}>
-                  <Feather name="alert-triangle" size={18} color="#D97706" />
-                  <Text style={styles.safetyTitle}>LPG Provider reported an issue</Text>
+                  <Text style={styles.safetyItemText}>{label}</Text>
                 </View>
-                {safetyCheck.notes ? (
-                  <Text style={styles.safetyNotesText}>{safetyCheck.notes}</Text>
-                ) : null}
+              ))}
+            </View>
+          ) : (
+            <View style={styles.safetyCardWarn}>
+              <View style={styles.safetyItemRow}>
+                <Feather name="alert-triangle" size={18} color={colors.amberDark} />
+                <Text style={styles.safetyTitleWarn}>Provider reported an issue</Text>
               </View>
-            )
-          )}
+              {safetyCheck.notes ? (
+                <Text style={styles.safetyNotesText}>{safetyCheck.notes}</Text>
+              ) : null}
+            </View>
+          ))}
 
         {/* Provider acceptances (bidding) — owned by the parent screen */}
         {children}
 
-        {/* Selected provider */}
+        {/* Selected provider — contact card */}
         {showSelectedProvider && selectedProvider && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Provider</Text>
+            <Text style={styles.sectionLabel}>Your provider</Text>
             <TouchableOpacity
-              style={styles.selectedProviderCard}
+              style={styles.providerCard}
               activeOpacity={0.8}
               onPress={onOpenMap}
               disabled={order.status !== 'in_transit' || selectedProvider?.provider_type !== 'rider'}
@@ -265,43 +315,45 @@ export default function OrderTracking({
                 {selectedProvider.avatar_url ? (
                   <Image source={{ uri: selectedProvider.avatar_url }} style={styles.avatarImage} />
                 ) : (
-                  <Feather name="user" size={22} color={PRIMARY} />
+                  <Text style={styles.providerInitials}>{providerInitials}</Text>
                 )}
               </View>
               <View style={styles.providerInfo}>
-                <Text style={styles.providerName}>{selectedProvider.business_name || selectedProvider.full_name}</Text>
-                <Text style={styles.providerBusiness}>
-                  LPG Provider
-                </Text>
+                <Text style={styles.providerName}>{providerLabel}</Text>
+                <View style={styles.providerMetaRow}>
+                  <Feather name="shield" size={12} color={colors.primary} />
+                  <Text style={styles.providerBusiness}>LPG Provider</Text>
+                </View>
               </View>
               {(order.status === 'in_transit' || order.status === 'awaiting_confirmation') && (
-              <View style={styles.providerActions}>
-                {selectedProvider.phone ? (
-                  <TouchableOpacity style={styles.providerIconBtn} onPress={onCall} hitSlop={6} activeOpacity={0.7}>
-                    <Feather name="phone" size={22} color={PRIMARY} />
+                <View style={styles.providerActions}>
+                  {selectedProvider.phone ? (
+                    <TouchableOpacity style={styles.actionOutline} onPress={onCall} hitSlop={6} activeOpacity={0.7}>
+                      <Feather name="phone" size={18} color={colors.primary} />
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity style={styles.actionPrimary} onPress={onChat} hitSlop={6} activeOpacity={0.7}>
+                    <Feather name="message-circle" size={18} color="#fff" />
+                    {unreadCount > 0 && (
+                      <View style={styles.chatBadge}>
+                        <Text style={styles.chatBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity style={styles.providerIconBtn} onPress={onChat} hitSlop={6} activeOpacity={0.7}>
-                  <Feather name="message-circle" size={22} color={PRIMARY} />
-                  {unreadCount > 0 && (
-                    <View style={styles.chatBadge}>
-                      <Text style={styles.chatBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                    </View>
+                  {order.status === 'in_transit' && selectedProvider?.provider_type === 'rider' && (
+                    <TouchableOpacity style={styles.actionOutline} onPress={onOpenMap} hitSlop={6} activeOpacity={0.7}>
+                      <Feather name="map-pin" size={18} color={colors.primary} />
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
-                {order.status === 'in_transit' && selectedProvider?.provider_type === 'rider' && (
-                  <TouchableOpacity style={styles.providerIconBtn} onPress={onOpenMap} hitSlop={6} activeOpacity={0.7}>
-                    <Feather name="map-pin" size={22} color={PRIMARY} />
-                  </TouchableOpacity>
-                )}
-              </View>
+                </View>
               )}
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Order items */}
+        {/* Payment summary */}
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Payment · {methodLabel}</Text>
           <View style={styles.itemsCard}>
             {items.map((item, index) => (
               <View
@@ -321,55 +373,64 @@ export default function OrderTracking({
                 <Text style={styles.expressFeeValue}>+₱{Number(order.express_fee).toLocaleString()}</Text>
               </View>
             )}
-            <View style={styles.itemTotalRow}>
-              <Text style={styles.itemTotalLabel}>Total</Text>
-              <Text style={styles.itemTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
-            </View>
+          </View>
+          <View style={styles.totalPill}>
+            <Text style={styles.totalPillLabel}>Total to pay</Text>
+            <Text style={styles.totalPillValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
           </View>
         </View>
 
-        {/* Review card — shown after delivery */}
+        {/* Review — shown after delivery */}
         {order.status === 'delivered' && selectedProvider && (
-          <View style={styles.reviewCard}>
-            {reviewDone ? (
-              <View style={styles.reviewDoneWrap}>
-                <Feather name="check-circle" size={20} color={PRIMARY} />
-                <Text style={styles.reviewDoneTitle}>Thank you for your review!</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Feather key={s} name="star" size={16} color={s <= (existingRating ?? 0) ? '#FBBF24' : '#E5E7EB'} />
-                  ))}
-                </View>
-                {existingComment ? (
-                  <Text style={styles.reviewDoneComment}>"{existingComment}"</Text>
-                ) : null}
-                {speedLabel(existingSpeed) ? (
-                  <Text style={styles.reviewDoneSpeed}>
-                    Speed: {speedLabel(existingSpeed)}
-                  </Text>
-                ) : null}
+          reviewDone ? (
+            /* Already-reviewed — read-only thank-you summary */
+            <View style={styles.reviewDoneCard}>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <MaterialCommunityIcons
+                    key={s}
+                    name={s <= (existingRating ?? 0) ? 'star' : 'star-outline'}
+                    size={20}
+                    color={s <= (existingRating ?? 0) ? colors.amber : colors.border}
+                  />
+                ))}
               </View>
-            ) : (
-              <>
-                <Text style={styles.reviewTitle}>Rate your delivery</Text>
+              <Text style={styles.reviewDoneTitle}>Thanks for your review!</Text>
+              <Text style={styles.reviewDoneSub}>
+                Your feedback keeps providers at their best.
+              </Text>
+              {existingComment ? (
+                <Text style={styles.reviewDoneComment}>&quot;{existingComment}&quot;</Text>
+              ) : null}
+              {speedLabel(existingSpeed) ? (
+                <View style={styles.reviewSpeedPill}>
+                  <Text style={styles.reviewSpeedPillText}>
+                    Rated delivery: {speedLabel(existingSpeed)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <>
+              {/* 1. Star rating */}
+              <View style={[styles.reviewCard, styles.reviewCardCentered]}>
+                <Text style={styles.reviewCardLabel}>Rate your provider</Text>
                 <View style={styles.starsRow}>
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <TouchableOpacity key={s} onPress={() => onSetReviewRating(s)} hitSlop={6}>
-                      <Feather name="star" size={26} color={s <= reviewRating ? '#FBBF24' : '#E5E7EB'} />
+                    <TouchableOpacity key={s} onPress={() => onSetReviewRating(s)} hitSlop={6} activeOpacity={0.7}>
+                      <MaterialCommunityIcons
+                        name={s <= reviewRating ? 'star' : 'star-outline'}
+                        size={36}
+                        color={s <= reviewRating ? colors.amber : colors.border}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
-                <TextInput
-                  style={styles.reviewInput}
-                  placeholder="Share your experience (optional)"
-                  placeholderTextColor="#9CA3AF"
-                  value={reviewComment}
-                  onChangeText={onSetReviewComment}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-                <Text style={styles.speedHeading}>How was the delivery speed? (optional)</Text>
+              </View>
+
+              {/* 2. Delivery speed */}
+              <View style={styles.reviewCard}>
+                <Text style={styles.reviewCardLabel}>Delivery speed</Text>
                 <View style={styles.speedRow}>
                   {DELIVERY_SPEED_OPTIONS.map((opt) => {
                     const selected = reviewSpeed === opt.value;
@@ -387,23 +448,45 @@ export default function OrderTracking({
                     );
                   })}
                 </View>
-                <TouchableOpacity
-                  style={[styles.reviewSubmitBtn, submittingReview && { opacity: 0.6 }]}
+              </View>
+
+              {/* 3. Comment */}
+              <View style={styles.reviewCard}>
+                <Text style={styles.reviewCardLabel}>Add a comment (optional)</Text>
+                <TextInput
+                  style={styles.reviewInput}
+                  placeholder="Tell us about your experience…"
+                  placeholderTextColor={colors.textMuted}
+                  value={reviewComment}
+                  onChangeText={onSetReviewComment}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              {/* 4. Submit */}
+              <View style={styles.reviewSubmitWrap}>
+                <PrimaryButton
+                  label="Submit review"
                   onPress={onSubmitReview}
-                  disabled={submittingReview}
-                >
-                  {submittingReview
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.reviewSubmitText}>Submit Review</Text>}
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+                  loading={submittingReview}
+                />
+              </View>
+            </>
+          )
         )}
 
         {/* Cancel button — owned by the parent screen */}
         {cancelSlot}
       </ScrollView>
+
+      {/* Pinned confirm-delivery CTA */}
+      {order.status === 'awaiting_confirmation' && (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+          <PrimaryButton label="Confirm delivery" onPress={onConfirmDelivery} loading={confirming} />
+        </View>
+      )}
 
       {/* Map popup — bottom sheet, like the chat popup */}
       <Modal visible={mapVisible} transparent animationType="slide" onRequestClose={onCloseMap}>
@@ -432,176 +515,192 @@ export default function OrderTracking({
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#16A34A';
 const H_PADDING = 20;
 
 const styles = StyleSheet.create({
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
 
-  // Status card
-  statusCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
+  // Status timeline card
+  trackCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.cardBorder,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.card,
+  },
+  etaRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.amberTint,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
-  statusBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  statusBadgeText: { fontSize: 16, fontWeight: '700' },
-  orderId: { fontSize: 13, fontWeight: '400', color: '#6B7280', marginBottom: 2 },
-  placedAt: { fontSize: 12, color: '#9CA3AF', marginBottom: 10 },
+  etaText: { fontSize: 13, fontWeight: '700', color: colors.amberDark },
 
-  // Express badge — amber/orange priority pill (shared shape across screens)
-  expressBadge: {
-    flexDirection: 'row',
+  timelineRow: { flexDirection: 'row' },
+  timelineLeft: { alignItems: 'center', width: 28 },
+  node: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.pill,
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#F59E0B',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 10,
+    justifyContent: 'center',
   },
-  expressBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
-  // Express ETA — amber to match the EXPRESS badge
-  etaText: { fontSize: 13, fontWeight: '700', color: '#B45309', textAlign: 'center', marginBottom: 10 },
-  addressRow: {
+  nodeActive: { backgroundColor: colors.primary },
+  nodeFuture: { borderWidth: 2, borderColor: colors.border, backgroundColor: colors.card },
+  connector: { width: 2, height: 22 },
+  connectorActive: { backgroundColor: colors.primary },
+  connectorFuture: { backgroundColor: colors.border },
+  timelineText: { flex: 1, marginLeft: spacing.md, paddingTop: 4 },
+  timelineLabel: { ...typography.cardTitle, color: colors.text },
+  timelineLabelFuture: { color: colors.textFaint, fontWeight: '400' },
+  timelineTime: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+
+  trackAddressRow: {
     flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 8,
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
   },
-  addressText: { fontSize: 13, fontWeight: '700', color: '#6B7280', flex: 1, textAlign: 'center' },
+  trackAddressText: { flex: 1, ...typography.body, color: colors.textSecondary },
 
   // System-expired card
   expiredCard: {
-    backgroundColor: '#FFF1F2',
-    borderRadius: 12,
+    backgroundColor: colors.dangerTint,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#FECDD3',
-    padding: 16,
+    borderColor: colors.dangerBorder,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 8,
+    marginBottom: spacing.xxl,
+    gap: spacing.sm,
   },
-  expiredTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#DC2626',
-    marginTop: 4,
-  },
-  expiredSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  expiredTitle: { fontSize: 18, fontWeight: '700', color: colors.danger, marginTop: 4 },
+  expiredSubtitle: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   newOrderBtn: {
-    marginTop: 8,
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
-    paddingVertical: 12,
+    marginTop: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: 28,
   },
-  newOrderBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
-  },
+  newOrderBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
-  // Confirm delivery card
+  // Confirm delivery prompt card
   confirmCard: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#DCFCE7',
-    padding: 16,
-    marginBottom: 16,
+    borderColor: colors.cardBorder,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
+    ...shadows.card,
   },
-  confirmCardTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  confirmBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 32,
+  confirmIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
     alignItems: 'center',
-    width: '100%',
-    marginTop: 4,
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
-  confirmBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  confirmCardTitle: { fontSize: 17, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  confirmCardSubtitle: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 18 },
 
   // Safety check result
   safetyCard: {
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#DCFCE7',
-    padding: 16,
-    marginBottom: 16,
-    gap: 12,
+    borderColor: colors.cardBorder,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    ...shadows.card,
   },
-  safetyCardWarn: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: 16,
-    marginBottom: 16,
-    gap: 12,
-  },
-  safetyTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  safetySubtitle: { fontSize: 13, color: '#6B7280' },
-  safetyItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 2 },
-  safetyItemText: { fontSize: 14, color: '#374151' },
-  safetyNotesText: { fontSize: 14, color: '#374151' },
-
-  // Section
-  section: { marginBottom: 20, zIndex: 1 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
-
-  // Selected provider
-  selectedProviderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  providerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#DCFCE7',
+  safetyLabel: { ...typography.label, color: colors.primaryDark, marginBottom: spacing.xs },
+  safetyCheckCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+  },
+  safetyItemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: 2 },
+  safetyItemText: { fontSize: 14, color: colors.text },
+  safetyCardWarn: {
+    backgroundColor: colors.amberTint,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  safetyTitleWarn: { fontSize: 16, fontWeight: '700', color: colors.amberText },
+  safetyNotesText: { fontSize: 14, color: colors.text },
+
+  // Section
+  section: { marginBottom: spacing.lg, zIndex: 1 },
+  sectionLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
+
+  // Provider contact card
+  providerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    ...shadows.card,
+  },
+  providerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
     overflow: 'hidden',
   },
-  avatarImage: { width: 40, height: 40, borderRadius: 20 },
+  avatarImage: { width: 44, height: 44, borderRadius: radii.pill },
+  providerInitials: { fontSize: 16, fontWeight: '700', color: colors.headerAccent },
   providerInfo: { flex: 1 },
-  providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  providerBusiness: { fontSize: 12, color: '#6B7280', marginTop: 1 },
-  providerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  providerIconBtn: {
-    width: 36,
-    height: 36,
+  providerName: { ...typography.cardTitle, color: colors.text },
+  providerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  providerBusiness: { ...typography.caption, color: colors.textSecondary },
+  providerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  actionOutline: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.primaryTintBorder,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionPrimary: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -612,7 +711,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
@@ -621,98 +720,124 @@ const styles = StyleSheet.create({
   },
   chatBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
 
-  // Order items
+  // Order items / payment
   itemsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.cardBorder,
     overflow: 'hidden',
+    ...shadows.card,
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
   itemRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  itemName: { flex: 1, fontSize: 13, color: '#374151' },
-  itemQty: { fontSize: 13, color: '#9CA3AF', marginHorizontal: 12 },
-  itemSubtotal: { fontSize: 13, fontWeight: '600', color: '#111827', minWidth: 64, textAlign: 'right' },
+  itemName: { flex: 1, fontSize: 13, color: colors.text },
+  itemQty: { fontSize: 13, color: colors.textMuted, marginHorizontal: spacing.md },
+  itemSubtotal: { fontSize: 13, fontWeight: '600', color: colors.text, minWidth: 64, textAlign: 'right' },
   expressFeeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
-  expressFeeLabel: { fontSize: 13, color: '#B45309', fontWeight: '600' },
-  expressFeeValue: { fontSize: 13, fontWeight: '700', color: '#B45309' },
-  itemTotalRow: {
+  expressFeeLabel: { fontSize: 13, color: colors.amberDark, fontWeight: '600' },
+  expressFeeValue: { fontSize: 13, fontWeight: '700', color: colors.amberDark },
+
+  // Green total pill
+  totalPill: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: '#F9FAFB',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  itemTotalLabel: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  itemTotalValue: { fontSize: 14, fontWeight: '800', color: PRIMARY },
-
-  // Review card
-  reviewCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 14,
-    marginBottom: 16,
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: colors.primaryTint,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
   },
-  reviewTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  starsRow: { flexDirection: 'row', gap: 6 },
+  totalPillLabel: { fontSize: 14, fontWeight: '700', color: colors.primaryDark },
+  totalPillValue: { ...typography.price, color: colors.primaryDark },
+
+  // Pinned bottom bar
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: H_PADDING,
+    paddingTop: spacing.md,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+  },
+
+  // Review — input cards
+  reviewCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.md,
+    ...shadows.card,
+  },
+  reviewCardCentered: { alignItems: 'center' },
+  reviewCardLabel: { fontSize: 13, fontWeight: '600', color: colors.text },
+  starsRow: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'center' },
   reviewInput: {
     width: '100%',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#111827',
-    minHeight: 56,
+    backgroundColor: colors.bg,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontSize: 14,
+    color: colors.text,
+    minHeight: 80,
   },
-  reviewSubmitBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
-    paddingVertical: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  reviewSubmitText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  reviewDoneWrap: { alignItems: 'center', gap: 6 },
-  reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  reviewDoneComment: { fontSize: 12, color: '#6B7280', textAlign: 'center', fontStyle: 'italic' },
-  reviewDoneSpeed: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  reviewSubmitWrap: { marginBottom: spacing.lg },
 
-  // Delivery speed picker
-  speedHeading: { fontSize: 12, fontWeight: '600', color: '#374151', textAlign: 'center', marginTop: 2 },
-  speedRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  speedPill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#fff',
+  // Review — already-reviewed summary
+  reviewDoneCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.cardBorder,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
+    ...shadows.card,
   },
-  speedPillSelected: { backgroundColor: PRIMARY, borderColor: PRIMARY },
-  speedPillText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  reviewDoneTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  reviewDoneSub: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
+  reviewDoneComment: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic' },
+  reviewSpeedPill: {
+    backgroundColor: colors.primaryTintStrong,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  reviewSpeedPillText: { fontSize: 13, fontWeight: '600', color: colors.primaryDark },
+
+  // Delivery speed pills
+  speedRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  speedPill: {
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#F3F4F6',
+  },
+  speedPillSelected: { backgroundColor: colors.primary },
+  speedPillText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   speedPillTextSelected: { color: '#fff' },
 
   // Map popup — bottom sheet (matches ChatModal)

@@ -13,11 +13,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../../components/AppHeader';
 import ChatModal from '../../../components/ChatModal';
-import CustomerHeaderActions from '../../../components/CustomerHeaderActions';
 import OrderBidding from '../../../components/order/OrderBidding';
 import OrderTracking from '../../../components/order/OrderTracking';
+import StatusBadge from '../../../components/ui/StatusBadge';
+import { colors, radii, spacing, typography } from '../../../lib/theme';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
@@ -676,7 +676,22 @@ export default function OrderTrackingScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo right={<CustomerHeaderActions />} />
+      {/* Dark detail header with back button */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={8}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={20} color={colors.headerText} />
+        </TouchableOpacity>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Order #{shortId}</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>{statusCfg.label}</Text>
+        </View>
+        {order.is_express ? <StatusBadge label="Express" tone="express" /> : null}
+      </View>
 
       <OrderTracking
         order={order}
@@ -760,9 +775,32 @@ export default function OrderTrackingScreen() {
 const PRIMARY = '#16A34A';
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
+  screen: { flex: 1, backgroundColor: colors.bg },
   centered: { alignItems: 'center', justifyContent: 'center' },
   errorText: { fontSize: 15, color: '#6B7280' },
+
+  // Dark detail header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: { flex: 1 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.headerText },
+  headerSubtitle: { ...typography.caption, color: colors.headerSubtext, marginTop: 2 },
 
 
   // Scroll
