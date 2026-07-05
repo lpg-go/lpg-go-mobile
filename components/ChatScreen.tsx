@@ -1,10 +1,11 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,9 +16,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from './AppHeader';
-import SheetHeader from './SheetHeader';
 import { QUICK_REPLIES, type ChatRole } from '../lib/chatReplies';
+import { colors, radii, spacing, typography } from '../lib/theme';
 import supabase from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,14 +37,26 @@ type Props = {
   // Drives which set of pre-defined quick replies appears above the input.
   role: ChatRole;
   // Header close control. The sheet (<ChatModal>) closes the sheet; the
-  // full-screen route passes router.back(). Either way the header is the shared
-  // SheetHeader (name + Order # + X), so both presentations look identical.
+  // full-screen route passes router.back(). The header ALWAYS calls this prop —
+  // never a hardcoded router.back() — so both presentations behave correctly.
   onClose?: () => void;
+  // Optional contact details for the header. Rendered only when provided, so
+  // existing hosts don't need to pass them yet.
+  otherAvatarUrl?: string | null;
+  otherPhone?: string | null;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ChatScreen({ orderId, currentUserId, otherUserName, role, onClose }: Props) {
+export default function ChatScreen({
+  orderId,
+  currentUserId,
+  otherUserName,
+  role,
+  onClose,
+  otherAvatarUrl,
+  otherPhone,
+}: Props) {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,31 +155,65 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, role
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const initials = otherUserName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Header — shared SheetHeader (name + Order # + X) for both the sheet and
-          the full-screen route. AppHeader is kept only as an unused fallback. */}
-      {onClose ? (
-        <SheetHeader
-          title={otherUserName}
-          subtitle={`Order #${orderId.slice(-8).toUpperCase()}`}
-          onClose={onClose}
-        />
-      ) : (
-        <AppHeader
-          showBack
-          title={otherUserName}
-          subtitle={`Order #${orderId.slice(-8).toUpperCase()}`}
-        />
-      )}
+      {/* Header — dark green. Close ALWAYS calls the injected onClose prop
+          (sheet-close for <ChatModal>, router.back() for the full-screen route). */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerBtn}
+          onPress={() => onClose?.()}
+          hitSlop={8}
+          activeOpacity={0.7}
+        >
+          <Feather name="chevron-down" size={22} color={colors.headerText} />
+        </TouchableOpacity>
+
+        <View style={styles.headerAvatar}>
+          {otherAvatarUrl ? (
+            <Image source={{ uri: otherAvatarUrl }} style={styles.headerAvatarImg} />
+          ) : (
+            <Text style={styles.headerAvatarInitials}>{initials}</Text>
+          )}
+        </View>
+
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerName} numberOfLines={1}>{otherUserName}</Text>
+          <View style={styles.headerSubRow}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.headerSub} numberOfLines={1}>
+              Order #{orderId.slice(-8).toUpperCase()}
+            </Text>
+          </View>
+        </View>
+
+        {otherPhone ? (
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => Linking.openURL(`tel:${otherPhone}`)}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
+            <Feather name="phone" size={18} color={colors.headerText} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       {/* Messages */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={PRIMARY} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -179,7 +225,7 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, role
           onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Feather name="message-circle" size={40} color="#D1D5DB" />
+              <Feather name="message-circle" size={40} color={colors.textFaint} />
               <Text style={styles.emptyText}>No messages yet. Say hello!</Text>
             </View>
           }
@@ -214,7 +260,7 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, role
           value={text}
           onChangeText={setText}
           placeholder="Type a message..."
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
           multiline
           maxLength={500}
           returnKeyType="send"
@@ -239,20 +285,61 @@ export default function ChatScreen({ orderId, currentUserId, otherUserName, role
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#16A34A';
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: colors.bg },
 
+  // Header — dark green. Fixed top padding (NOT insets.top): the full-screen
+  // route already wraps ChatScreen with paddingTop:insets.top, and the sheet
+  // host needs no top inset.
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  headerAvatarImg: { width: 38, height: 38, borderRadius: radii.pill },
+  headerAvatarInitials: { fontSize: 15, fontWeight: '700', color: colors.headerText },
+  headerTextWrap: { flex: 1 },
+  headerName: { fontSize: 16, fontWeight: '700', color: colors.headerText },
+  headerSubRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerAccent,
+  },
+  headerSub: { ...typography.caption, color: colors.headerSubtext },
 
   // Loading
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Message list
   listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
     flexGrow: 1,
   },
   emptyState: {
@@ -260,47 +347,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 80,
-    gap: 12,
+    gap: spacing.md,
   },
-  emptyText: { fontSize: 14, color: '#9CA3AF' },
+  emptyText: { fontSize: 14, color: colors.textMuted },
 
   // Bubbles
   bubbleWrapper: { marginBottom: 6, maxWidth: '80%' },
   bubbleWrapperMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleWrapperOther: { alignSelf: 'flex-start', alignItems: 'flex-start' },
-  senderName: { fontSize: 11, color: '#9CA3AF', marginBottom: 3, marginLeft: 4 },
-  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
-  bubbleMine: { backgroundColor: PRIMARY, borderBottomRightRadius: 4 },
-  bubbleOther: { backgroundColor: '#E5E7EB', borderBottomLeftRadius: 4 },
+  senderName: { fontSize: 11, color: colors.textSecondary, marginBottom: 3, marginLeft: 4 },
+  bubble: { borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 9 },
+  bubbleMine: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
+  bubbleOther: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderBottomLeftRadius: 4,
+  },
   bubbleText: { fontSize: 14, lineHeight: 20 },
   bubbleTextMine: { color: '#fff' },
-  bubbleTextOther: { color: '#111827' },
-  timestamp: { fontSize: 10, color: '#9CA3AF', marginTop: 3 },
+  bubbleTextOther: { color: colors.text },
+  timestamp: { fontSize: 10, color: colors.textMuted, marginTop: 3 },
   timestampMine: { alignSelf: 'flex-end', marginRight: 2 },
   timestampOther: { alignSelf: 'flex-start', marginLeft: 2 },
 
   // Quick replies
   quickRepliesWrap: {
     flexGrow: 0,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.cardBorder,
   },
   quickReplies: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   quickReplyPill: {
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: colors.border,
   },
   quickReplyText: {
-    color: '#15803D',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -309,27 +401,29 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    backgroundColor: '#fff',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: colors.card,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.lg,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
     maxHeight: 100,
   },
   sendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: PRIMARY,
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
