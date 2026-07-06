@@ -169,7 +169,10 @@ export default function ProviderEarningsScreen() {
 
   return (
     <View style={styles.screen}>
-      <DetailHeader title="Earnings" onBack={() => router.back()} />
+      <DetailHeader
+        title="Earnings"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -186,8 +189,12 @@ export default function ProviderEarningsScreen() {
       >
         {/* Balance card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Available balance</Text>
-          <Text style={styles.balanceAmount}>{peso(balance)}</Text>
+          <View style={styles.balanceLeft}>
+            <Text style={styles.balanceLabel}>Available balance</Text>
+            <Text style={styles.balanceAmount}>
+              {balance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.topUpBtn}
             onPress={() => router.push('/(provider)/topup' as never)}
@@ -300,19 +307,22 @@ const styles = StyleSheet.create({
 
   // Balance card
   balanceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
     backgroundColor: colors.primary,
     borderRadius: radii.lg,
     padding: spacing.xl,
     marginBottom: spacing.lg,
   },
+  balanceLeft: { flex: 1 },
   balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
   balanceAmount: { fontSize: 36, fontWeight: '800', color: '#fff', marginTop: 4 },
   topUpBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     gap: 6,
-    marginTop: spacing.lg,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
