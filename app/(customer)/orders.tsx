@@ -1,4 +1,5 @@
-import { router } from 'expo-router';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,8 +12,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../components/AppHeader';
-import CustomerHeaderActions from '../../components/CustomerHeaderActions';
+import FloatingPillNav from '../../components/ui/FloatingPillNav';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import supabase from '../../lib/supabase';
 
 type OrderStatus =
@@ -55,9 +57,13 @@ const H_PADDING = 20;
 
 export default function CustomerOrdersScreen() {
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<'active' | 'history'>(
+    params.tab === 'history' ? 'history' : 'active'
+  );
 
   useEffect(() => {
     fetchOrders().then(() => setLoading(false));
@@ -151,21 +157,39 @@ export default function CustomerOrdersScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
   const recentOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
+  const list = tab === 'active' ? activeOrders : recentOrders;
 
   return (
     <View style={styles.screen}>
-      <AppHeader
-        showLogo
-        right={<CustomerHeaderActions />}
-      />
+      {/* Dark header + segmented toggle */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <Text style={styles.headerTitle}>My Orders</Text>
+        <View style={styles.toggle}>
+          {(['active', 'history'] as const).map((t) => {
+            const on = tab === t;
+            return (
+              <TouchableOpacity
+                key={t}
+                style={[styles.segment, on && styles.segmentOn]}
+                onPress={() => setTab(t)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.segmentText, on ? styles.segmentTextOn : styles.segmentTextOff]}>
+                  {t === 'active' ? 'Active' : 'History'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       <ScrollView
         style={styles.scroll}
@@ -174,39 +198,40 @@ export default function CustomerOrdersScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={PRIMARY}
-            colors={[PRIMARY]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Active orders — always visible (ongoing deliveries) */}
-        {activeOrders.length === 0 ? (
-          <View style={styles.cardEmptyState}>
-            <Text style={styles.cardEmptyText}>No Active Orders</Text>
-          </View>
+        {list.length === 0 ? (
+          tab === 'active' ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No active orders</Text>
+              <TouchableOpacity
+                style={styles.browseButton}
+                onPress={() => router.replace('/(customer)')}
+              >
+                <Text style={styles.browseButtonText}>Browse brands</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No past orders yet</Text>
+            </View>
+          )
         ) : (
-          activeOrders.map((order) => <OrderCard key={order.id} order={order} />)
-        )}
-
-        {recentOrders.length > 0 && (
-          <>
-            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
-              Recent Orders
-            </Text>
-            {recentOrders.map((order) => <OrderCard key={order.id} order={order} />)}
-          </>
-        )}
-
-        {orders.length === 0 && (
-          <TouchableOpacity
-            style={styles.browseButton}
-            onPress={() => router.replace('/(customer)')}
-          >
-            <Text style={styles.browseButtonText}>Browse Brands</Text>
-          </TouchableOpacity>
+          list.map((order) => <OrderCard key={order.id} order={order} />)
         )}
       </ScrollView>
+
+      <FloatingPillNav
+        active="orders"
+        onNavigate={(t) => {
+          if (t === 'home') router.replace('/(customer)');
+          else setTab('active');
+        }}
+      />
     </View>
   );
 }
@@ -214,6 +239,7 @@ export default function CustomerOrdersScreen() {
 function OrderCard({ order }: { order: OrderRow }) {
   const cfg = STATUS_CONFIG[order.status];
   const isActive = ACTIVE_STATUSES.includes(order.status);
+  const isCancelled = order.status === 'cancelled';
   const shortId = order.id.slice(-8).toUpperCase();
   const date = new Date(order.created_at).toLocaleString('en-PH', {
     month: 'short',
@@ -226,100 +252,200 @@ function OrderCard({ order }: { order: OrderRow }) {
       ? `${order.firstItemName} and ${order.extraCount} more`
       : order.firstItemName;
 
+  // PRESERVED EXACTLY — resume bidding for orders still finding a provider,
+  // otherwise open the order detail.
+  const onPress = () => {
+    if (order.status === 'awaiting_dealer_selection' && order.firstItemProductId) {
+      router.push({
+        pathname: '/(customer)/find-store/[productId]',
+        params: { productId: order.firstItemProductId, resumeOrderId: order.id },
+      });
+    } else {
+      router.push({ pathname: '/(customer)/order/[id]', params: { id: order.id } });
+    }
+  };
+
+  if (isActive) {
+    return (
+      <TouchableOpacity style={styles.activeCard} onPress={onPress} activeOpacity={0.85}>
+        <View style={styles.cardTop}>
+          <Text style={styles.activeMeta} numberOfLines={1}>#{shortId} · {date}</Text>
+          <View style={styles.activeBadge}>
+            <Text style={styles.activeBadgeText}>{cfg.label}</Text>
+          </View>
+        </View>
+        <View style={styles.cardMid}>
+          <View style={styles.activeIconSquare}>
+            <MaterialCommunityIcons name="gas-cylinder" size={22} color="#fff" />
+          </View>
+          <View style={styles.cardMidText}>
+            <Text style={styles.activeProduct} numberOfLines={1}>{itemSummary}</Text>
+            <View style={styles.addressRow}>
+              <Feather name="map-pin" size={12} color="rgba(255,255,255,0.75)" />
+              <Text style={styles.activeAddress} numberOfLines={1}>{order.delivery_address}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.activeBottom}>
+          <Text style={styles.activeTotalLabel}>Total</Text>
+          <Text style={styles.activeTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <TouchableOpacity
-      style={[styles.card, isActive && styles.activeCard]}
-      onPress={() => {
-        if (order.status === 'awaiting_dealer_selection' && order.firstItemProductId) {
-          // Resume the bidding view for an order still finding a provider
-          router.push({
-            pathname: '/(customer)/find-store/[productId]',
-            params: { productId: order.firstItemProductId, resumeOrderId: order.id },
-          });
-        } else {
-          router.push({ pathname: '/(customer)/order/[id]', params: { id: order.id } });
-        }
-      }}
+      style={[styles.historyCard, isCancelled && styles.historyCardDim]}
+      onPress={onPress}
       activeOpacity={0.7}
     >
       <View style={styles.cardTop}>
-        <Text style={[styles.itemSummary, isActive && styles.activeText]} numberOfLines={1}>{itemSummary}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-          <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+        <Text style={styles.historyMeta} numberOfLines={1}>#{shortId} · {date}</Text>
+        <StatusBadge label={cfg.label} tone={isCancelled ? 'danger' : 'success'} />
+      </View>
+      <View style={styles.cardMid}>
+        <View style={styles.historyIconSquare}>
+          <MaterialCommunityIcons name="gas-cylinder" size={22} color={colors.primary} />
+        </View>
+        <View style={styles.cardMidText}>
+          <Text style={styles.historyProduct} numberOfLines={1}>{itemSummary}</Text>
+          <View style={styles.addressRow}>
+            <Feather name="map-pin" size={12} color={colors.textMuted} />
+            <Text style={styles.historyAddress} numberOfLines={1}>{order.delivery_address}</Text>
+          </View>
         </View>
       </View>
-
-      <View style={styles.cardBottom}>
-        <Text style={[styles.address, isActive && styles.activeAddress]} numberOfLines={1}>{order.delivery_address}</Text>
-        <Text style={[styles.amount, isActive && styles.activeText]}>₱{Number(order.total_amount).toLocaleString()}</Text>
+      <View style={styles.historyBottom}>
+        <Text style={styles.historyTotalLabel}>Total</Text>
+        <Text style={styles.historyTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-const PRIMARY = '#16A34A';
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
+  screen: { flex: 1, backgroundColor: colors.bg },
   centered: { alignItems: 'center', justifyContent: 'center' },
 
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },
-
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
-  sectionTitleSpaced: { marginTop: 18 },
-
-  cardEmptyState: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 24,
+  // Dark header + toggle
+  header: {
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  headerTitle: { ...typography.title, color: colors.headerText, marginBottom: spacing.md },
+  toggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: radii.md,
+    padding: 4,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.sm,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  cardEmptyText: { fontSize: 13, color: '#9CA3AF' },
+  segmentOn: { backgroundColor: colors.card },
+  segmentText: { fontSize: 14, fontWeight: '600' },
+  segmentTextOn: { color: colors.headerBg },
+  segmentTextOff: { color: colors.headerSubtext },
 
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, paddingBottom: 100 },
+
+  // Empty state
+  emptyState: { paddingVertical: 48, alignItems: 'center', gap: spacing.md },
+  emptyTitle: { fontSize: 14, color: colors.textMuted },
+  browseButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
   },
-  activeCard: {
-    backgroundColor: PRIMARY,
-    borderColor: PRIMARY,
-  },
-  activeText: { color: '#fff' },
-  activeAddress: { color: 'rgba(255,255,255,0.85)' },
+  browseButtonText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+
+  // Shared card layout
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
-    gap: 8,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
-  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
-  statusText: { fontSize: 11, fontWeight: '600' },
-  itemSummary: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
-  cardBottom: {
+  cardMid: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+  cardMidText: { flex: 1 },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+
+  // Active card (solid green)
+  activeCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  activeMeta: { flex: 1, fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.75)' },
+  activeBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    flexShrink: 0,
+  },
+  activeBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+  activeIconSquare: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.sm,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeProduct: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  activeAddress: { flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.85)' },
+  activeBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+    paddingTop: spacing.md,
   },
-  address: { fontSize: 12, color: '#6B7280', flex: 1 },
-  amount: { fontSize: 13, fontWeight: '700', color: '#111827', flexShrink: 0 },
+  activeTotalLabel: { fontSize: 13, color: 'rgba(255,255,255,0.85)' },
+  activeTotalValue: { fontSize: 15, fontWeight: '800', color: '#fff' },
 
-  browseButton: {
-    alignSelf: 'center',
-    marginTop: 16,
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 24,
+  // History card (white)
+  historyCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    ...shadows.card,
   },
-  browseButtonText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  historyCardDim: { opacity: 0.85 },
+  historyMeta: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  historyIconSquare: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyProduct: { ...typography.cardTitle, color: colors.text },
+  historyAddress: { flex: 1, fontSize: 12, color: colors.textMuted },
+  historyBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+    paddingTop: spacing.md,
+  },
+  historyTotalLabel: { fontSize: 13, color: colors.textSecondary },
+  historyTotalValue: { fontSize: 15, fontWeight: '800', color: colors.text },
 });

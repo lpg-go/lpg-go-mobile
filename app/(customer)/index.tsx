@@ -229,8 +229,6 @@ export default function CustomerHomeScreen() {
         active="home"
         onNavigate={(tab) => {
           if (tab === 'orders') router.push('/(customer)/orders');
-          // TODO: History screen not built yet — routes to Orders for now
-          else if (tab === 'history') router.push('/(customer)/orders');
           // home → already here
         }}
       />

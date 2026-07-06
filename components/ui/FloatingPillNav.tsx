@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, shadows } from '../../lib/theme';
 
-type Tab = 'home' | 'orders' | 'history';
+type Tab = 'home' | 'orders';
 
 type Props = {
   active: Tab;
@@ -12,7 +12,6 @@ type Props = {
 const TABS: { key: Tab; label: string; icon: keyof typeof Feather.glyphMap }[] = [
   { key: 'home', label: 'Home', icon: 'home' },
   { key: 'orders', label: 'Orders', icon: 'package' },
-  { key: 'history', label: 'History', icon: 'clock' },
 ];
 
 export default function FloatingPillNav({ active, onNavigate }: Props) {
