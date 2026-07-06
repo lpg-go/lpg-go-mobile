@@ -1,29 +1,30 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, shadows } from '../../lib/theme';
-import { useActiveOrderCount } from '../../lib/useActiveOrderCount';
 
-type Tab = 'home' | 'orders';
-
-type Props = {
-  active: Tab;
-  onNavigate: (tab: Tab) => void;
+export type TabConfig = {
+  key: string;
+  label: string;
+  icon: string;
+  iconLib?: 'feather' | 'material';
+  badgeCount?: number;
 };
 
-const TABS: { key: Tab; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { key: 'home', label: 'Home', icon: 'home' },
-  { key: 'orders', label: 'Orders', icon: 'package' },
-];
+type Props = {
+  tabs: TabConfig[];
+  activeKey: string;
+  onNavigate: (key: string) => void;
+};
 
-export default function FloatingPillNav({ active, onNavigate }: Props) {
-  const activeOrderCount = useActiveOrderCount();
-
+export default function FloatingPillNav({ tabs, activeKey, onNavigate }: Props) {
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
       <View style={styles.pill}>
-        {TABS.map((tab) => {
-          const isActive = tab.key === active;
-          const showBadge = tab.key === 'orders' && activeOrderCount > 0;
+        {tabs.map((tab) => {
+          const isActive = tab.key === activeKey;
+          const badgeCount = tab.badgeCount ?? 0;
+          const showBadge = badgeCount > 0;
+          const iconColor = isActive ? colors.headerText : colors.textMuted;
           return (
             <TouchableOpacity
               key={tab.key}
@@ -32,15 +33,23 @@ export default function FloatingPillNav({ active, onNavigate }: Props) {
               activeOpacity={0.8}
             >
               <View style={styles.iconWrap}>
-                <Feather
-                  name={tab.icon}
-                  size={20}
-                  color={isActive ? colors.headerText : colors.textMuted}
-                />
+                {tab.iconLib === 'material' ? (
+                  <MaterialCommunityIcons
+                    name={tab.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                    size={20}
+                    color={iconColor}
+                  />
+                ) : (
+                  <Feather
+                    name={tab.icon as keyof typeof Feather.glyphMap}
+                    size={20}
+                    color={iconColor}
+                  />
+                )}
                 {showBadge && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
-                      {activeOrderCount > 9 ? '9+' : activeOrderCount}
+                      {badgeCount > 9 ? '9+' : badgeCount}
                     </Text>
                   </View>
                 )}

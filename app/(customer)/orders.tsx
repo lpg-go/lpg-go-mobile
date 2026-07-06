@@ -17,6 +17,7 @@ import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { colors, radii, spacing, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
+import { useActiveOrderCount } from '../../lib/useActiveOrderCount';
 
 type OrderStatus =
   | 'pending'
@@ -59,6 +60,7 @@ const H_PADDING = 20;
 export default function CustomerOrdersScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
+  const activeOrderCount = useActiveOrderCount();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -227,7 +229,11 @@ export default function CustomerOrdersScreen() {
       </ScrollView>
 
       <FloatingPillNav
-        active="orders"
+        tabs={[
+          { key: 'home', label: 'Home', icon: 'home' },
+          { key: 'orders', label: 'Orders', icon: 'package', badgeCount: activeOrderCount },
+        ]}
+        activeKey="orders"
         onNavigate={(t) => {
           if (t === 'home') router.replace('/(customer)');
           else setTab('active');

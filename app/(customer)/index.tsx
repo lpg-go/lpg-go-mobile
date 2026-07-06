@@ -20,6 +20,7 @@ import BrandCard from '../../components/ui/BrandCard';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import { colors, spacing, radii, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
+import { useActiveOrderCount } from '../../lib/useActiveOrderCount';
 
 type Brand = {
   id: string;
@@ -65,6 +66,7 @@ export default function CustomerHomeScreen() {
   const { width } = useWindowDimensions();
   const { fullName, avatarUrl } = useProfileHeader();
   const { unreadCount } = useNotifications();
+  const activeOrderCount = useActiveOrderCount();
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState('');
@@ -229,7 +231,11 @@ export default function CustomerHomeScreen() {
 
       {/* Floating bottom nav */}
       <FloatingPillNav
-        active="home"
+        tabs={[
+          { key: 'home', label: 'Home', icon: 'home' },
+          { key: 'orders', label: 'Orders', icon: 'package', badgeCount: activeOrderCount },
+        ]}
+        activeKey="home"
         onNavigate={(tab) => {
           if (tab === 'orders') router.push('/(customer)/orders');
           // home → already here
