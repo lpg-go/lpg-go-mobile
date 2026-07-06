@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Card from '../../components/ui/Card';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
+import { colors, radii, spacing, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
 
 type OrderStatus =
@@ -295,10 +296,9 @@ function OrderCard({ order }: { order: OrderRow }) {
   }
 
   return (
-    <TouchableOpacity
-      style={[styles.historyCard, isCancelled && styles.historyCardDim]}
+    <Card
       onPress={onPress}
-      activeOpacity={0.7}
+      style={[styles.historyCard, isCancelled && styles.historyCardDim]}
     >
       <View style={styles.cardTop}>
         <Text style={styles.historyMeta} numberOfLines={1}>#{shortId} · {date}</Text>
@@ -320,7 +320,7 @@ function OrderCard({ order }: { order: OrderRow }) {
         <Text style={styles.historyTotalLabel}>Total</Text>
         <Text style={styles.historyTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
       </View>
-    </TouchableOpacity>
+    </Card>
   );
 }
 
@@ -418,13 +418,8 @@ const styles = StyleSheet.create({
 
   // History card (white)
   historyCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    ...shadows.card,
   },
   historyCardDim: { opacity: 0.85 },
   historyMeta: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textMuted },

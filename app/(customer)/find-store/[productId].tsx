@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import OrderBidding from '../../../components/order/OrderBidding';
 import PrimaryButton from '../../../components/ui/PrimaryButton';
+import Card from '../../../components/ui/Card';
 import DetailHeader from '../../../components/ui/DetailHeader';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { colors, radii, spacing, typography, shadows } from '../../../lib/theme';
@@ -639,7 +640,7 @@ export default function FindStoreScreen() {
             {/* Delivery address */}
             <View style={styles.section}>
               <Text style={styles.label}>Delivery Address</Text>
-              <View style={styles.addressCard}>
+              <Card style={styles.addressCard}>
                 <Feather name="map-pin" size={18} color={colors.primary} style={styles.addressIcon} />
                 <TextInput
                   style={styles.addressInput}
@@ -665,13 +666,13 @@ export default function FindStoreScreen() {
                     <Feather name="map-pin" size={18} color={colors.headerText} />
                   </TouchableOpacity>
                 )}
-              </View>
+              </Card>
               {locationError ? <Text style={styles.fieldError}>{locationError}</Text> : null}
             </View>
 
             {/* Product summary + quantity */}
             <View style={styles.section}>
-              <View style={styles.card}>
+              <Card style={styles.card}>
                 <View style={styles.productInfo}>
                   <Text style={styles.productName} numberOfLines={1}>{displayName}</Text>
                   <Text style={styles.productPrice}>Est. ₱{totalAmount.toLocaleString()}</Text>
@@ -695,7 +696,7 @@ export default function FindStoreScreen() {
                     <Feather name="plus" size={18} color={colors.headerText} />
                   </TouchableOpacity>
                 </View>
-              </View>
+              </Card>
               <Text style={styles.estimateNote}>
                 Final price depends on the provider you choose.
               </Text>
@@ -728,7 +729,7 @@ export default function FindStoreScreen() {
           </>
         ) : (
           /* Bidding — collapsed read-only summary of the placed order */
-          <View style={styles.summaryCard}>
+          <Card style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Feather name="map-pin" size={15} color={colors.textMuted} style={styles.summaryIcon} />
               <Text style={styles.summaryText} numberOfLines={1}>{address || 'No address'}</Text>
@@ -743,7 +744,7 @@ export default function FindStoreScreen() {
                 <Text style={[styles.summaryText, { color: colors.amberText }]}>Express delivery</Text>
               </View>
             )}
-          </View>
+          </Card>
         )}
 
         {/* Bidding content — provider acceptances (shared component) */}
@@ -920,12 +921,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
     padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    ...shadows.card,
   },
   productInfo: { flex: 1 },
   productName: { ...typography.cardTitle, color: colors.text },
@@ -972,13 +968,8 @@ const styles = StyleSheet.create({
   addressCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    ...shadows.card,
   },
   addressIcon: { marginTop: 3, marginRight: spacing.sm },
   addressInput: {
@@ -1001,14 +992,9 @@ const styles = StyleSheet.create({
 
   // Bidding read-only summary card
   summaryCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
     padding: spacing.lg,
     gap: spacing.sm,
     marginBottom: spacing.lg,
-    ...shadows.card,
   },
   summaryRow: { flexDirection: 'row', alignItems: 'center' },
   summaryIcon: { marginRight: spacing.sm },

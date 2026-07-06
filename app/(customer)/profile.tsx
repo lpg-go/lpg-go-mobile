@@ -18,7 +18,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import PrimaryButton from '../../components/ui/PrimaryButton';
-import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
+import Card from '../../components/ui/Card';
+import { colors, radii, spacing, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -236,7 +237,7 @@ export default function CustomerProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Personal Information card */}
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.cardLabel}>Personal Information</Text>
 
           {/* Full Name — editable */}
@@ -282,7 +283,7 @@ export default function CustomerProfileScreen() {
               <Text style={styles.rowValueMuted}>{memberSince}</Text>
             </View>
           </View>
-        </View>
+        </Card>
 
         {/* Save / Cancel — only while editing */}
         {editing && (
@@ -297,7 +298,7 @@ export default function CustomerProfileScreen() {
         )}
 
         {/* Support / legal */}
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <TouchableOpacity
             style={styles.linkRow}
             // TODO: replace with real support destination (email/URL) before launch
@@ -321,7 +322,7 @@ export default function CustomerProfileScreen() {
             <Text style={styles.linkLabel}>Terms & privacy</Text>
             <Feather name="chevron-right" size={18} color={colors.textFaint} />
           </TouchableOpacity>
-        </View>
+        </Card>
 
         {/* Sign out */}
         <TouchableOpacity style={styles.signOutCard} onPress={confirmSignOut} activeOpacity={0.8}>
@@ -402,12 +403,7 @@ const styles = StyleSheet.create({
 
   // Personal Information card
   card: {
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
     paddingVertical: spacing.sm,
-    ...shadows.card,
   },
   cardLabel: {
     ...typography.label,
