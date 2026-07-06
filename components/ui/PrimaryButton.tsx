@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { colors, radii, typography } from '../../lib/theme';
 
-type Variant = 'primary' | 'outline' | 'danger';
+type Variant = 'primary' | 'outline' | 'danger' | 'onDark';
 
 type Props = {
   label: string;
@@ -30,6 +30,7 @@ export default function PrimaryButton({
     variant === 'primary' && styles.primary,
     variant === 'outline' && styles.outline,
     variant === 'danger' && styles.danger,
+    variant === 'onDark' && styles.onDark,
     isDisabled && styles.disabled,
   ];
 
@@ -38,9 +39,13 @@ export default function PrimaryButton({
     variant === 'primary' && styles.labelPrimary,
     variant === 'outline' && styles.labelOutline,
     variant === 'danger' && styles.labelDanger,
+    variant === 'onDark' && styles.labelOnDark,
   ];
 
-  const spinnerColor = variant === 'primary' ? colors.headerText : colors.primary;
+  const spinnerColor =
+    variant === 'primary' ? colors.headerText
+    : variant === 'onDark' ? colors.headerBg
+    : colors.primary;
 
   return (
     <TouchableOpacity
@@ -79,6 +84,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderColor: colors.danger,
   },
+  // Inverted for dark backgrounds: white surface, dark-green label.
+  onDark: {
+    backgroundColor: colors.card,
+  },
   disabled: {
     opacity: 0.5,
   },
@@ -93,5 +102,8 @@ const styles = StyleSheet.create({
   },
   labelDanger: {
     color: colors.danger,
+  },
+  labelOnDark: {
+    color: colors.headerBg,
   },
 });

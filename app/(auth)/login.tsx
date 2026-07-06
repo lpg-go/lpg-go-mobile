@@ -1,8 +1,8 @@
+import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { registerForPushNotificationsAsync } from '../../lib/notifications';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -13,14 +13,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import PrimaryButton from '../../components/ui/PrimaryButton';
 import { formatPhoneAsEmail } from '../../lib/auth';
 import supabase from '../../lib/supabase';
+import { colors, radii, spacing } from '../../lib/theme';
 import { useAppLogo } from '../../lib/useAppLogo';
 
-
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const { logoUrl } = useAppLogo();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -68,192 +70,179 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.flex}>
+    <View style={styles.screen}>
+      {/* Decorative depth circles (behind content) */}
+      <View style={styles.circleTop} pointerEvents="none" />
+      <View style={styles.circleLeft} pointerEvents="none" />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-      >
-        {logoUrl ? (
-          <Image
-            source={{ uri: logoUrl }}
-            style={styles.logoDynamic}
-            resizeMode="contain"
-          />
-        ) : (
-          <Image
-            source={require('../../assets/images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        )}
-
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>Sign in to your LPG Go account.</Text>
-
-        <Text style={styles.label}>Phone number</Text>
-        <View style={styles.phoneRow}>
-          <Text style={styles.prefix}>🇵🇭 +63</Text>
-          <TextInput
-            style={styles.phoneInput}
-            placeholder="9XX XXX XXXX"
-            placeholderTextColor="#9CA3AF"
-            keyboardType="number-pad"
-            maxLength={10}
-            value={phone}
-            onChangeText={handlePhoneChange}
-          />
-        </View>
-
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.passwordRow}>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="Enter your password"
-            placeholderTextColor="#9CA3AF"
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton}>
-            <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleSignIn}
-          disabled={loading}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
+          {/* HERO — brand-dominant top ~⅔; logo + heading centered vertically */}
+          <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
+            <View style={styles.logoBox}>
+              {logoUrl ? (
+                <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
+              ) : (
+                <Image source={require('../../assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+              )}
+            </View>
+            <Text style={styles.heading}>Welcome</Text>
+            <Text style={styles.headingAccent}>back 👋</Text>
+            <Text style={styles.subtitle}>Sign in to order LPG in minutes</Text>
+          </View>
 
-        <TouchableOpacity
-          style={styles.forgotRow}
-          onPress={() => router.push('/(auth)/forgot-password')}
-        >
-          <Text style={styles.forgotText}>Forgot Password?</Text>
-        </TouchableOpacity>
+          {/* FORM — compact bottom ~⅓ */}
+          <View style={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}>
+            <View style={styles.inputCard}>
+              <Text style={styles.prefix}>🇵🇭 +63</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="9XX XXX XXXX"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={10}
+                value={phone}
+                onChangeText={handlePhoneChange}
+              />
+            </View>
 
-        <TouchableOpacity
-          style={styles.linkRow}
-          onPress={() => router.push('/(auth)/register')}
-        >
-          <Text style={styles.linkText}>
-            Don't have an account?{' '}
-            <Text style={styles.linkBold}>Register</Text>
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+            <View style={styles.inputCard}>
+              <Feather name="lock" size={18} color={colors.primary} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton} hitSlop={8}>
+                <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {error ? (
+              <View style={styles.errorCard}>
+                <Feather name="alert-circle" size={14} color={colors.danger} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <PrimaryButton label="Sign In" onPress={handleSignIn} loading={loading} />
+
+            <View style={styles.bottomLinks}>
+              <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} hitSlop={6}>
+                <Text style={styles.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/(auth)/register')} hitSlop={6}>
+                <Text style={styles.createBold}>Create account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const PRIMARY = '#16A34A';
-
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: {
-    flexGrow: 1,
+  screen: { flex: 1, backgroundColor: colors.headerBg, overflow: 'hidden' },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+
+  // Decorative circles
+  circleTop: {
+    position: 'absolute',
+    top: -60,
+    right: -50,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(22,163,74,0.25)',
+  },
+  circleLeft: {
+    position: 'absolute',
+    top: 300,
+    left: -60,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(74,222,128,0.12)',
+  },
+
+  // HERO — flex:1 pushes the form down and centers the brand block
+  hero: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.xl,
   },
-  logo: {
-    width: 300,
-    height: 150,
-    alignSelf: 'center',
-    marginBottom: 24,
+  logoBox: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+    overflow: 'hidden',
   },
-  logoDynamic: {
-    width: 300,
-    height: 150,
-    alignSelf: 'center',
-    marginBottom: 24,
+  logo: { width: 50, height: 50 },
+  heading: { fontSize: 30, fontWeight: '800', color: colors.headerText, letterSpacing: -0.5, lineHeight: 34 },
+  headingAccent: { fontSize: 30, fontWeight: '800', color: colors.headerAccent, letterSpacing: -0.5, lineHeight: 34 },
+  subtitle: { fontSize: 14, color: colors.headerSubtext, marginTop: spacing.sm },
+
+  // FORM — compact light sheet rising over the green hero
+  form: {
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xxl,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 28,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 6,
-  },
-  phoneRow: {
+  inputCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
+    marginBottom: spacing.md,
   },
-  prefix: {
-    fontSize: 15,
-    color: '#111827',
-    marginRight: 8,
-  },
-  phoneInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    padding: 0,
-  },
-  passwordRow: {
+  prefix: { fontSize: 15, color: colors.textMuted },
+  input: { flex: 1, fontSize: 15, color: colors.text, padding: 0 },
+  eyeButton: { paddingLeft: spacing.sm },
+
+  forgotText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+
+  errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
+    gap: spacing.sm,
+    backgroundColor: colors.dangerTint,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
-  passwordInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    padding: 0,
-  },
-  eyeButton: { paddingLeft: 8 },
-  eyeText: { fontSize: 13, color: PRIMARY, fontWeight: '500' },
-  error: {
-    fontSize: 13,
-    color: '#EF4444',
-    marginBottom: 12,
-  },
-  button: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
+  errorText: { flex: 1, fontSize: 13, color: colors.danger },
+
+  bottomLinks: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  forgotRow: { alignItems: 'center', marginBottom: 20 },
-  forgotText: { fontSize: 14, color: PRIMARY, fontWeight: '500' },
-  linkRow: { alignItems: 'center' },
-  linkText: { fontSize: 14, color: '#6B7280' },
-  linkBold: { color: PRIMARY, fontWeight: '600' },
+  createBold: { fontSize: 14, color: colors.primary, fontWeight: '700' },
 });
