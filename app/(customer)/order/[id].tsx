@@ -92,18 +92,16 @@ const STATUS_CONFIG: Record<
   OrderStatus,
   { label: string; color: string; bg: string }
 > = {
-  pending:                   { label: 'Select Provider',   color: '#16A34A', bg: '#F0FDF4' },
-  awaiting_dealer_selection: { label: 'Finding Provider',  color: '#16A34A', bg: '#F0FDF4' },
-  in_transit:                { label: 'On the Way',       color: '#16A34A', bg: '#F0FDF4' },
-  awaiting_confirmation:     { label: 'Awaiting Confirmation', color: '#16A34A', bg: '#F0FDF4' },
-  delivered:                 { label: 'Delivered',         color: '#FFFFFF', bg: '#16A34A' },
-  cancelled:                 { label: 'Cancelled',         color: '#FFFFFF', bg: '#DC2626' },
+  pending:                   { label: 'Select Provider',   color: colors.primary, bg: colors.primaryTint },
+  awaiting_dealer_selection: { label: 'Finding Provider',  color: colors.primary, bg: colors.primaryTint },
+  in_transit:                { label: 'On the Way',       color: colors.primary, bg: colors.primaryTint },
+  awaiting_confirmation:     { label: 'Awaiting Confirmation', color: colors.primary, bg: colors.primaryTint },
+  delivered:                 { label: 'Delivered',         color: '#FFFFFF', bg: colors.primary },
+  cancelled:                 { label: 'Cancelled',         color: '#FFFFFF', bg: colors.danger },
 };
 
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
-
-const H_PADDING = 20;
 
 export default function OrderTrackingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -646,7 +644,7 @@ export default function OrderTrackingScreen() {
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -731,7 +729,7 @@ export default function OrderTrackingScreen() {
             disabled={cancelling}
           >
             {cancelling ? (
-              <ActivityIndicator size="small" color="#DC2626" />
+              <ActivityIndicator size="small" color={colors.danger} />
             ) : (
               <Text style={styles.cancelButtonText}>Cancel Order</Text>
             )}
@@ -772,12 +770,10 @@ export default function OrderTrackingScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#16A34A';
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  errorText: { fontSize: 15, color: '#6B7280' },
+  errorText: { fontSize: 15, color: colors.textSecondary },
 
   // Dark detail header
   header: {
@@ -805,16 +801,16 @@ const styles = StyleSheet.create({
 
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16 },
+  scrollContent: { paddingHorizontal: spacing.screenH, paddingTop: 16 },
 
   // Status card
   statusCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     alignItems: 'center',
   },
   statusBadge: {
@@ -824,21 +820,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statusBadgeText: { fontSize: 16, fontWeight: '700' },
-  orderId: { fontSize: 13, fontWeight: '400', color: '#6B7280', marginBottom: 2 },
-  placedAt: { fontSize: 12, color: '#9CA3AF', marginBottom: 10 },
+  orderId: { fontSize: 13, fontWeight: '400', color: colors.textSecondary, marginBottom: 2 },
+  placedAt: { fontSize: 12, color: colors.textMuted, marginBottom: 10 },
   addressRow: {
     flexDirection: 'row',
     gap: 6,
     paddingHorizontal: 8,
   },
-  addressText: { fontSize: 13, fontWeight: '700', color: '#6B7280', flex: 1, textAlign: 'center' },
+  addressText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, flex: 1, textAlign: 'center' },
 
   // System-expired card
   expiredCard: {
-    backgroundColor: '#FFF1F2',
+    backgroundColor: colors.dangerTint,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#FECDD3',
+    borderColor: colors.dangerBorder,
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
@@ -847,19 +843,19 @@ const styles = StyleSheet.create({
   expiredTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#DC2626',
+    color: colors.danger,
     marginTop: 4,
   },
   expiredSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   newOrderBtn: {
     marginTop: 8,
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
     paddingVertical: 12,
     paddingHorizontal: 28,
   },
@@ -871,10 +867,10 @@ const styles = StyleSheet.create({
 
   // Confirm delivery card
   confirmCard: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.primaryTint,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#DCFCE7',
+    borderColor: colors.primaryTintStrong,
     padding: 20,
     marginBottom: 16,
     alignItems: 'center',
@@ -883,17 +879,17 @@ const styles = StyleSheet.create({
   confirmCardTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
   },
   confirmCardSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
   },
   confirmBtn: {
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 13,
     paddingHorizontal: 32,
@@ -903,11 +899,11 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   reportBtn: { paddingVertical: 6 },
-  reportBtnText: { fontSize: 13, color: '#9CA3AF' },
+  reportBtnText: { fontSize: 13, color: colors.textMuted },
 
   // Section
   section: { marginBottom: 16, zIndex: 1 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 10 },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -922,18 +918,18 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: PRIMARY,
-    backgroundColor: '#F0FDF4',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
   },
-  sortDropdownBtnText: { fontSize: 12, fontWeight: '600', color: PRIMARY },
+  sortDropdownBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary },
   sortDropdownMenu: {
     position: 'absolute',
     top: 34,
     right: 0,
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.card,
+    borderRadius: radii.sm,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -950,9 +946,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
-  sortDropdownItemActive: { backgroundColor: '#F0FDF4' },
-  sortDropdownItemText: { fontSize: 13, fontWeight: '500', color: '#374151' },
-  sortDropdownItemTextActive: { color: PRIMARY, fontWeight: '600' },
+  sortDropdownItemActive: { backgroundColor: colors.primaryTint },
+  sortDropdownItemText: { fontSize: 13, fontWeight: '500', color: colors.grey700 },
+  sortDropdownItemTextActive: { color: colors.primary, fontWeight: '600' },
 
 
   // Provider acceptances
@@ -960,37 +956,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
-  emptyProvidersText: { fontSize: 13, color: '#6B7280' },
+  emptyProvidersText: { fontSize: 13, color: colors.textSecondary },
   providerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   selectedProviderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.primaryTint,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#DCFCE7',
+    borderColor: colors.primaryTintStrong,
   },
   providerAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.primaryTintStrong,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -998,20 +994,20 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: 40, height: 40, borderRadius: 20 },
   providerInfo: { flex: 1 },
-  providerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  providerBusiness: { fontSize: 12, color: '#6B7280', marginTop: 1 },
-  providerTotal: { fontSize: 13, fontWeight: '700', color: PRIMARY, marginTop: 3 },
+  providerName: { fontSize: 14, fontWeight: '600', color: colors.text },
+  providerBusiness: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  providerTotal: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 3 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3, flexWrap: 'wrap' },
-  ratingText: { fontSize: 12, fontWeight: '600', color: '#374151' },
-  ratingCount: { fontSize: 11, fontWeight: '400', color: '#9CA3AF' },
-  ratingNew: { fontSize: 12, color: '#9CA3AF' },
-  ratingDot: { fontSize: 12, color: '#D1D5DB' },
+  ratingText: { fontSize: 12, fontWeight: '600', color: colors.grey700 },
+  ratingCount: { fontSize: 11, fontWeight: '400', color: colors.textMuted },
+  ratingNew: { fontSize: 12, color: colors.textMuted },
+  ratingDot: { fontSize: 12, color: colors.grey300 },
   // Message banner
   msgBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -1026,7 +1022,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#DC2626',
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
@@ -1036,7 +1032,7 @@ const styles = StyleSheet.create({
   providerActions: { flexDirection: 'row', gap: 8 },
   providerActionBtn: {
     borderRadius: 8,
-    backgroundColor: '#16A34A',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
@@ -1048,7 +1044,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   selectBtn: {
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -1060,10 +1056,10 @@ const styles = StyleSheet.create({
 
   // Order items
   itemsCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   itemRow: {
@@ -1072,82 +1068,82 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  itemRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  itemName: { flex: 1, fontSize: 13, color: '#374151' },
-  itemQty: { fontSize: 13, color: '#9CA3AF', marginHorizontal: 12 },
-  itemSubtotal: { fontSize: 13, fontWeight: '600', color: '#111827', minWidth: 64, textAlign: 'right' },
+  itemRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.grey100 },
+  itemName: { flex: 1, fontSize: 13, color: colors.grey700 },
+  itemQty: { fontSize: 13, color: colors.textMuted, marginHorizontal: 12 },
+  itemSubtotal: { fontSize: 13, fontWeight: '600', color: colors.text, minWidth: 64, textAlign: 'right' },
   itemTotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.grey50,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
   },
-  itemTotalLabel: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  itemTotalValue: { fontSize: 14, fontWeight: '800', color: PRIMARY },
+  itemTotalLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+  itemTotalValue: { fontSize: 14, fontWeight: '800', color: colors.primary },
 
   // Cancel
   cancelButton: {
     borderWidth: 1,
-    borderColor: '#DC2626',
+    borderColor: colors.danger,
     borderRadius: 12,
     paddingVertical: 13,
     alignItems: 'center',
     marginTop: 4,
   },
   cancelButtonDisabled: { opacity: 0.5 },
-  cancelButtonText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+  cancelButtonText: { fontSize: 14, fontWeight: '600', color: colors.danger },
 
   // Review card
   reviewCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     padding: 14,
     marginBottom: 16,
     alignItems: 'center',
     gap: 8,
   },
-  reviewTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  reviewTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   reviewProviderRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   reviewAvatar: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.primaryTintStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reviewProviderName: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  reviewProviderName: { fontSize: 13, fontWeight: '600', color: colors.grey700 },
   starsRow: { flexDirection: 'row', gap: 6 },
   reviewInput: {
     width: '100%',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.grey50,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
+    borderColor: colors.grey300,
+    borderRadius: radii.sm,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 13,
-    color: '#111827',
+    color: colors.text,
     minHeight: 56,
   },
   reviewSubmitBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
     paddingVertical: 10,
     width: '100%',
     alignItems: 'center',
   },
   reviewSubmitText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   reviewSkipBtn: { paddingVertical: 2 },
-  reviewSkipText: { fontSize: 12, color: '#9CA3AF' },
+  reviewSkipText: { fontSize: 12, color: colors.textMuted },
   reviewDoneWrap: { alignItems: 'center', gap: 6 },
-  reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  reviewDoneComment: { fontSize: 12, color: '#6B7280', textAlign: 'center', fontStyle: 'italic' },
+  reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  reviewDoneComment: { fontSize: 12, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic' },
 
   // Map modal
   modalScreen: { flex: 1, backgroundColor: '#000' },
@@ -1159,10 +1155,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   paymentModalCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingHorizontal: H_PADDING,
+    paddingHorizontal: spacing.screenH,
     paddingTop: 18,
   },
   paymentModalHeader: {
@@ -1171,43 +1167,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  paymentModalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  paymentModalTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   paymentOptions: { gap: 10, marginBottom: 16 },
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
   paymentOptionSelected: {
-    borderColor: PRIMARY,
-    backgroundColor: '#F0FDF4',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryTint,
   },
   radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.grey300,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  radioSelected: { borderColor: PRIMARY },
+  radioSelected: { borderColor: colors.primary },
   radioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.primary,
   },
-  paymentLabel: { fontSize: 14, fontWeight: '500', color: '#374151' },
-  paymentLabelSelected: { color: PRIMARY, fontWeight: '600' },
+  paymentLabel: { fontSize: 14, fontWeight: '500', color: colors.grey700 },
+  paymentLabelSelected: { color: colors.primary, fontWeight: '600' },
   confirmOrderBtn: {
-    backgroundColor: PRIMARY,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
@@ -1218,5 +1214,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  paymentCancelBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  paymentCancelBtnText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
 });
