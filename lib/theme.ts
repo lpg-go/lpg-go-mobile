@@ -4,6 +4,7 @@ export const colors = {
   headerSurface: 'rgba(255,255,255,0.08)', headerSurfaceBorder: 'rgba(255,255,255,0.15)',
   primary: '#16A34A', primaryDark: '#15803D', primaryTint: '#F0FDF4', primaryTintStrong: '#DCFCE7', primaryTintBorder: '#BBF7D0',
   text: '#111827', textSecondary: '#6B7280', textMuted: '#9CA3AF', textFaint: '#C4C4C0',
+  grey700: '#374151', grey300: '#D1D5DB', grey100: '#F3F4F6', grey50: '#F9FAFB',
   border: '#E5E7EB',
   amber: '#F59E0B', amberDark: '#B45309', amberTint: '#FEF3C7', amberText: '#92400E',
   danger: '#DC2626', dangerTint: '#FEE2E2', dangerBorder: '#FCA5A5',
@@ -13,12 +14,12 @@ export const brandTints = [
   { bg: '#DBEAFE', icon: '#185FA5' },
   { bg: '#FEE2E2', icon: '#A32D2D' },
   { bg: '#FEF3C7', icon: '#854F0B' },
-  { bg: '#EDEE', icon: '#5B21B6' },
+  { bg: '#EDE9FE', icon: '#5B21B6' },
   { bg: '#FCE7F3', icon: '#9D174D' },
   { bg: '#DCFCE7', icon: '#15803D' },
 ] as const;
 
-export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 18, xxl: 24, xxxl: 32 } as const;
+export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 18, xxl: 24, xxxl: 32, screenH: 20 } as const;
 
 export const radii = { sm: 10, md: 14, lg: 18, xl: 22, pill: 999 } as const;
 
