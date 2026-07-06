@@ -2,7 +2,6 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -15,12 +14,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Card from '../../components/ui/Card';
+import DetailHeader from '../../components/ui/DetailHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
 import supabase from '../../lib/supabase';
+import { colors, radii, spacing } from '../../lib/theme';
 
 type PaymentMethod = 'gcash' | 'card';
 
 const H_PADDING = 20;
-const PRIMARY = '#16A34A';
 const PRESETS = [100, 200, 500, 1000, 2000, 5000];
 
 export default function TopUpScreen() {
@@ -115,15 +117,11 @@ export default function TopUpScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.replace('/(provider)/earnings')} style={styles.backButton} hitSlop={8}>
-            <Feather name="chevron-left" size={26} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Top Up Balance</Text>
-          <View style={{ width: 34 }} />
-        </View>
+      <View style={styles.screen}>
+        <DetailHeader
+          title="Top Up Balance"
+          onBack={() => router.replace('/(provider)/earnings')}
+        />
 
         <ScrollView
           style={styles.scroll}
@@ -131,6 +129,23 @@ export default function TopUpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Coming soon banner — honest state, no dead-end */}
+          <View style={styles.comingSoon}>
+            <Feather name="clock" size={18} color={colors.amberText} />
+            <View style={styles.comingSoonText}>
+              <Text style={styles.comingSoonTitle}>Online top-up is coming soon</Text>
+              <Text style={styles.comingSoonSub}>Contact admin to add balance to your account for now.</Text>
+            </View>
+          </View>
+
+          {/* Current balance */}
+          <Card style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>Current balance</Text>
+            <Text style={styles.balanceValue}>
+              {balance != null ? `₱${balance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '—'}
+            </Text>
+          </Card>
+
           {/* Amount selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Select Amount</Text>
@@ -152,17 +167,17 @@ export default function TopUpScreen() {
             <Text style={styles.orLabel}>or enter custom amount</Text>
 
             <View style={[styles.customInputWrap, customAmount.length > 0 && styles.customInputWrapActive]}>
-              <Text style={styles.pesoSign}>PHP</Text>
+              <Text style={styles.pesoSign}>₱</Text>
               <TextInput
                 style={styles.customInput}
                 value={customAmount}
                 onChangeText={handleCustomAmountChange}
                 placeholder="0"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="decimal-pad"
               />
             </View>
-            <Text style={styles.minNote}>Minimum top-up: 50</Text>
+            <Text style={styles.minNote}>Minimum top-up: ₱50</Text>
           </View>
 
           {/* Payment method */}
@@ -189,34 +204,22 @@ export default function TopUpScreen() {
           </View>
 
           {/* Info note */}
-          <View style={styles.infoBox}>
-            <Feather name="info" size={14} color="#6B7280" style={{ marginTop: 1 }} />
+          <Card style={styles.infoBox}>
+            <Feather name="info" size={14} color={colors.textSecondary} style={{ marginTop: 1 }} />
             <Text style={styles.infoText}>
               Your balance is used to accept orders. Admin fees are automatically deducted after each successful delivery. ₱1 is equal to 1 credit.
             </Text>
-          </View>
+          </Card>
         </ScrollView>
 
         {/* Bottom bar */}
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity
-            style={[styles.proceedBtn, (!isValidAmount || processing) && styles.proceedBtnDisabled]}
+          <PrimaryButton
+            label={isValidAmount ? `Request ₱${amount!.toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : 'Request Top-Up'}
             onPress={handleProceed}
-            disabled={!isValidAmount || processing}
-            activeOpacity={0.8}
-          >
-            {processing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Text style={styles.proceedBtnText}>
-                  {isValidAmount
-                    ? `Top Up ${amount!.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`
-                    : 'Proceed to Payment'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+            disabled={!isValidAmount}
+            loading={processing}
+          />
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -246,9 +249,9 @@ function PaymentOption({
         {selected && <View style={styles.radioDot} />}
       </View>
       <Feather
-        name={icon as any}
+        name={icon as keyof typeof Feather.glyphMap}
         size={18}
-        color={selected ? PRIMARY : '#6B7280'}
+        color={selected ? colors.primary : colors.textSecondary}
         style={{ marginRight: 10 }}
       />
       <View style={{ flex: 1 }}>
@@ -260,106 +263,107 @@ function PaymentOption({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  backButton: { width: 34 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  screen: { flex: 1, backgroundColor: colors.bg },
 
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
+
+  // Coming soon banner
+  comingSoon: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    backgroundColor: colors.amberTint,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  comingSoonText: { flex: 1 },
+  comingSoonTitle: { fontSize: 14, fontWeight: '700', color: colors.amberText },
+  comingSoonSub: { fontSize: 12, color: colors.amberText, marginTop: 2, lineHeight: 17 },
+
+  // Current balance card
+  balanceCard: { padding: spacing.lg, marginBottom: spacing.xl, alignItems: 'flex-start' },
+  balanceLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
+  balanceValue: { fontSize: 24, fontWeight: '800', color: colors.text, marginTop: 4 },
 
   // Section
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
+  section: { marginBottom: spacing.xl },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
 
   // Preset grid
   presetGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 14,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   presetBtn: {
-    width: '30.5%',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#fff',
+    width: '31%',
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     alignItems: 'center',
   },
-  presetBtnSelected: { borderColor: PRIMARY, backgroundColor: '#F0FDF4' },
-  presetText: { fontSize: 15, fontWeight: '600', color: '#374151' },
-  presetTextSelected: { color: PRIMARY },
+  presetBtnSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  presetText: { fontSize: 15, fontWeight: '600', color: colors.grey700 },
+  presetTextSelected: { color: colors.primaryDark },
 
   // Custom amount
-  orLabel: { fontSize: 13, color: '#9CA3AF', textAlign: 'center', marginBottom: 10 },
+  orLabel: { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.md },
   customInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     marginBottom: 6,
   },
-  customInputWrapActive: { borderColor: PRIMARY },
-  pesoSign: { fontSize: 18, fontWeight: '700', color: '#374151', marginRight: 6 },
-  customInput: { flex: 1, fontSize: 18, fontWeight: '600', color: '#111827', padding: 0 },
-  minNote: { fontSize: 12, color: '#9CA3AF' },
+  customInputWrapActive: { borderColor: colors.primary },
+  pesoSign: { fontSize: 18, fontWeight: '700', color: colors.grey700, marginRight: 6 },
+  customInput: { flex: 1, fontSize: 18, fontWeight: '600', color: colors.text, padding: 0 },
+  minNote: { fontSize: 12, color: colors.textMuted },
 
   // Payment options
-  paymentOptions: { gap: 10 },
+  paymentOptions: { gap: spacing.sm },
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  paymentOptionSelected: { borderColor: PRIMARY, backgroundColor: '#F0FDF4' },
+  paymentOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   radio: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.grey300,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
-  radioSelected: { borderColor: PRIMARY },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: PRIMARY },
-  paymentLabel: { fontSize: 14, fontWeight: '500', color: '#374151' },
-  paymentLabelSelected: { color: PRIMARY, fontWeight: '600' },
-  paymentSub: { fontSize: 12, color: '#9CA3AF', marginTop: 1 },
+  radioSelected: { borderColor: colors.primary },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  paymentLabel: { fontSize: 14, fontWeight: '500', color: colors.grey700 },
+  paymentLabelSelected: { color: colors.primary, fontWeight: '600' },
+  paymentSub: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
 
   // Info box
-  infoBox: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 14,
-  },
-  infoText: { flex: 1, fontSize: 13, color: '#6B7280', lineHeight: 19 },
+  infoBox: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
+  infoText: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
 
   // Bottom bar
   bottomBar: {
@@ -368,18 +372,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: H_PADDING,
-    paddingTop: 12,
-    backgroundColor: '#fff',
+    paddingTop: spacing.md,
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: colors.grey100,
   },
-  proceedBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  proceedBtnDisabled: { opacity: 0.6 },
-  proceedBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });
