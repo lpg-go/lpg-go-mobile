@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,12 +13,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../components/AppHeader';
-import ProviderHeaderActions from '../../components/ProviderHeaderActions';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import FloatingPillNav from '../../components/ui/FloatingPillNav';
+import IdentityHeader from '../../components/ui/IdentityHeader';
+import StatusBadge from '../../components/ui/StatusBadge';
 import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
+import { colors, radii, shadows, spacing } from '../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +42,7 @@ type RecentOrder = {
   status: 'delivered' | 'cancelled';
   total_amount: number;
   created_at: string;
+  delivery_address: string;
   itemSummary: string;
 };
 
@@ -52,22 +55,43 @@ type ActiveOrder = {
   itemSummary: string;
 };
 
-const ACTIVE_STATUS_BADGE: Record<ActiveOrder['status'], { label: string; color: string; bg: string }> = {
-  in_transit:            { label: 'On the Way', color: '#16A34A', bg: '#F0FDF4' },
-  awaiting_confirmation: { label: 'Delivered?',  color: '#16A34A', bg: '#F0FDF4' },
+const ACTIVE_STATUS_LABEL: Record<ActiveOrder['status'], string> = {
+  in_transit: 'On the Way',
+  awaiting_confirmation: 'Delivered?',
 };
 
 const H_PADDING = 20;
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function timeAgo(iso: string): string {
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProviderIncomingOrdersScreen() {
-  const insets = useSafeAreaInsets();
-
   const [providerId, setProviderId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [balance, setBalance] = useState(0);
   const [minBalance, setMinBalance] = useState(0);
+
+  // Header identity
+  const [providerName, setProviderName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [providerType, setProviderType] = useState<'dealer' | 'rider' | null>(null);
+  const [displayId, setDisplayId] = useState<string | null>(null);
+  const [togglingOnline, setTogglingOnline] = useState(false);
 
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [orders, setOrders] = useState<IncomingOrder[]>([]);
@@ -165,12 +189,16 @@ export default function ProviderIncomingOrdersScreen() {
   async function fetchProfile(uid: string) {
     const { data } = await supabase
       .from('profiles')
-      .select('is_online, balance')
+      .select('is_online, balance, full_name, avatar_url, provider_type, display_id')
       .eq('id', uid)
       .single();
     if (data) {
       setIsOnline(data.is_online);
       setBalance(Number(data.balance));
+      setProviderName(data.full_name ?? '');
+      setAvatarUrl(data.avatar_url ?? null);
+      setProviderType((data.provider_type as 'dealer' | 'rider' | null) ?? null);
+      setDisplayId(data.display_id ?? null);
     }
   }
 
@@ -366,6 +394,22 @@ export default function ProviderIncomingOrdersScreen() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
+  async function handleToggleOnline(value: boolean) {
+    const uid = providerIdRef.current;
+    if (!uid) return;
+    setTogglingOnline(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_online: value })
+      .eq('id', uid);
+    setTogglingOnline(false);
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+    setIsOnline(value);
+  }
+
   async function handleAccept(orderId: string) {
     if (!providerId) return;
 
@@ -452,15 +496,58 @@ export default function ProviderIncomingOrdersScreen() {
 
   if (initialLoading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
+  // Incoming broadcast cards are visible only when online AND at least one product
+  // is enabled — the core gating that must not change.
+  const showIncoming = isOnline && availableProductIds.length > 0;
+  const subtitle = [displayId, providerType ? cap(providerType) : null].filter(Boolean).join(' · ');
+
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
+      {/* ── Dark header ─────────────────────────────────────────────── */}
+      <IdentityHeader
+        name={providerName || 'Provider'}
+        subtitle={subtitle}
+        avatarUrl={avatarUrl}
+        online={isOnline}
+        right={
+          <TouchableOpacity
+            style={styles.bellBtn}
+            onPress={() => router.push('/(provider)/notifications')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather name="bell" size={20} color={colors.headerText} />
+          </TouchableOpacity>
+        }
+      >
+        {/* Stat cards */}
+        <View style={styles.statRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Balance</Text>
+            <Text style={styles.statValue}>₱{balance.toLocaleString()}</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Status</Text>
+            <View style={styles.statusRow}>
+              <Text style={styles.statValue}>{isOnline ? 'Online' : 'Offline'}</Text>
+              <Switch
+                value={isOnline}
+                onValueChange={handleToggleOnline}
+                disabled={togglingOnline}
+                trackColor={{ true: colors.headerAccent, false: 'rgba(255,255,255,0.25)' }}
+                thumbColor="#fff"
+                ios_backgroundColor="rgba(255,255,255,0.25)"
+              />
+            </View>
+          </View>
+        </View>
+      </IdentityHeader>
 
       <ScrollView
         style={styles.scroll}
@@ -469,40 +556,73 @@ export default function ProviderIncomingOrdersScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={PRIMARY}
-            colors={[PRIMARY]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Active deliveries + new incoming orders — merged into one section */}
-        <View style={styles.section}>
-          {/* Active orders — always visible (ongoing deliveries), even when offline */}
-          {activeOrders.map((order) => {
-            const cfg = ACTIVE_STATUS_BADGE[order.status];
-            return (
+        {/* Active delivery — always visible (ongoing deliveries), even when offline */}
+        {activeOrders.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Active delivery</Text>
+            {activeOrders.map((order) => (
               <TouchableOpacity
                 key={order.id}
-                style={[styles.recentCard, styles.activeOrderCard]}
+                style={styles.activeCard}
                 onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
-                activeOpacity={0.7}
+                activeOpacity={0.85}
               >
-                <View style={styles.recentCardTop}>
-                  <Text style={[styles.recentItems, styles.activeOrderText]} numberOfLines={1}>{order.itemSummary}</Text>
-                  <View style={[styles.recentBadge, { backgroundColor: cfg.bg }]}>
-                    <Text style={[styles.recentBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+                <View style={styles.activeTopRow}>
+                  <Text style={styles.activeOrderId}>#{order.id.slice(-8).toUpperCase()}</Text>
+                  <View style={styles.activePill}>
+                    <Text style={styles.activePillText}>{ACTIVE_STATUS_LABEL[order.status]}</Text>
                   </View>
                 </View>
-                <View style={styles.recentCardBottom}>
-                  <Text style={[styles.recentDate, styles.activeOrderAddress]}>{order.delivery_address}</Text>
-                  <Text style={[styles.recentAmount, styles.activeOrderText]}>₱{Number(order.total_amount).toLocaleString()}</Text>
+                <Text style={styles.activeItems} numberOfLines={1}>{order.itemSummary}</Text>
+                <View style={styles.activeAddrRow}>
+                  <Feather name="map-pin" size={13} color="rgba(255,255,255,0.85)" />
+                  <Text style={styles.activeAddr} numberOfLines={1}>{order.delivery_address}</Text>
                 </View>
+                <Text style={styles.activeContinue}>Continue delivery →</Text>
               </TouchableOpacity>
-            );
-          })}
+            ))}
+          </View>
+        )}
 
-          {/* New incoming orders — only when online with at least one enabled product */}
-          {isOnline && availableProductIds.length > 0 &&
+        {/* New orders */}
+        <View style={styles.section}>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>New orders</Text>
+            {showIncoming && orders.length > 0 && (
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{orders.length}</Text>
+              </View>
+            )}
+          </View>
+
+          {!isOnline ? (
+            <EmptyState
+              icon="wifi-off"
+              message="You're offline"
+              subtitle="Go online to start receiving new orders."
+              style={styles.emptyPad}
+            />
+          ) : availableProductIds.length === 0 ? (
+            <EmptyState
+              icon="package"
+              message="Enable products to receive orders"
+              subtitle="Turn on items in your inventory to start getting orders."
+              style={styles.emptyPad}
+            />
+          ) : orders.length === 0 ? (
+            <EmptyState
+              icon="inbox"
+              message="No new orders"
+              subtitle="New broadcast orders will appear here."
+              style={styles.emptyPad}
+            />
+          ) : (
             orders.map((order) => (
               <OrderCard
                 key={order.id}
@@ -510,69 +630,56 @@ export default function ProviderIncomingOrdersScreen() {
                 accepting={accepting === order.id}
                 onAccept={() => handleAccept(order.id)}
               />
-            ))}
-
-          {/* Empty / status states — shown only when there are no active orders */}
-          {activeOrders.length === 0 && (
-            !isOnline ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>You're offline</Text>
-              </View>
-            ) : availableProductIds.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>
-                  Enable products in your inventory to start receiving orders.
-                </Text>
-              </View>
-            ) : orders.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No Active Orders</Text>
-              </View>
-            ) : null
+            ))
           )}
         </View>
 
         {/* Recent orders */}
         {recentOrders.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Recent Orders</Text>
-                {recentOrders.map((order) => {
-                  const isDelivered = order.status === 'delivered';
-                  const shortId = order.id.slice(-8).toUpperCase();
-                  const date = new Date(order.created_at).toLocaleString('en-PH', {
-                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                  });
-                  return (
-                    <TouchableOpacity
-                      key={order.id}
-                      style={styles.recentCard}
-                      onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.recentCardTop}>
-                        <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
-                        <View style={[
-                          styles.recentBadge,
-                          { backgroundColor: isDelivered ? '#16A34A' : '#DC2626' },
-                        ]}>
-                          <Text style={[
-                            styles.recentBadgeText,
-                            { color: '#FFFFFF' },
-                          ]}>
-                            {isDelivered ? 'Delivered' : 'Cancelled'}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.recentCardBottom}>
-                        <Text style={styles.recentDate} numberOfLines={1}>{order.delivery_address}</Text>
-                        <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recent orders</Text>
+            {recentOrders.map((order) => {
+              const isDelivered = order.status === 'delivered';
+              return (
+                <Card
+                  key={order.id}
+                  style={styles.recentCard}
+                  onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
+                >
+                  <View style={styles.recentTopRow}>
+                    <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
+                    <StatusBadge
+                      tone={isDelivered ? 'success' : 'danger'}
+                      label={isDelivered ? 'Delivered' : 'Cancelled'}
+                    />
+                  </View>
+                  <View style={styles.recentBottomRow}>
+                    <Text style={styles.recentAddr} numberOfLines={1}>{order.delivery_address}</Text>
+                    <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
+                  </View>
+                </Card>
+              );
+            })}
           </View>
         )}
       </ScrollView>
+
+      {/* ── Provider nav ────────────────────────────────────────────── */}
+      <FloatingPillNav
+        tabs={[
+          { key: 'home', label: 'Home', icon: 'home', badgeCount: showIncoming ? orders.length : 0 },
+          { key: 'earnings', label: 'Earnings', icon: 'wallet', iconLib: 'material' },
+          { key: 'products', label: 'Products', icon: 'package' },
+          { key: 'profile', label: 'Profile', icon: 'user' },
+        ]}
+        activeKey="home"
+        onNavigate={(key) => {
+          if (key === 'earnings') router.push('/(provider)/earnings');
+          else if (key === 'products') router.push('/(provider)/products');
+          else if (key === 'profile') router.push('/(provider)/profile');
+          // home → already here
+        }}
+      />
     </View>
   );
 }
@@ -588,141 +695,184 @@ function OrderCard({
   accepting: boolean;
   onAccept: () => void;
 }) {
+  const disabled = accepting || order.alreadyAccepted;
   return (
-    <TouchableOpacity
-      style={[styles.recentCard, styles.newOrderCard]}
-      activeOpacity={0.7}
-      onPress={() => {
-        Alert.alert(
-          'Accept Order?',
-          `Location: ${order.delivery_address}`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Accept', onPress: onAccept },
-          ]
-        );
-      }}
-      disabled={accepting || order.alreadyAccepted}
-    >
-      <View style={styles.recentCardTop}>
-        <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
-        <View style={styles.badgeRow}>
-          {order.is_express && (
-            <View style={styles.expressBadge}>
-              <Feather name="zap" size={10} color="#fff" />
-              <Text style={styles.expressBadgeText}>EXPRESS</Text>
-            </View>
-          )}
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>{order.alreadyAccepted ? 'Accepted' : 'New'}</Text>
-          </View>
-        </View>
-      </View>
-      <View style={styles.recentCardBottom}>
-        <Text style={styles.recentDate}>{order.delivery_address}</Text>
-        {accepting ? (
-          <ActivityIndicator size="small" color={PRIMARY} />
+    <Card style={styles.orderCard}>
+      <View style={styles.orderTopRow}>
+        {order.is_express ? (
+          <StatusBadge tone="express" label="Express" />
         ) : (
-          <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
+          <Text style={styles.standardLabel}>Standard order</Text>
         )}
+        <Text style={styles.timeAgo}>{timeAgo(order.created_at)}</Text>
       </View>
-    </TouchableOpacity>
+
+      <Text style={styles.orderItems} numberOfLines={1}>{order.itemSummary}</Text>
+
+      <View style={styles.orderAddrRow}>
+        <Feather name="map-pin" size={13} color={colors.textMuted} />
+        <Text style={styles.orderAddr} numberOfLines={2}>{order.delivery_address}</Text>
+      </View>
+
+      <View style={styles.orderBottomRow}>
+        <Text style={styles.orderPrice}>₱{Number(order.total_amount).toLocaleString()}</Text>
+        <TouchableOpacity
+          style={[styles.acceptBtn, disabled && styles.acceptBtnDisabled]}
+          onPress={onAccept}
+          disabled={disabled}
+          activeOpacity={0.85}
+        >
+          {accepting ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.acceptBtnText}>{order.alreadyAccepted ? 'Accepted' : 'Accept'}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </Card>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#16A34A';
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
+  screen: { flex: 1, backgroundColor: colors.bg },
   centered: { alignItems: 'center', justifyContent: 'center' },
 
-
-  // Scroll
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },
-
-  // Section
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  viewAllText: { fontSize: 13, fontWeight: '600', color: PRIMARY },
-
-  // Recent order card
-  recentCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 8,
+  // Header — bell button in the IdentityHeader right slot
+  bellBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.headerSurface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  newOrderCard: {
-    backgroundColor: '#F0FDF4',
-    borderColor: PRIMARY,
-  },
-  activeOrderCard: {
-    backgroundColor: PRIMARY,
-    borderColor: PRIMARY,
-  },
-  activeOrderText: { color: '#fff' },
-  activeOrderAddress: { color: 'rgba(255,255,255,0.85)' },
-  recentCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-    gap: 8,
-  },
-  recentBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
-  recentBadgeText: { fontSize: 11, fontWeight: '600' },
-  newBadge: { backgroundColor: PRIMARY, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
-  newBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  // Express badge — amber/orange priority pill (shared shape across screens)
-  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
-  expressBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#F59E0B',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  expressBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
-  recentItems: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
-  recentCardBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  recentDate: { fontSize: 12, color: '#6B7280', flex: 1 },
-  orderCustomerLine: { fontSize: 12, color: '#6B7280', marginBottom: 6 },
-  recentAmount: { fontSize: 13, fontWeight: '700', color: '#111827', flexShrink: 0 },
-
-  // Incoming order card — same shape as activeCard, white background
-  // Empty state
-  emptyState: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    borderColor: colors.headerSurfaceBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyText: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    lineHeight: 20,
+
+  // Stat cards (rendered in the IdentityHeader children slot)
+  statRow: { flexDirection: 'row', gap: spacing.md },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
+  statLabel: {
+    color: colors.headerSubtext,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  statValue: { color: colors.headerText, fontSize: 18, fontWeight: '700' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.xl, paddingBottom: 100 },
+
+  // Section
+  section: { marginBottom: spacing.xxl },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  countBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  countBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  emptyPad: { flex: undefined, paddingVertical: spacing.xxxl },
+
+  // Active delivery card (green)
+  activeCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    marginBottom: spacing.sm,
+    ...shadows.card,
+  },
+  activeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  activeOrderId: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  activePill: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  activePillText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  activeItems: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  activeAddrRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: spacing.md },
+  activeAddr: { color: 'rgba(255,255,255,0.85)', fontSize: 12, flex: 1 },
+  activeContinue: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  // Incoming order card (white)
+  orderCard: { padding: spacing.lg, marginBottom: spacing.sm },
+  orderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  standardLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  timeAgo: { fontSize: 12, color: colors.textMuted },
+  orderItems: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  orderAddrRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: spacing.md },
+  orderAddr: { fontSize: 12, color: colors.textSecondary, flex: 1 },
+  orderBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  orderPrice: { fontSize: 17, fontWeight: '700', color: colors.primary },
+  acceptBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    minWidth: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  acceptBtnDisabled: { opacity: 0.5 },
+  acceptBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // Recent order card (white)
+  recentCard: { padding: spacing.lg, marginBottom: spacing.sm },
+  recentTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  recentItems: { fontSize: 13, fontWeight: '600', color: colors.text, flex: 1 },
+  recentBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  recentAddr: { fontSize: 12, color: colors.textSecondary, flex: 1 },
+  recentAmount: { fontSize: 13, fontWeight: '700', color: colors.text },
 });

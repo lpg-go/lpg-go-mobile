@@ -10,11 +10,9 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import HeaderDark from '../../components/ui/HeaderDark';
 import { useNotifications } from '../../lib/notificationsStore';
 import AddressBar from '../../components/ui/AddressBar';
+import IdentityHeader from '../../components/ui/IdentityHeader';
 import SearchBar from '../../components/ui/SearchBar';
 import BrandCard from '../../components/ui/BrandCard';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
@@ -40,6 +38,7 @@ const COLS = 3;
 function useProfileHeader() {
   const [fullName, setFullName] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [displayId, setDisplayId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -48,23 +47,23 @@ function useProfileHeader() {
       if (!user) return;
       const { data } = await supabase
         .from('profiles')
-        .select('avatar_url, full_name')
+        .select('avatar_url, full_name, display_id')
         .eq('id', user.id)
         .single();
       if (!alive || !data) return;
       if (data.full_name) setFullName(data.full_name);
       if (data.avatar_url) setAvatarUrl(data.avatar_url);
+      if (data.display_id) setDisplayId(data.display_id);
     })();
     return () => { alive = false; };
   }, []);
 
-  return { fullName, avatarUrl };
+  return { fullName, avatarUrl, displayId };
 }
 
 export default function CustomerHomeScreen() {
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { fullName, avatarUrl } = useProfileHeader();
+  const { fullName, avatarUrl, displayId } = useProfileHeader();
   const { unreadCount } = useNotifications();
   const activeOrderCount = useActiveOrderCount();
 
@@ -164,20 +163,31 @@ export default function CustomerHomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Green fills the status-bar notch above the header */}
-        <View style={{ height: insets.top, backgroundColor: colors.headerBg }} />
-
         {/* Header */}
-        <HeaderDark
+        <IdentityHeader
           name={fullName}
+          subtitle={displayId ?? undefined}
           avatarUrl={avatarUrl}
-          unreadCount={unreadCount}
-          onBellPress={() => router.push('/(customer)/notifications')}
           onAvatarPress={() => router.push('/(customer)/profile')}
+          right={
+            <TouchableOpacity
+              style={styles.bell}
+              onPress={() => router.push('/(customer)/notifications')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="bell" size={20} color={colors.headerText} />
+              {unreadCount > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          }
         >
           {/* TODO: wire real delivery address + GPS location picker (feature pending) */}
           <AddressBar address="Set delivery address" onPress={() => {}} />
-        </HeaderDark>
+        </IdentityHeader>
 
         {/* Search — overlaps the header's extra bottom padding */}
         <View style={styles.searchWrap}>
@@ -267,10 +277,37 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 100 },
 
-  // Search — pulled up to overlap the header's 46px bottom padding
+  // Bell button (IdentityHeader right slot) — frosted circle + unread badge
+  bell: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  bellBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+
+  // Search — sits just below the rounded header
   searchWrap: {
     paddingHorizontal: H_PADDING,
-    marginTop: -30,
+    marginTop: spacing.lg,
   },
 
   // Section header
@@ -283,7 +320,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sectionTitle: {
-    ...typography.sectionHeader,
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
   },
   seeAll: {
