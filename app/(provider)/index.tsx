@@ -513,17 +513,15 @@ export default function ProviderIncomingOrdersScreen() {
                 activeOpacity={0.85}
               >
                 <View style={styles.activeTopRow}>
-                  <Text style={styles.activeOrderId}>#{order.id.slice(-8).toUpperCase()}</Text>
+                  <Text style={styles.activeItems} numberOfLines={1}>{order.itemSummary}</Text>
                   <View style={styles.activePill}>
                     <Text style={styles.activePillText}>{ACTIVE_STATUS_LABEL[order.status]}</Text>
                   </View>
                 </View>
-                <Text style={styles.activeItems} numberOfLines={1}>{order.itemSummary}</Text>
                 <View style={styles.activeAddrRow}>
                   <Feather name="map-pin" size={13} color="rgba(255,255,255,0.85)" />
                   <Text style={styles.activeAddr} numberOfLines={1}>{order.delivery_address}</Text>
                 </View>
-                <Text style={styles.activeContinue}>Continue delivery →</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -824,9 +822,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  activeOrderId: { color: '#fff', fontSize: 14, fontWeight: '700' },
   activePill: {
     backgroundColor: 'rgba(255,255,255,0.22)',
     borderRadius: radii.pill,
@@ -834,10 +832,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   activePillText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  activeItems: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 4 },
-  activeAddrRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: spacing.md },
+  activeItems: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
+  activeAddrRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   activeAddr: { color: 'rgba(255,255,255,0.85)', fontSize: 12, flex: 1 },
-  activeContinue: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   // Incoming order card (white)
   orderCard: { padding: spacing.lg, marginBottom: spacing.sm },

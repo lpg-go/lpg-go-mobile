@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -18,15 +17,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../../components/AppHeader';
 import ChatModal from '../../../components/ChatModal';
 import LiveMap from '../../../components/LiveMap';
 import SheetHeader from '../../../components/SheetHeader';
-import ProviderHeaderActions from '../../../components/ProviderHeaderActions';
+import Card from '../../../components/ui/Card';
+import DetailHeader from '../../../components/ui/DetailHeader';
+import PartyCard from '../../../components/ui/PartyCard';
+import PrimaryButton from '../../../components/ui/PrimaryButton';
+import StatusBadge from '../../../components/ui/StatusBadge';
 import { sendOrderNotification } from '../../../lib/notifications';
 import { speedLabel } from '../../../lib/reviewSpeed';
 import { SAFETY_ITEMS } from '../../../lib/safety';
 import supabase from '../../../lib/supabase';
+import { colors, radii, shadows, spacing, typography } from '../../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +44,7 @@ type OrderStatus =
 type Order = {
   id: string;
   status: OrderStatus;
+  payment_method: string | null;
   delivery_address: string;
   delivery_lat: number | null;
   delivery_lng: number | null;
@@ -66,14 +70,23 @@ type LatLng = { lat: number; lng: number };
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
-  pending:                   { label: 'Waiting...',            color: '#16A34A', bg: '#F0FDF4' },
-  awaiting_dealer_selection: { label: 'Finding Provider',      color: '#16A34A', bg: '#F0FDF4' },
-  in_transit:                { label: 'On the Way',           color: '#16A34A', bg: '#F0FDF4' },
-  awaiting_confirmation:     { label: 'Awaiting Confirmation', color: '#16A34A', bg: '#F0FDF4' },
-  delivered:                 { label: 'Delivered',             color: '#FFFFFF', bg: '#16A34A' },
-  cancelled:                 { label: 'Cancelled',             color: '#FFFFFF', bg: '#DC2626' },
+const STATUS_LABEL: Record<OrderStatus, string> = {
+  pending: 'Waiting...',
+  awaiting_dealer_selection: 'Finding Provider',
+  in_transit: 'On the Way',
+  awaiting_confirmation: 'Awaiting Confirmation',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
 };
+
+const STATUS_TONE = {
+  pending: 'neutral',
+  awaiting_dealer_selection: 'neutral',
+  in_transit: 'success',
+  awaiting_confirmation: 'pending',
+  delivered: 'success',
+  cancelled: 'danger',
+} as const;
 
 const H_PADDING = 20;
 
@@ -231,7 +244,7 @@ export default function ActiveDeliveryScreen() {
   async function fetchOrder() {
     const { data } = await supabase
       .from('orders')
-      .select('id, status, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, is_express, express_fee, eta_minutes, eta_deadline, customer_id, created_at, customer:profiles!customer_id(full_name, phone, avatar_url)')
+      .select('id, status, payment_method, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, is_express, express_fee, eta_minutes, eta_deadline, customer_id, created_at, customer:profiles!customer_id(full_name, phone, avatar_url)')
       .eq('id', id)
       .single();
     if (!data) return;
@@ -443,122 +456,110 @@ export default function ActiveDeliveryScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   if (!order) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <Text style={styles.errorText}>Order not found.</Text>
+      <View style={styles.screen}>
+        <DetailHeader title="Active Delivery" onBack={() => router.back()} />
+        <View style={[styles.screen, styles.centered]}>
+          <Text style={styles.errorText}>Order not found.</Text>
+        </View>
       </View>
     );
   }
 
-  const statusCfg = STATUS_CONFIG[order.status];
   const shortId = order.id.slice(-8).toUpperCase();
   const placedAt = new Date(order.created_at).toLocaleString('en-PH', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
-  const isActive = order.status !== 'delivered' && order.status !== 'cancelled';
   // Dealers don't broadcast location, so the live map serves no purpose for them.
   const isRider = providerType === 'rider';
+  const inTransit = order.status === 'in_transit';
+  const callChatActive = order.status === 'in_transit' || order.status === 'awaiting_confirmation';
+  const isCOD = order.payment_method !== 'card'; // cash / null default = collect on delivery
+  const locationActive = isRider && inTransit && providerLocation != null;
 
   // "Confirm Delivery" is allowed only when every safety item passes.
-  const allChecked = checks.every(Boolean);
-  const canConfirm = allChecked;
+  const canConfirm = checks.every(Boolean);
 
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
+      <DetailHeader
+        title="Active Delivery"
+        subtitle={`#${shortId}`}
+        onBack={() => router.back()}
+        right={order.is_express ? <StatusBadge label="Express" tone="express" /> : undefined}
+      />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: (order.status === 'in_transit' ? 110 : 40) + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: (inTransit ? 110 : 40) + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Status card */}
-        <View style={styles.statusCard}>
-          <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
-            <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>
-              {statusCfg.label}
-            </Text>
+        {/* Status + ETA */}
+        <Card style={styles.statusCard}>
+          <View style={styles.statusTopRow}>
+            <StatusBadge label={STATUS_LABEL[order.status]} tone={STATUS_TONE[order.status]} />
+            <Text style={styles.placedAt}>Placed {placedAt}</Text>
           </View>
-          <Text style={styles.orderId}>Order #{shortId}</Text>
-          <Text style={styles.placedAt}>Placed {placedAt}</Text>
-          {order.is_express && (
-            <View style={styles.expressBadge}>
-              <Feather name="zap" size={11} color="#fff" />
-              <Text style={styles.expressBadgeText}>EXPRESS</Text>
-            </View>
-          )}
           {order.is_express && order.eta_deadline && (
             <View style={styles.etaRow}>
+              <Feather name="clock" size={14} color={colors.amberText} />
               <Text style={styles.etaDeadline}>
                 Deliver by {new Date(order.eta_deadline).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}
               </Text>
               {order.eta_minutes != null && (
-                <Text style={styles.etaMinutes}>~{order.eta_minutes} mins</Text>
+                <Text style={styles.etaMinutes}>· ~{order.eta_minutes} mins</Text>
               )}
             </View>
           )}
-          <View style={styles.addressRow}>
-            <Text style={styles.addressText} numberOfLines={2}>{order.delivery_address}</Text>
-          </View>
-        </View>
+        </Card>
 
-        {/* Customer */}
-        {order.customer && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Customer</Text>
-            <TouchableOpacity
-              style={styles.customerCard}
-              activeOpacity={0.8}
-              onPress={() => setMapVisible(true)}
-              disabled={order.status !== 'in_transit' || !isRider}
-            >
-              <View style={styles.customerAvatar}>
-                {order.customer.avatar_url ? (
-                  <Image source={{ uri: order.customer.avatar_url }} style={styles.avatarImage} />
-                ) : (
-                  <Feather name="user" size={22} color={PRIMARY} />
-                )}
-              </View>
-              <View style={styles.customerInfo}>
-                <Text style={styles.customerName}>{order.customer.full_name}</Text>
-              </View>
-              {(order.status === 'in_transit' || order.status === 'awaiting_confirmation') && (
-              <View style={styles.customerActions}>
-                {order.customer.phone ? (
-                  <TouchableOpacity style={styles.customerIconBtn} onPress={handleCall} hitSlop={6} activeOpacity={0.7}>
-                    <Feather name="phone" size={22} color={PRIMARY} />
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity style={styles.customerIconBtn} onPress={handleChat} hitSlop={6} activeOpacity={0.7}>
-                  <Feather name="message-circle" size={22} color={PRIMARY} />
-                  {unreadCount > 0 && (
-                    <View style={styles.chatBadge}>
-                      <Text style={styles.chatBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-                {order.status === 'in_transit' && isRider && (
-                  <TouchableOpacity style={styles.customerIconBtn} onPress={() => setMapVisible(true)} hitSlop={6} activeOpacity={0.7}>
-                    <Feather name="map-pin" size={22} color={PRIMARY} />
-                  </TouchableOpacity>
-                )}
-              </View>
-              )}
-            </TouchableOpacity>
+        {/* Location banner — rider, in transit, sharing live */}
+        {locationActive && (
+          <View style={styles.locBanner}>
+            <Feather name="navigation" size={18} color="#185FA5" />
+            <View style={styles.locBannerText}>
+              <Text style={styles.locBannerTitle}>Sharing your location</Text>
+              <Text style={styles.locBannerSub}>Customer can see you on the map</Text>
+            </View>
           </View>
         )}
 
-        {/* Order items */}
-        <View style={styles.section}>
+        {/* Deliver to — customer */}
+        {order.customer && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Deliver to</Text>
+            <PartyCard
+              name={order.customer.full_name}
+              avatarUrl={order.customer.avatar_url}
+              subtitle={order.delivery_address}
+              onCall={callChatActive && order.customer.phone ? handleCall : undefined}
+              onChat={callChatActive ? handleChat : undefined}
+              chatBadge={unreadCount}
+            />
+            {isRider && inTransit && (
+              <TouchableOpacity
+                style={styles.mapBtn}
+                onPress={() => setMapVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Feather name="map-pin" size={18} color={colors.primary} />
+                <Text style={styles.mapBtnText}>Open live map</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
-          <View style={styles.itemsCard}>
+        {/* Order */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Order</Text>
+          <Card style={styles.itemsCard}>
             {items.map((item, index) => (
               <View
                 key={item.id}
@@ -580,69 +581,53 @@ export default function ActiveDeliveryScreen() {
               </View>
             )}
             <View style={styles.itemTotalRow}>
-              <Text style={styles.itemTotalLabel}>Total</Text>
+              <Text style={styles.itemTotalLabel}>Total ({isCOD ? 'COD' : 'Card'})</Text>
               <Text style={styles.itemTotalValue}>
                 ₱{Number(order.total_amount).toLocaleString()}
               </Text>
             </View>
-          </View>
+          </Card>
         </View>
 
-        {/* Customer review */}
+        {/* Customer review (delivered) */}
         {order.status === 'delivered' && (
-          <View style={styles.completedCard}>
+          <Card style={styles.reviewCard}>
             {customerReview ? (
               <>
-                <Feather name="check-circle" size={20} color={PRIMARY} />
-                <Text style={styles.reviewDoneTitle}>Customer Review</Text>
+                <Feather name="check-circle" size={20} color={colors.primary} />
+                <Text style={styles.reviewTitle}>Customer Review</Text>
                 <View style={styles.reviewStarsRow}>
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Feather key={s} name="star" size={16} color={s <= customerReview.rating ? '#FBBF24' : '#E5E7EB'} />
+                    <Feather key={s} name="star" size={16} color={s <= customerReview.rating ? colors.amber : colors.border} />
                   ))}
                 </View>
                 {customerReview.comment ? (
                   <Text style={styles.reviewComment}>"{customerReview.comment}"</Text>
                 ) : null}
                 {speedLabel(customerReview.delivery_speed) ? (
-                  <Text style={styles.reviewSpeedText}>Speed: {speedLabel(customerReview.delivery_speed)}</Text>
+                  <Text style={styles.reviewSpeed}>Speed: {speedLabel(customerReview.delivery_speed)}</Text>
                 ) : null}
               </>
             ) : (
               <>
-                <Feather name="star" size={20} color="#D1D5DB" />
-                <Text style={styles.reviewDoneTitle}>Customer Review</Text>
+                <Feather name="star" size={20} color={colors.grey300} />
+                <Text style={styles.reviewTitle}>Customer Review</Text>
                 <Text style={styles.reviewPending}>Waiting for customer review...</Text>
               </>
             )}
-          </View>
-        )}
-
-        {/* Cancel delivery */}
-        {order.status === 'in_transit' && (
-          <TouchableOpacity
-            style={[styles.cancelBtn, cancelling && { opacity: 0.5 }]}
-            onPress={confirmCancelDelivery}
-            disabled={cancelling}
-          >
-            {cancelling ? (
-              <ActivityIndicator size="small" color="#DC2626" />
-            ) : (
-              <Text style={styles.cancelBtnText}>Cancel Delivery</Text>
-            )}
-          </TouchableOpacity>
+          </Card>
         )}
       </ScrollView>
 
-      {/* Mark as delivered — fixed bottom bar */}
-      {order.status === 'in_transit' && (
+      {/* Bottom bar — Cancel + Mark as Delivered (in transit) */}
+      {inTransit && (
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity
-            style={[styles.markDeliveredBtn, marking && { opacity: 0.6 }]}
-            onPress={openSafetyCheck}
-            disabled={marking}
-          >
-            <Text style={styles.markDeliveredBtnText}>Mark as Delivered</Text>
-          </TouchableOpacity>
+          <View style={styles.bottomCancel}>
+            <PrimaryButton label="Cancel" variant="danger" onPress={confirmCancelDelivery} loading={cancelling} />
+          </View>
+          <View style={styles.bottomMark}>
+            <PrimaryButton label="Mark as Delivered" onPress={openSafetyCheck} loading={marking} />
+          </View>
         </View>
       )}
 
@@ -687,7 +672,7 @@ export default function ActiveDeliveryScreen() {
               {SAFETY_ITEMS.map((label, i) => (
                 <TouchableOpacity
                   key={i}
-                  style={styles.checkRow}
+                  style={[styles.checkRow, checks[i] && styles.checkRowChecked]}
                   activeOpacity={0.7}
                   onPress={() => toggleCheck(i)}
                   disabled={marking}
@@ -700,26 +685,22 @@ export default function ActiveDeliveryScreen() {
               ))}
             </View>
 
-            <View style={styles.safetyActions}>
-              <TouchableOpacity
-                style={[styles.safetyCancelBtn, marking && { opacity: 0.5 }]}
-                onPress={() => setSafetyVisible(false)}
-                disabled={marking}
-              >
-                <Text style={styles.safetyCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.safetyConfirmBtn, (!canConfirm || marking) && styles.safetyConfirmBtnDisabled]}
+            <View style={styles.safetyConfirm}>
+              <PrimaryButton
+                label="Confirm & mark delivered"
                 onPress={submitSafetyCheck}
-                disabled={!canConfirm || marking}
-              >
-                {marking ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.safetyConfirmText}>Confirm Delivery</Text>
-                )}
-              </TouchableOpacity>
+                disabled={!canConfirm}
+                loading={marking}
+              />
             </View>
+            <TouchableOpacity
+              style={styles.safetyCancel}
+              onPress={() => { if (!marking) setSafetyVisible(false); }}
+              disabled={marking}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.safetyCancelText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -738,226 +719,108 @@ export default function ActiveDeliveryScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#16A34A';
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
-  centered: { alignItems: 'center', justifyContent: 'center' },
-  errorText: { fontSize: 15, color: '#6B7280' },
-
+  screen: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorText: { fontSize: 15, color: colors.textSecondary },
 
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
 
   // Status card
-  statusCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  statusBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  statusBadgeText: { fontSize: 16, fontWeight: '700' },
-  orderId: { fontSize: 13, fontWeight: '400', color: '#6B7280', marginBottom: 2 },
-  placedAt: { fontSize: 12, color: '#9CA3AF', marginBottom: 10 },
+  statusCard: { padding: spacing.lg, marginBottom: spacing.lg },
+  statusTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  placedAt: { fontSize: 12, color: colors.textMuted },
+  etaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.sm },
+  etaDeadline: { fontSize: 13, fontWeight: '700', color: colors.amberText },
+  etaMinutes: { fontSize: 12, fontWeight: '600', color: colors.amberDark },
 
-  // Express badge — amber/orange priority pill (shared shape across screens)
-  expressBadge: {
+  // Location banner (blue info)
+  locBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#F59E0B',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 10,
+    gap: spacing.md,
+    backgroundColor: '#DBEAFE',
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
-  expressBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
-
-  // Express ETA — amber to match the EXPRESS badge
-  etaRow: { alignItems: 'center', gap: 2, marginBottom: 10 },
-  etaDeadline: { fontSize: 14, fontWeight: '700', color: '#B45309' },
-  etaMinutes: { fontSize: 12, fontWeight: '600', color: '#D97706' },
-
-  addressRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 8 },
-  addressText: { fontSize: 13, fontWeight: '700', color: '#6B7280', flex: 1, textAlign: 'center' },
-
-  // Awaiting confirmation card
-  waitingConfirmCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    backgroundColor: '#EDE9FE',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    padding: 16,
-    marginBottom: 16,
-  },
-  waitingConfirmTitle: { fontSize: 15, fontWeight: '700', color: '#5B21B6', marginBottom: 4 },
-  waitingConfirmSubtitle: { fontSize: 13, color: '#7C3AED', lineHeight: 18 },
+  locBannerText: { flex: 1 },
+  locBannerTitle: { fontSize: 13, fontWeight: '700', color: '#185FA5' },
+  locBannerSub: { fontSize: 12, color: '#185FA5', marginTop: 1 },
 
   // Section
-  section: { marginBottom: 16 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 10 },
-
-  // Customer card
-  customerCard: {
+  section: { marginBottom: spacing.lg },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
+  mapBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 52,
+    marginTop: spacing.md,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
   },
-  customerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    overflow: 'hidden',
-  },
-  avatarImage: { width: 40, height: 40, borderRadius: 20 },
-  customerInfo: { flex: 1 },
-  customerName: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  customerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  customerIconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chatBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  chatBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
-
-  // Chat badge
-  chatBtnWrapper: { position: 'relative' },
-  unreadBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  unreadBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
+  mapBtnText: { fontSize: 16, fontWeight: '600', color: colors.primary },
 
   // Items card
-  itemsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  itemRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
-  itemRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  itemName: { flex: 1, fontSize: 13, color: '#374151' },
-  itemQty: { fontSize: 13, color: '#9CA3AF', marginHorizontal: 12 },
-  itemSubtotal: { fontSize: 13, fontWeight: '600', color: '#111827', minWidth: 64, textAlign: 'right' },
+  itemsCard: { overflow: 'hidden' },
+  itemRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  itemRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.grey100 },
+  itemName: { flex: 1, fontSize: 13, color: colors.grey700 },
+  itemQty: { fontSize: 13, color: colors.textMuted, marginHorizontal: spacing.md },
+  itemSubtotal: { fontSize: 13, fontWeight: '600', color: colors.text, minWidth: 64, textAlign: 'right' },
   expressFeeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: colors.grey100,
   },
-  expressFeeLabel: { fontSize: 13, color: '#B45309', fontWeight: '600' },
-  expressFeeValue: { fontSize: 13, fontWeight: '700', color: '#B45309' },
+  expressFeeLabel: { fontSize: 13, color: colors.amberText, fontWeight: '600' },
+  expressFeeValue: { fontSize: 13, fontWeight: '700', color: colors.amberText },
   itemTotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: '#F9FAFB',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.grey50,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
   },
-  itemTotalLabel: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  itemTotalValue: { fontSize: 14, fontWeight: '800', color: PRIMARY },
+  itemTotalLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+  itemTotalValue: { fontSize: 14, fontWeight: '800', color: colors.primary },
 
-  // Mark delivered — fixed bottom bar (matches customer Select Provider button)
+  // Customer review card
+  reviewCard: { padding: spacing.lg, marginBottom: spacing.lg, alignItems: 'center', gap: spacing.sm },
+  reviewTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  reviewStarsRow: { flexDirection: 'row', gap: 6 },
+  reviewComment: { fontSize: 12, color: colors.textSecondary, textAlign: 'center' },
+  reviewSpeed: { fontSize: 12, fontWeight: '600', color: colors.grey700 },
+  reviewPending: { fontSize: 12, color: colors.textMuted, fontStyle: 'italic' },
+
+  // Bottom bar
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: H_PADDING,
-    paddingTop: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  markDeliveredBtn: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+    gap: spacing.md,
+    paddingHorizontal: H_PADDING,
+    paddingTop: spacing.md,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.grey100,
   },
-  markDeliveredBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-
-  // Cancel
-  cancelBtn: {
-    borderWidth: 1,
-    borderColor: '#DC2626',
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
-
-  // Customer review card
-  completedCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 14,
-    marginBottom: 16,
-    alignItems: 'center',
-    gap: 8,
-  },
-  reviewDoneTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  reviewStarsRow: { flexDirection: 'row', gap: 6 },
-  reviewComment: { fontSize: 12, color: '#6B7280', textAlign: 'center' },
-  reviewSpeedText: { fontSize: 12, fontWeight: '600', color: '#374151' },
-  reviewPending: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' },
+  bottomCancel: { flex: 1 },
+  bottomMark: { flex: 2 },
 
   // Map modal
   mapSheetOverlay: {
@@ -981,45 +844,37 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   safetySheet: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: H_PADDING,
-    paddingTop: 20,
+    paddingTop: spacing.xl,
   },
-  safetyTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  safetySubtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  checkList: { marginTop: 16, gap: 12 },
-  checkRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  safetyTitle: { fontSize: 20, fontWeight: '700', color: colors.text },
+  safetySubtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  checkList: { marginTop: spacing.lg, gap: spacing.sm },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  checkRowChecked: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 24,
+    height: 24,
+    borderRadius: radii.sm,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
+    borderColor: colors.grey300,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: PRIMARY, borderColor: PRIMARY },
-  checkLabel: { fontSize: 15, color: '#111827', marginLeft: 12, flex: 1 },
-  safetyActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  safetyCancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  safetyCancelText: { fontSize: 16, fontWeight: '600', color: '#374151' },
-  safetyConfirmBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  safetyConfirmBtnDisabled: { opacity: 0.5 },
-  safetyConfirmText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkLabel: { fontSize: 15, color: colors.text, marginLeft: spacing.md, flex: 1 },
+  safetyConfirm: { marginTop: spacing.xl },
+  safetyCancel: { paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.xs },
+  safetyCancelText: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
 });

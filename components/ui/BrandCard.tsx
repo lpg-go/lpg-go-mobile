@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing, radii, typography, brandTints } from '../../lib/theme';
+import { colors, spacing, radii, brandTints } from '../../lib/theme';
 
 type Props = {
   name: string;
@@ -37,11 +37,6 @@ export default function BrandCard({
           <Text style={styles.featuredText}>Featured</Text>
         </View>
       ) : null}
-      <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={1}>
-          {name}
-        </Text>
-      </View>
     </TouchableOpacity>
   );
 }
@@ -55,7 +50,7 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
   },
   imageZone: {
-    height: 72,
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -78,15 +73,5 @@ const styles = StyleSheet.create({
     color: colors.headerText,
     fontSize: 9,
     fontWeight: '700',
-  },
-  body: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  name: {
-    ...typography.cardTitle,
-    fontSize: 12,
-    color: colors.text,
-    textAlign: 'left',
   },
 });

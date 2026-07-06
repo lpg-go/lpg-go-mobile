@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import DetailHeader from '../../../components/ui/DetailHeader';
-import { colors, radii, spacing, typography, shadows } from '../../../lib/theme';
+import { colors, radii, spacing, shadows } from '../../../lib/theme';
 import supabase from '../../../lib/supabase';
 
 type Product = {
@@ -185,12 +185,10 @@ function ProductCard({
             </View>
           </View>
         )}
-      </View>
-
-      <View style={styles.cardBottom}>
-        <Text style={[styles.sizeLabel, !inStock && styles.sizeLabelUnavailable]}>
-          {product.size_kg} kg
-        </Text>
+        <View style={[styles.sizeBadge, !inStock && styles.sizeBadgeUnavailable]}>
+          <Text style={styles.sizeBadgeValue}>{product.size_kg}</Text>
+          <Text style={styles.sizeBadgeUnit}>kg</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -219,7 +217,7 @@ const styles = StyleSheet.create({
   },
   cardDisabled: { opacity: 0.5 },
   imageZone: {
-    height: 58,
+    aspectRatio: 1,
     backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
@@ -239,8 +237,21 @@ const styles = StyleSheet.create({
   },
   unavailablePillText: { fontSize: 9, fontWeight: '700', color: colors.textSecondary },
 
-  // Card bottom / label
-  cardBottom: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-  sizeLabel: { ...typography.cardTitle, color: colors.text },
-  sizeLabelUnavailable: { color: colors.textMuted },
+  // Modern size badge — floats over the square image, bottom-left
+  sizeBadge: {
+    position: 'absolute',
+    bottom: spacing.sm,
+    left: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    ...shadows.card,
+  },
+  sizeBadgeUnavailable: { backgroundColor: 'rgba(255,255,255,0.75)' },
+  sizeBadgeValue: { fontSize: 15, fontWeight: '800', color: colors.text },
+  sizeBadgeUnit: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
 });

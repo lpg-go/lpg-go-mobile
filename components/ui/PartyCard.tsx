@@ -20,6 +20,8 @@ type Props = {
   // Action buttons render only when their handler is provided.
   onCall?: () => void;
   onChat?: () => void;
+  // Unread message count shown as a badge on the chat button (hidden when 0).
+  chatBadge?: number;
   // Makes the whole card tappable.
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -43,6 +45,7 @@ export default function PartyCard({
   online,
   onCall,
   onChat,
+  chatBadge,
   onPress,
   style,
 }: Props) {
@@ -97,6 +100,11 @@ export default function PartyCard({
           {onChat ? (
             <TouchableOpacity style={styles.chatBtn} onPress={onChat} activeOpacity={0.8}>
               <Feather name="message-circle" size={18} color="#fff" />
+              {chatBadge != null && chatBadge > 0 ? (
+                <View style={styles.chatBadge}>
+                  <Text style={styles.chatBadgeText}>{chatBadge > 9 ? '9+' : chatBadge}</Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           ) : null}
         </View>
@@ -164,4 +172,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  chatBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  chatBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
 });

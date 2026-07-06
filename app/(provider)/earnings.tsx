@@ -10,30 +10,46 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import AppHeader from '../../components/AppHeader';
-import ProviderHeaderActions from '../../components/ProviderHeaderActions';
+import Card from '../../components/ui/Card';
+import DetailHeader from '../../components/ui/DetailHeader';
+import EmptyState from '../../components/ui/EmptyState';
 import supabase from '../../lib/supabase';
+import { colors, radii, spacing } from '../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type TxType = 'topup' | 'promo' | 'loyalty' | 'fee_deduction' | 'express_platform_fee';
+
 type Transaction = {
   id: string;
-  type: 'topup' | 'promo' | 'loyalty' | 'fee_deduction';
+  type: TxType;
   amount: number;
   order_id: string | null;
   created_at: string;
 };
 
 const H_PADDING = 20;
-const PRIMARY = '#16A34A';
+
+// Per-type presentation: label, icon, and the tinted circle behind it.
+function txMeta(type: TxType): { label: string; icon: keyof typeof Feather.glyphMap; iconColor: string; circleBg: string } {
+  switch (type) {
+    case 'topup':
+      return { label: 'Top up', icon: 'arrow-down-left', iconColor: colors.primary, circleBg: colors.primaryTint };
+    case 'promo':
+      return { label: 'Promo', icon: 'gift', iconColor: colors.primary, circleBg: colors.primaryTint };
+    case 'loyalty':
+      return { label: 'Loyalty', icon: 'award', iconColor: colors.primary, circleBg: colors.primaryTint };
+    case 'express_platform_fee':
+      return { label: 'Express fee', icon: 'zap', iconColor: colors.amberText, circleBg: colors.amberTint };
+    case 'fee_deduction':
+    default:
+      return { label: 'Admin fee', icon: 'arrow-up-right', iconColor: colors.danger, circleBg: colors.dangerTint };
+  }
+}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProviderEarningsScreen() {
-  const insets = useSafeAreaInsets();
-
   const [providerId, setProviderId] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [minBalance, setMinBalance] = useState(0);
@@ -139,45 +155,45 @@ export default function ProviderEarningsScreen() {
     .filter((t) => t.type === 'fee_deduction')
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
+  const peso = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
+      <DetailHeader title="Earnings" onBack={() => router.back()} />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 32 + insets.bottom }]}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={PRIMARY}
-            colors={[PRIMARY]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
       >
         {/* Balance card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceAmount}>
-            {balance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-          </Text>
+          <Text style={styles.balanceLabel}>Available balance</Text>
+          <Text style={styles.balanceAmount}>{peso(balance)}</Text>
           <TouchableOpacity
             style={styles.topUpBtn}
             onPress={() => router.push('/(provider)/topup' as never)}
             activeOpacity={0.8}
           >
-            <Feather name="plus-circle" size={15} color={PRIMARY} />
+            <Feather name="plus-circle" size={15} color="#fff" />
             <Text style={styles.topUpBtnText}>Top Up</Text>
           </TouchableOpacity>
         </View>
@@ -185,29 +201,45 @@ export default function ProviderEarningsScreen() {
         {/* Low balance warning */}
         {minBalance > 0 && balance < minBalance && (
           <View style={styles.lowBalanceWarning}>
-            <Feather name="alert-triangle" size={16} color="#92400E" />
+            <Feather name="alert-triangle" size={16} color={colors.amberText} />
             <Text style={styles.lowBalanceText}>
               Your balance is below the minimum of{' '}
-              {minBalance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}.
-              Top up to keep receiving orders.
+              {peso(minBalance)}. Top up to keep receiving orders.
             </Text>
           </View>
         )}
 
-
+        {/* Stat cards */}
+        <View style={styles.statsRow}>
+          <Card style={styles.statCard}>
+            <Text style={styles.statTitle}>This month</Text>
+            <Text style={styles.statValue}>{peso(monthlyFees)}</Text>
+            <Text style={styles.statUnit}>in fees</Text>
+          </Card>
+          <Card style={styles.statCard}>
+            <Text style={styles.statTitle}>All time</Text>
+            <Text style={styles.statValue}>{peso(allTimeFees)}</Text>
+            <Text style={styles.statUnit}>in fees</Text>
+          </Card>
+          <Card style={styles.statCard}>
+            <Text style={styles.statTitle}>Delivered</Text>
+            <Text style={styles.statValue}>{completedOrders}</Text>
+            <Text style={styles.statUnit}>orders</Text>
+          </Card>
+        </View>
 
         {/* Transaction history */}
         <Text style={styles.sectionTitle}>Transaction History</Text>
 
         {transactions.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="file-text" size={40} color="#D1D5DB" />
-            <Text style={styles.emptyText}>
-              No transactions yet.{'\n'}Complete deliveries to see earnings.
-            </Text>
-          </View>
+          <EmptyState
+            icon="file-text"
+            message="No transactions yet"
+            subtitle="Complete deliveries to see earnings."
+            style={styles.emptyPad}
+          />
         ) : (
-          <View style={styles.txList}>
+          <Card style={styles.txList}>
             {transactions.map((tx, index) => (
               <TransactionRow
                 key={tx.id}
@@ -215,7 +247,7 @@ export default function ProviderEarningsScreen() {
                 isLast={index === transactions.length - 1}
               />
             ))}
-          </View>
+          </Card>
         )}
       </ScrollView>
     </View>
@@ -227,11 +259,7 @@ export default function ProviderEarningsScreen() {
 function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
   // Both top-ups and promo credits add to balance (credit, + sign).
   const isCredit = tx.type === 'topup' || tx.type === 'promo' || tx.type === 'loyalty';
-  const typeLabel =
-    tx.type === 'topup' ? 'Top Up'
-    : tx.type === 'promo' ? 'Promo'
-    : tx.type === 'loyalty' ? 'Loyalty'
-    : 'Fee';
+  const meta = txMeta(tx.type);
   const date = new Date(tx.created_at).toLocaleString('en-PH', {
     month: 'short',
     day: 'numeric',
@@ -242,106 +270,104 @@ function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
 
   return (
     <View style={[styles.txRow, !isLast && styles.txRowBorder]}>
-      <View style={styles.txTop}>
-        <Text style={styles.txType}>{typeLabel}{!isCredit && shortRef ? ` · #${shortRef}` : ''}</Text>
-        <Text style={[styles.txAmount, { color: isCredit ? PRIMARY : '#DC2626' }]}>
-          {isCredit ? '+' : '-'}{Number(tx.amount).toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-        </Text>
+      <View style={[styles.txIcon, { backgroundColor: meta.circleBg }]}>
+        <Feather name={meta.icon} size={16} color={meta.iconColor} />
       </View>
-      <Text style={styles.txDate}>{date}</Text>
+      <View style={styles.txInfo}>
+        <Text style={styles.txType}>{meta.label}</Text>
+        <Text style={styles.txDate}>{shortRef ? `#${shortRef} · ` : ''}{date}</Text>
+      </View>
+      <Text style={[styles.txAmount, { color: isCredit ? colors.primary : colors.danger }]}>
+        {isCredit ? '+' : '-'}{peso0(tx.amount)}
+      </Text>
     </View>
   );
+}
+
+function peso0(n: number): string {
+  return `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
-  centered: { alignItems: 'center', justifyContent: 'center' },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 20 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, paddingBottom: spacing.xxxl },
 
   // Balance card
   balanceCard: {
-    backgroundColor: PRIMARY,
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 16,
-    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radii.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
-  balanceLabel: { fontSize: 13, color: '#86EFAC', fontWeight: '500', marginBottom: 6 },
-  balanceAmount: { fontSize: 38, fontWeight: '800', color: '#fff', marginBottom: 16 },
+  balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
+  balanceAmount: { fontSize: 36, fontWeight: '800', color: '#fff', marginTop: 4 },
   topUpBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 6,
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    marginTop: spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderRadius: radii.pill,
     paddingVertical: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
-  topUpBtnText: { fontSize: 14, fontWeight: '700', color: PRIMARY },
+  topUpBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
   // Low balance warning
   lowBalanceWarning: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 12,
+    gap: spacing.sm,
+    backgroundColor: colors.amberTint,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: '#FDE68A',
-    padding: 14,
-    marginBottom: 16,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
-  lowBalanceText: { flex: 1, fontSize: 13, color: '#92400E', lineHeight: 18 },
+  lowBalanceText: { flex: 1, fontSize: 13, color: colors.amberText, lineHeight: 18 },
 
-  // Stats row
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 24,
-  },
-  statCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  statValue: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  statLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '500', textAlign: 'center' },
+  // Stat cards
+  statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xxl },
+  statCard: { flex: 1, padding: spacing.md, alignItems: 'flex-start' },
+  statTitle: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  statValue: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 4 },
+  statUnit: { fontSize: 10, color: colors.textMuted, marginTop: 1 },
 
   // Section title
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
 
   // Empty state
-  emptyState: { alignItems: 'center', paddingTop: 40, gap: 12 },
-  emptyText: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 22 },
+  emptyPad: { flex: undefined, paddingTop: spacing.xxxl, paddingBottom: spacing.md },
 
   // Transaction list
-  txList: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
+  txList: { overflow: 'hidden' },
   txRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  txRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  txTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 3,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  txType: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 },
-  txDate: { fontSize: 11, color: '#9CA3AF' },
-  txAmount: { fontSize: 13, fontWeight: '700' },
+  txRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.grey100 },
+  txIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  txInfo: { flex: 1 },
+  txType: { fontSize: 13, fontWeight: '600', color: colors.text },
+  txDate: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  txAmount: { fontSize: 14, fontWeight: '700' },
 });
