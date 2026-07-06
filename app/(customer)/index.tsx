@@ -13,8 +13,8 @@ import {
 import { useNotifications } from '../../lib/notificationsStore';
 import AddressBar from '../../components/ui/AddressBar';
 import IdentityHeader from '../../components/ui/IdentityHeader';
-import SearchBar from '../../components/ui/SearchBar';
 import BrandCard from '../../components/ui/BrandCard';
+import Dropdown from '../../components/ui/Dropdown';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import { colors, spacing, radii, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
@@ -63,12 +63,12 @@ function useProfileHeader() {
 
 export default function CustomerHomeScreen() {
   const { width } = useWindowDimensions();
-  const { fullName, avatarUrl, displayId } = useProfileHeader();
+  const { fullName, avatarUrl } = useProfileHeader();
   const { unreadCount } = useNotifications();
   const activeOrderCount = useActiveOrderCount();
 
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [search, setSearch] = useState('');
+  const [brandFilter, setBrandFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -143,9 +143,14 @@ export default function CustomerHomeScreen() {
     setRefreshing(false);
   }
 
-  const filtered = brands.filter((b) =>
-    b.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = brands.filter(
+    (b) => brandFilter === 'all' || b.id === brandFilter
   );
+
+  const brandOptions = [
+    { label: 'All', value: 'all' },
+    ...brands.map((b) => ({ label: b.name, value: b.id })),
+  ];
 
   return (
     <View style={styles.screen}>
@@ -166,7 +171,6 @@ export default function CustomerHomeScreen() {
         {/* Header */}
         <IdentityHeader
           name={fullName}
-          subtitle={displayId ?? undefined}
           avatarUrl={avatarUrl}
           onAvatarPress={() => router.push('/(customer)/profile')}
           right={
@@ -189,22 +193,10 @@ export default function CustomerHomeScreen() {
           <AddressBar address="Set delivery address" onPress={() => {}} />
         </IdentityHeader>
 
-        {/* Search — overlaps the header's extra bottom padding */}
-        <View style={styles.searchWrap}>
-          <SearchBar
-            placeholder="Search for a brand"
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
-
         {/* Section header */}
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Brands</Text>
-          {/* TODO: "See all" — dedicated all-brands screen not built yet */}
-          <TouchableOpacity onPress={() => {}} activeOpacity={0.7}>
-            <Text style={styles.seeAll}>See all</Text>
-          </TouchableOpacity>
+          <Dropdown options={brandOptions} value={brandFilter} onChange={setBrandFilter} />
         </View>
 
         {/* Brands grid */}
@@ -304,12 +296,6 @@ const styles = StyleSheet.create({
   },
   bellBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
 
-  // Search — sits just below the rounded header
-  searchWrap: {
-    paddingHorizontal: H_PADDING,
-    marginTop: spacing.lg,
-  },
-
   // Section header
   sectionRow: {
     flexDirection: 'row',
@@ -323,11 +309,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
-  },
-  seeAll: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
   },
 
   // Grid

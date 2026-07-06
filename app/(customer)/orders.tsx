@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { colors, radii, spacing, typography } from '../../lib/theme';
@@ -209,19 +210,19 @@ export default function CustomerOrdersScreen() {
       >
         {list.length === 0 ? (
           tab === 'active' ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No active orders</Text>
-              <TouchableOpacity
-                style={styles.browseButton}
-                onPress={() => router.replace('/(customer)')}
-              >
-                <Text style={styles.browseButtonText}>Browse brands</Text>
-              </TouchableOpacity>
-            </View>
+            <EmptyState
+              icon="package"
+              message="No active orders"
+              subtitle="Your ongoing orders will appear here."
+              style={styles.emptyPad}
+            />
           ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No past orders yet</Text>
-            </View>
+            <EmptyState
+              icon="clock"
+              message="No past orders yet"
+              subtitle="Your completed orders will appear here."
+              style={styles.emptyPad}
+            />
           )
         ) : (
           list.map((order) => <OrderCard key={order.id} order={order} />)
@@ -363,15 +364,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, paddingBottom: 100 },
 
   // Empty state
-  emptyState: { paddingVertical: 48, alignItems: 'center', gap: spacing.md },
-  emptyTitle: { fontSize: 14, color: colors.textMuted },
-  browseButton: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xxl,
-  },
-  browseButtonText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  emptyPad: { flex: undefined, paddingVertical: spacing.xxxl },
 
   // Shared card layout
   cardTop: {

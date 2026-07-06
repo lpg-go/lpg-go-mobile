@@ -116,12 +116,14 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.label,
+    fontSize: 13,
     textTransform: 'none',
     letterSpacing: 0,
     color: colors.textMuted,
   },
   labelActive: {
     ...typography.label,
+    fontSize: 13,
     textTransform: 'none',
     letterSpacing: 0,
     color: colors.headerText,

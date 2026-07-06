@@ -5,10 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -37,15 +37,6 @@ type IncomingOrder = {
   alreadyAccepted: boolean;
 };
 
-type RecentOrder = {
-  id: string;
-  status: 'delivered' | 'cancelled';
-  total_amount: number;
-  created_at: string;
-  delivery_address: string;
-  itemSummary: string;
-};
-
 type ActiveOrder = {
   id: string;
   status: 'in_transit' | 'awaiting_confirmation';
@@ -63,10 +54,6 @@ const ACTIVE_STATUS_LABEL: Record<ActiveOrder['status'], string> = {
 const H_PADDING = 20;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
 
 function timeAgo(iso: string): string {
   const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -95,7 +82,6 @@ export default function ProviderIncomingOrdersScreen() {
 
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [orders, setOrders] = useState<IncomingOrder[]>([]);
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [availableProductIds, setAvailableProductIds] = useState<string[]>([]);
 
   const [initialLoading, setInitialLoading] = useState(true);
@@ -114,7 +100,6 @@ export default function ProviderIncomingOrdersScreen() {
     if (!providerId) return;
     fetchOrders();
     fetchActiveOrders();
-    fetchRecentOrders();
   }, [providerId]);
 
   // Re-sync online status (and balance) whenever the screen regains focus — e.g.
@@ -156,7 +141,6 @@ export default function ProviderIncomingOrdersScreen() {
             Alert.alert('Order Completed!', 'The customer confirmed delivery. Your balance has been updated.');
             const uid = providerIdRef.current;
             if (uid) fetchProfile(uid);
-            fetchRecentOrders();
           }
 
           fetchOrders();
@@ -316,50 +300,6 @@ export default function ProviderIncomingOrdersScreen() {
     );
   }
 
-  async function fetchRecentOrders() {
-    const uid = providerIdRef.current;
-    if (!uid) return;
-
-    const { data: orderRows } = await supabase
-      .from('orders')
-      .select('id, status, total_amount, created_at, delivery_address')
-      .eq('selected_provider_id', uid)
-      .in('status', ['delivered', 'cancelled'])
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (!orderRows || orderRows.length === 0) {
-      setRecentOrders([]);
-      return;
-    }
-
-    const orderIds = orderRows.map((o) => o.id);
-    const { data: itemRows } = await supabase
-      .from('order_items')
-      .select('order_id, quantity, product:products(name)')
-      .in('order_id', orderIds);
-
-    const summaryByOrder: Record<string, string> = {};
-    for (const row of itemRows ?? []) {
-      const name = (row.product as { name: string } | null)?.name ?? 'Item';
-      const part = `${name} x${row.quantity}`;
-      summaryByOrder[row.order_id] = summaryByOrder[row.order_id]
-        ? `${summaryByOrder[row.order_id]}, ${part}`
-        : part;
-    }
-
-    setRecentOrders(
-      orderRows.map((o) => ({
-        id: o.id,
-        status: o.status as RecentOrder['status'],
-        total_amount: o.total_amount,
-        created_at: o.created_at,
-        delivery_address: o.delivery_address,
-        itemSummary: summaryByOrder[o.id] ?? 'Order',
-      }))
-    );
-  }
-
   async function fetchActiveOrders() {
     const uid = providerIdRef.current;
     if (!uid) return;
@@ -486,7 +426,6 @@ export default function ProviderIncomingOrdersScreen() {
     await Promise.all([
       fetchOrders(),
       fetchActiveOrders(),
-      fetchRecentOrders(),
       fetchProfile(uid),
     ]);
     setRefreshing(false);
@@ -505,16 +444,14 @@ export default function ProviderIncomingOrdersScreen() {
   // Incoming broadcast cards are visible only when online AND at least one product
   // is enabled — the core gating that must not change.
   const showIncoming = isOnline && availableProductIds.length > 0;
-  const subtitle = [displayId, providerType ? cap(providerType) : null].filter(Boolean).join(' · ');
 
   return (
     <View style={styles.screen}>
       {/* ── Dark header ─────────────────────────────────────────────── */}
       <IdentityHeader
         name={providerName || 'Provider'}
-        subtitle={subtitle}
         avatarUrl={avatarUrl}
-        online={isOnline}
+        onAvatarPress={() => router.push('/(provider)/profile')}
         right={
           <TouchableOpacity
             style={styles.bellBtn}
@@ -528,22 +465,24 @@ export default function ProviderIncomingOrdersScreen() {
       >
         {/* Stat cards */}
         <View style={styles.statRow}>
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => router.push('/(provider)/earnings')}
+            activeOpacity={0.7}
+          >
             <Text style={styles.statLabel}>Balance</Text>
-            <Text style={styles.statValue}>₱{balance.toLocaleString()}</Text>
-          </View>
+            <Text style={styles.statValue}>{balance.toLocaleString()}</Text>
+          </TouchableOpacity>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Status</Text>
             <View style={styles.statusRow}>
-              <Text style={styles.statValue}>{isOnline ? 'Online' : 'Offline'}</Text>
-              <Switch
-                value={isOnline}
-                onValueChange={handleToggleOnline}
-                disabled={togglingOnline}
-                trackColor={{ true: colors.headerAccent, false: 'rgba(255,255,255,0.25)' }}
-                thumbColor="#fff"
-                ios_backgroundColor="rgba(255,255,255,0.25)"
-              />
+              <View style={styles.statusValueRow}>
+                <View
+                  style={[styles.statusDot, isOnline ? styles.statusDotOnline : styles.statusDotOffline]}
+                />
+                <Text style={styles.statValue}>{isOnline ? 'Online' : 'Offline'}</Text>
+              </View>
+              <OnlineToggle value={isOnline} disabled={togglingOnline} onToggle={handleToggleOnline} />
             </View>
           </View>
         </View>
@@ -593,12 +532,20 @@ export default function ProviderIncomingOrdersScreen() {
         {/* New orders */}
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>New orders</Text>
-            {showIncoming && orders.length > 0 && (
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{orders.length}</Text>
-              </View>
-            )}
+            <View style={styles.sectionTitleLeft}>
+              <Text style={styles.sectionTitle}>New orders</Text>
+              {showIncoming && orders.length > 0 && (
+                <View style={styles.countBadge}>
+                  <Text style={styles.countBadgeText}>{orders.length}</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/(provider)/recent-orders')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.seeAll}>Recent Orders</Text>
+            </TouchableOpacity>
           </View>
 
           {!isOnline ? (
@@ -634,53 +581,73 @@ export default function ProviderIncomingOrdersScreen() {
           )}
         </View>
 
-        {/* Recent orders */}
-        {recentOrders.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent orders</Text>
-            {recentOrders.map((order) => {
-              const isDelivered = order.status === 'delivered';
-              return (
-                <Card
-                  key={order.id}
-                  style={styles.recentCard}
-                  onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
-                >
-                  <View style={styles.recentTopRow}>
-                    <Text style={styles.recentItems} numberOfLines={1}>{order.itemSummary}</Text>
-                    <StatusBadge
-                      tone={isDelivered ? 'success' : 'danger'}
-                      label={isDelivered ? 'Delivered' : 'Cancelled'}
-                    />
-                  </View>
-                  <View style={styles.recentBottomRow}>
-                    <Text style={styles.recentAddr} numberOfLines={1}>{order.delivery_address}</Text>
-                    <Text style={styles.recentAmount}>₱{Number(order.total_amount).toLocaleString()}</Text>
-                  </View>
-                </Card>
-              );
-            })}
-          </View>
-        )}
       </ScrollView>
 
       {/* ── Provider nav ────────────────────────────────────────────── */}
       <FloatingPillNav
         tabs={[
           { key: 'home', label: 'Home', icon: 'home', badgeCount: showIncoming ? orders.length : 0 },
-          { key: 'earnings', label: 'Earnings', icon: 'wallet', iconLib: 'material' },
           { key: 'products', label: 'Products', icon: 'package' },
-          { key: 'profile', label: 'Profile', icon: 'user' },
         ]}
         activeKey="home"
         onNavigate={(key) => {
-          if (key === 'earnings') router.push('/(provider)/earnings');
-          else if (key === 'products') router.push('/(provider)/products');
-          else if (key === 'profile') router.push('/(provider)/profile');
+          if (key === 'products') router.push('/(provider)/products');
           // home → already here
         }}
       />
     </View>
+  );
+}
+
+// ─── Online toggle ──────────────────────────────────────────────────────────────
+
+function OnlineToggle({
+  value,
+  disabled,
+  onToggle,
+}: {
+  value: boolean;
+  disabled: boolean;
+  onToggle: (next: boolean) => void;
+}) {
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(anim, {
+      toValue: value ? 1 : 0,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 70,
+    }).start();
+  }, [value, anim]);
+
+  const trackColor = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(255,255,255,0.18)', colors.headerAccent],
+    extrapolate: 'clamp',
+  });
+  const translateX = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [3, 25],
+    extrapolate: 'clamp',
+  });
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => onToggle(!value)}
+      disabled={disabled}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={disabled && styles.toggleDisabled}
+    >
+      <Animated.View
+        style={[styles.toggleTrack, { backgroundColor: trackColor }, value && styles.toggleTrackOnline]}
+      >
+        <Animated.View style={[styles.toggleThumb, { transform: [{ translateX }] }]}>
+          <Feather name="power" size={12} color={value ? colors.headerBg : colors.textMuted} />
+        </Animated.View>
+      </Animated.View>
+    </TouchableOpacity>
   );
 }
 
@@ -772,10 +739,53 @@ const styles = StyleSheet.create({
   },
   statValue: { color: colors.headerText, fontSize: 18, fontWeight: '700' },
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusValueRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusDotOnline: {
+    backgroundColor: colors.headerAccent,
+    shadowColor: colors.headerAccent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statusDotOffline: { backgroundColor: 'rgba(255,255,255,0.35)' },
+
+  // Custom online toggle (fits the dark status card)
+  toggleTrack: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  toggleTrackOnline: {
+    borderColor: 'transparent',
+    shadowColor: colors.headerAccent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleDisabled: { opacity: 0.55 },
 
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.xl, paddingBottom: 100 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.xxl, paddingBottom: 100 },
 
   // Section
   section: { marginBottom: spacing.xxl },
@@ -783,9 +793,12 @@ const styles = StyleSheet.create({
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
+  sectionTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  seeAll: { fontSize: 14, fontWeight: '600', color: colors.primary },
   countBadge: {
     minWidth: 22,
     height: 22,
@@ -858,21 +871,4 @@ const styles = StyleSheet.create({
   acceptBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 
   // Recent order card (white)
-  recentCard: { padding: spacing.lg, marginBottom: spacing.sm },
-  recentTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  recentItems: { fontSize: 13, fontWeight: '600', color: colors.text, flex: 1 },
-  recentBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  recentAddr: { fontSize: 12, color: colors.textSecondary, flex: 1 },
-  recentAmount: { fontSize: 13, fontWeight: '700', color: colors.text },
 });

@@ -51,6 +51,10 @@ export default function ProviderLayout() {
           name="notifications"
           options={{ href: null, tabBarStyle: { display: 'none' } }}
         />
+        <Tabs.Screen
+          name="recent-orders"
+          options={{ href: null, tabBarStyle: { display: 'none' } }}
+        />
       </Tabs>
       <GlobalChatModal role="provider" />
       <NotificationBanner />

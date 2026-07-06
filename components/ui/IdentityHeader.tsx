@@ -6,8 +6,6 @@ import { colors, radii, spacing } from '../../lib/theme';
 
 type Props = {
   name: string;
-  // Customer: display_id (e.g. "LGCS00001"). Provider: "LGRD00001 · Rider".
-  subtitle?: string;
   avatarUrl?: string | null;
   // When provided, an online dot is shown on the avatar (green when true, grey
   // when false). Omit entirely to hide the dot (e.g. the customer header).
@@ -18,6 +16,13 @@ type Props = {
   children?: ReactNode;
   onAvatarPress?: () => void;
 };
+
+function timeGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
 function getInitials(name: string): string {
   return (
@@ -35,7 +40,6 @@ function getInitials(name: string): string {
 // children slot below (address bar / stat cards). Rounded bottom corners.
 export default function IdentityHeader({
   name,
-  subtitle,
   avatarUrl,
   online,
   right,
@@ -76,14 +80,12 @@ export default function IdentityHeader({
         )}
 
         <View style={styles.identityText}>
+          <Text style={styles.greeting} numberOfLines={1}>
+            {timeGreeting()}
+          </Text>
           <Text style={styles.name} numberOfLines={1}>
             {name}
           </Text>
-          {subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
         </View>
 
         {right ? <View style={styles.rightSlot}>{right}</View> : null}
@@ -126,8 +128,8 @@ const styles = StyleSheet.create({
     borderColor: colors.headerBg,
   },
   identityText: { flex: 1 },
+  greeting: { color: colors.headerSubtext, fontSize: 13, fontWeight: '500', marginBottom: 2 },
   name: { color: colors.headerText, fontSize: 16, fontWeight: '600' },
-  subtitle: { color: colors.headerSubtext, fontSize: 12, fontWeight: '500', marginTop: 1 },
   rightSlot: { flexShrink: 0 },
   children: { marginTop: spacing.md },
 });
