@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
   },
   tabActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.headerBg,
   },
   label: {
     ...typography.label,
