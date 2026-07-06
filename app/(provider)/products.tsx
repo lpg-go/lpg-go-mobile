@@ -1,5 +1,5 @@
-import { Feather } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,9 +16,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../components/AppHeader';
-import ProviderHeaderActions from '../../components/ProviderHeaderActions';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import supabase from '../../lib/supabase';
+import { brandTints, colors, radii, spacing } from '../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,16 +45,7 @@ type BrandGroup = {
 
 type SaveState = 'idle' | 'saving' | 'saved';
 
-const AVATAR_COLORS = ['#16A34A', '#2563EB', '#D97706', '#7C3AED', '#DC2626', '#0891B2'];
-function getBrandColor(name: string) {
-  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
-}
-function getInitials(name: string) {
-  return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
-}
-
 const H_PADDING = 20;
-const PRIMARY = '#16A34A';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -165,43 +158,64 @@ export default function ProviderProductsScreen() {
   }
   brandGroups.sort((a, b) => a.brand_name.localeCompare(b.brand_name));
 
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <Text style={styles.headerTitle}>My Products</Text>
+      <Text style={styles.headerSubtitle}>Set price + availability per item</Text>
+    </View>
+  );
+
+  const nav = (
+    <FloatingPillNav
+      tabs={[
+        { key: 'home', label: 'Home', icon: 'home' },
+        { key: 'products', label: 'Products', icon: 'package' },
+      ]}
+      activeKey="products"
+      onNavigate={(key) => {
+        if (key === 'home') router.replace('/(provider)');
+        // products → already here
+      }}
+    />
+  );
+
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
+      {header}
 
       {products.length === 0 ? (
         <ScrollView
           contentContainerStyle={styles.emptyState}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PRIMARY} colors={[PRIMARY]} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
         >
-          <Feather name="box" size={48} color="#D1D5DB" />
-          <Text style={styles.emptyTitle}>No products available</Text>
-          <Text style={styles.emptySubtitle}>Pull down to refresh.</Text>
+          <EmptyState icon="box" message="No products available" subtitle="Pull down to refresh." />
         </ScrollView>
       ) : (
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PRIMARY} colors={[PRIMARY]} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {brandGroups.map((group) => {
+          {brandGroups.map((group, gi) => {
             const collapsed = collapsedBrands.has(group.brand_name);
+            const tint = brandTints[gi % brandTints.length];
+            const sellingCount = group.products.filter((p) => p.is_available).length;
             return (
-              <View key={group.brand_name} style={styles.brandSection}>
+              <Card key={group.brand_name} style={styles.brandCard}>
                 <TouchableOpacity
                   style={styles.brandHeaderRow}
                   onPress={() => toggleBrand(group.brand_name)}
@@ -210,16 +224,25 @@ export default function ProviderProductsScreen() {
                   {group.logo_url ? (
                     <Image source={{ uri: group.logo_url }} style={styles.brandLogo} resizeMode="contain" />
                   ) : (
-                    <View style={[styles.brandLogoFallback, { backgroundColor: getBrandColor(group.brand_name) }]}>
-                      <Text style={styles.brandLogoInitials}>{getInitials(group.brand_name)}</Text>
+                    <View style={[styles.brandIconSquare, { backgroundColor: tint.bg }]}>
+                      <MaterialCommunityIcons name="gas-cylinder" size={22} color={tint.icon} />
                     </View>
                   )}
-                  <Text style={styles.brandHeader}>{group.brand_name}</Text>
-                  <Feather name={collapsed ? 'chevron-down' : 'chevron-up'} size={16} color="#9CA3AF" />
+                  <Text style={styles.brandHeader} numberOfLines={1}>{group.brand_name}</Text>
+                  {sellingCount > 0 ? (
+                    <View style={styles.sellingBadge}>
+                      <Text style={styles.sellingBadgeText}>{sellingCount} selling</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.offBadge}>
+                      <Text style={styles.offBadgeText}>Off</Text>
+                    </View>
+                  )}
+                  <Feather name={collapsed ? 'chevron-down' : 'chevron-up'} size={18} color={colors.textMuted} />
                 </TouchableOpacity>
 
                 {!collapsed && (
-                  <View style={styles.brandCard}>
+                  <View style={styles.productsWrap}>
                     {group.products.map((product, index) => (
                       <ProductRow
                         key={product.id}
@@ -231,11 +254,13 @@ export default function ProviderProductsScreen() {
                     ))}
                   </View>
                 )}
-              </View>
+              </Card>
             );
           })}
         </ScrollView>
       )}
+
+      {nav}
     </View>
   );
 }
@@ -322,60 +347,46 @@ function ProductRow({
 
   return (
     <View style={[styles.productRow, !isLast && styles.productRowBorder]}>
-      {/* Thumbnail */}
-      <View style={styles.productThumb}>
-        {product.image_url ? (
-          <Image source={{ uri: product.image_url }} style={styles.productThumbImage} resizeMode="contain" />
-        ) : (
-          <Text style={styles.thumbSizeText}>{product.size_kg}kg</Text>
-        )}
-      </View>
-
-      {/* Name + size + admin fee */}
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={1}>{product.product_name}</Text>
-        <Text style={styles.productSize}>{product.size_kg}kg</Text>
-        <Text style={styles.adminFeeText}>Fee: ₱{product.admin_fee.toLocaleString()}</Text>
-      </View>
-
-      {/* Price field — always editable so a provider can set a price while the
-          product is OFF, then enable "Selling" (which requires price > 0). */}
-      <View style={styles.fieldWrap}>
-        <Text style={styles.fieldLabel}>Price</Text>
-        <TouchableOpacity
-          style={styles.inputTouchable}
-          onPress={() => priceRef.current?.focus()}
-          activeOpacity={1}
-        >
-          <Text style={styles.pesoPrefix}>₱</Text>
-          <TextInput
-            ref={priceRef}
-            style={styles.fieldInput}
-            value={priceText}
-            onChangeText={setPriceText}
-            keyboardType="decimal-pad"
-            returnKeyType="done"
-            onBlur={savePrice}
-            onSubmitEditing={savePrice}
-            selectTextOnFocus
-          />
-          {priceSave === 'saving' && <ActivityIndicator size="small" color="#9CA3AF" style={styles.saveIndicator} />}
-          {priceSave === 'saved' && <Feather name="check" size={12} color={PRIMARY} style={styles.saveIndicator} />}
-        </TouchableOpacity>
-      </View>
-
-      {/* Availability toggle — saves immediately on change */}
-      <View style={styles.fieldWrap}>
-        <Text style={styles.fieldLabel}>{available ? 'Selling' : 'Off'}</Text>
+      {/* Top: size + admin fee · availability toggle */}
+      <View style={styles.rowTop}>
+        <View style={styles.rowTopLeft}>
+          <Text style={styles.sizeText}>{product.size_kg} kg</Text>
+          <Text style={styles.adminFeeText}>Admin fee ₱{product.admin_fee.toLocaleString()}</Text>
+        </View>
         <Switch
           value={available}
           onValueChange={toggleAvailable}
           disabled={toggleSaving}
-          trackColor={{ false: '#E5E7EB', true: '#86EFAC' }}
-          thumbColor={available ? PRIMARY : '#F3F4F6'}
-          ios_backgroundColor="#E5E7EB"
+          trackColor={{ false: colors.grey300, true: colors.primary }}
+          thumbColor="#fff"
+          ios_backgroundColor={colors.grey300}
         />
       </View>
+
+      {/* Price field — always editable so a provider can set a price while the
+          product is OFF, then enable "Selling" (which requires price > 0). */}
+      <TouchableOpacity
+        style={styles.priceField}
+        onPress={() => priceRef.current?.focus()}
+        activeOpacity={1}
+      >
+        <Text style={styles.pesoPrefix}>₱</Text>
+        <TextInput
+          ref={priceRef}
+          style={styles.priceInput}
+          value={priceText}
+          onChangeText={setPriceText}
+          placeholder="Set price"
+          placeholderTextColor={colors.textFaint}
+          keyboardType="decimal-pad"
+          returnKeyType="done"
+          onBlur={savePrice}
+          onSubmitEditing={savePrice}
+          selectTextOnFocus
+        />
+        {priceSave === 'saving' && <ActivityIndicator size="small" color={colors.textMuted} />}
+        {priceSave === 'saved' && <Feather name="check" size={16} color={colors.primary} />}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -383,107 +394,83 @@ function ProductRow({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
-  centered: { alignItems: 'center', justifyContent: 'center' },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
+  // Header
+  header: {
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: colors.headerText },
+  headerSubtitle: { fontSize: 13, color: colors.headerSubtext, marginTop: 2 },
+
+  // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 16, paddingBottom: 32 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, paddingBottom: 100 },
 
-  brandSection: { marginBottom: 20 },
+  // Brand group card
+  brandCard: { marginBottom: spacing.md, overflow: 'hidden' },
   brandHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-    paddingVertical: 2,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  brandLogo: { width: 40, height: 40, borderRadius: 8 },
-  brandLogoFallback: {
+  brandLogo: { width: 40, height: 40, borderRadius: radii.sm },
+  brandIconSquare: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  brandLogoInitials: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  brandHeader: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  brandHeader: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
+  sellingBadge: {
+    backgroundColor: colors.primaryTint,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
   },
-  brandCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+  sellingBadgeText: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
+  offBadge: {
+    backgroundColor: colors.grey100,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
   },
+  offBadgeText: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
 
-  productRow: {
+  // Product rows
+  productsWrap: { borderTopWidth: 1, borderTopColor: colors.grey100 },
+  productRow: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  productRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.grey100 },
+  rowTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    justifyContent: 'space-between',
+    gap: spacing.md,
   },
-  productRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  productThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    flexShrink: 0,
-  },
-  productThumbImage: { width: 40, height: 40 },
-  thumbSizeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
-
-  productInfo: { flex: 1 },
-  productName: { fontSize: 13, fontWeight: '600', color: '#111827' },
-  productSize: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  adminFeeText: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-
-  fieldWrap: { alignItems: 'center', gap: 2 },
-  fieldLabel: { fontSize: 10, color: '#9CA3AF', fontWeight: '500' },
-  inputTouchable: {
+  rowTopLeft: { flex: 1 },
+  sizeText: { fontSize: 15, fontWeight: '500', color: colors.text },
+  adminFeeText: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  priceField: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.sm,
+    backgroundColor: colors.grey50,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    backgroundColor: '#F9FAFB',
-    minWidth: 64,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  inputTouchableDisabled: { backgroundColor: '#F3F4F6', opacity: 0.6 },
-  textDisabled: { color: '#9CA3AF' },
-  pesoPrefix: { fontSize: 12, color: '#6B7280', marginRight: 1 },
-  fieldInput: {
-    fontSize: 13,
-    color: '#111827',
-    padding: 0,
-    minWidth: 36,
-    maxWidth: 60,
-  },
-  saveIndicator: { marginLeft: 3 },
+  pesoPrefix: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
+  priceInput: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, padding: 0 },
 
-  emptyState: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: H_PADDING,
-    paddingBottom: 40,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginTop: 4 },
-  emptySubtitle: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 20 },
+  // Empty state
+  emptyState: { flexGrow: 1, paddingHorizontal: H_PADDING, paddingBottom: 40 },
 });
