@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import OrderBidding from '../../../components/order/OrderBidding';
 import PrimaryButton from '../../../components/ui/PrimaryButton';
+import DetailHeader from '../../../components/ui/DetailHeader';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { colors, radii, spacing, typography, shadows } from '../../../lib/theme';
 import { sendOrderNotification } from '../../../lib/notifications';
@@ -617,26 +618,12 @@ export default function FindStoreScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* Dark detail header with back button */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={8}
-          activeOpacity={0.7}
-        >
-          <Feather name="arrow-left" size={20} color={colors.headerText} />
-        </TouchableOpacity>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {brandName || displayName}
-          </Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {phase === 'bidding' ? `Order #${orderShort}` : 'Set delivery details'}
-          </Text>
-        </View>
-        {phase === 'bidding' && isExpress ? <StatusBadge label="Express" tone="express" /> : null}
-      </View>
+      <DetailHeader
+        title={brandName || displayName}
+        subtitle={phase === 'bidding' ? `Order #${orderShort}` : 'Set delivery details'}
+        onBack={() => router.back()}
+        right={phase === 'bidding' && isExpress ? <StatusBadge label="Express" tone="express" /> : undefined}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -920,29 +907,6 @@ const DEFAULT_REGION = {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-
-  // Dark detail header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.headerBg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    backgroundColor: colors.headerSurface,
-    borderWidth: 1,
-    borderColor: colors.headerSurfaceBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: { flex: 1 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.headerText },
-  headerSubtitle: { ...typography.caption, color: colors.headerSubtext, marginTop: 2 },
 
   // Scroll
   scroll: { flex: 1 },

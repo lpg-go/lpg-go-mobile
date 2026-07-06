@@ -1,4 +1,3 @@
-import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -16,8 +15,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ChatModal from '../../../components/ChatModal';
 import OrderBidding from '../../../components/order/OrderBidding';
 import OrderTracking from '../../../components/order/OrderTracking';
+import DetailHeader from '../../../components/ui/DetailHeader';
 import StatusBadge from '../../../components/ui/StatusBadge';
-import { colors, radii, spacing, typography } from '../../../lib/theme';
+import { colors, radii, spacing } from '../../../lib/theme';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
@@ -674,22 +674,12 @@ export default function OrderTrackingScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* Dark detail header with back button */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={8}
-          activeOpacity={0.7}
-        >
-          <Feather name="arrow-left" size={20} color={colors.headerText} />
-        </TouchableOpacity>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>Order #{shortId}</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>{statusCfg.label}</Text>
-        </View>
-        {order.is_express ? <StatusBadge label="Express" tone="express" /> : null}
-      </View>
+      <DetailHeader
+        title={`Order #${shortId}`}
+        subtitle={statusCfg.label}
+        onBack={() => router.back()}
+        right={order.is_express ? <StatusBadge label="Express" tone="express" /> : undefined}
+      />
 
       <OrderTracking
         order={order}
@@ -774,30 +764,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   centered: { alignItems: 'center', justifyContent: 'center' },
   errorText: { fontSize: 15, color: colors.textSecondary },
-
-  // Dark detail header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.headerBg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    backgroundColor: colors.headerSurface,
-    borderWidth: 1,
-    borderColor: colors.headerSurfaceBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: { flex: 1 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.headerText },
-  headerSubtitle: { ...typography.caption, color: colors.headerSubtext, marginTop: 2 },
-
 
   // Scroll
   scroll: { flex: 1 },
