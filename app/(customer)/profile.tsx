@@ -1,11 +1,13 @@
 import { Feather } from '@expo/vector-icons';
 import { decode } from 'base64-arraybuffer';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,8 +17,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../components/AppHeader';
-import CustomerHeaderActions from '../../components/CustomerHeaderActions';
+import PrimaryButton from '../../components/ui/PrimaryButton';
+import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import supabase from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,7 +33,6 @@ type Profile = {
 };
 
 const H_PADDING = 20;
-const PRIMARY = '#16A34A';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -169,8 +170,8 @@ export default function CustomerProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -181,25 +182,31 @@ export default function CustomerProfileScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo right={<CustomerHeaderActions />} />
+      {/* Dark header with profile block */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.titleRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={20} color={colors.headerText} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profile</Text>
+        </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
+        <View style={styles.profileBlock}>
           <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
             <View style={styles.avatarWrap}>
               {uploadingAvatar ? (
-                <View style={[styles.avatar, styles.avatarLoading]}>
-                  <ActivityIndicator size="large" color="#fff" />
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <ActivityIndicator color="#fff" />
                 </View>
               ) : profile?.avatar_url ? (
                 <Image key={profile.avatar_url} source={{ uri: profile.avatar_url }} style={styles.avatar} />
               ) : (
-                <View style={[styles.avatar, { backgroundColor: PRIMARY }]}>
+                <View style={[styles.avatar, styles.avatarFallback]}>
                   <Text style={styles.avatarInitials}>
                     {profile ? getInitials(profile.full_name) : '?'}
                   </Text>
@@ -210,207 +217,254 @@ export default function CustomerProfileScreen() {
               </View>
             </View>
           </TouchableOpacity>
-          <Text style={styles.avatarName}>{profile?.full_name}</Text>
-          <Text style={styles.avatarSub}>Customer</Text>
-          {profile?.display_id ? (
-            <Text style={styles.avatarId}>ID: {profile.display_id}</Text>
-          ) : null}
-        </View>
 
-        {/* Personal info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-          <View style={styles.card}>
-            {editing ? (
-              <View style={styles.editFieldWrap}>
-                <Text style={styles.editFieldLabel}>Full Name</Text>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName} numberOfLines={1}>{profile?.full_name}</Text>
+            {profile?.display_id ? (
+              <View style={styles.idPill}>
+                <Text style={styles.idPillText}>ID: {profile.display_id}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Personal Information card */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Personal Information</Text>
+
+          {/* Full Name — editable */}
+          <View style={styles.row}>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Full Name</Text>
+              {editing ? (
                 <TextInput
                   style={styles.textInput}
                   value={editName}
                   onChangeText={setEditName}
                   placeholder="Full name"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textMuted}
                   autoFocus
                 />
-              </View>
-            ) : (
-              <InfoRow icon="user" label="Full Name" value={profile?.full_name ?? '—'} />
+              ) : (
+                <Text style={styles.rowValue}>{profile?.full_name ?? '—'}</Text>
+              )}
+            </View>
+            {!editing && (
+              <TouchableOpacity onPress={startEditing} hitSlop={8} activeOpacity={0.7}>
+                <Feather name="edit-2" size={16} color={colors.primary} />
+              </TouchableOpacity>
             )}
-            <View style={styles.rowDivider} />
-            <InfoRow icon="phone" label="Phone" value={formatPhone(profile?.phone ?? '')} />
-            <View style={styles.rowDivider} />
-            <InfoRow icon="calendar" label="Member Since" value={memberSince} />
           </View>
 
-          {editing ? (
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-                onPress={handleSave}
-                disabled={saving}
-              >
-                {saving
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={styles.saveBtnText}>Save Changes</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditing(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
+          <View style={styles.divider} />
+
+          {/* Phone — read-only */}
+          <View style={styles.row}>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Phone</Text>
+              <Text style={styles.rowValueMuted}>{formatPhone(profile?.phone ?? '')}</Text>
             </View>
-          ) : (
-            <TouchableOpacity style={styles.editBtn} onPress={startEditing}>
-              <Feather name="edit-2" size={14} color={PRIMARY} />
-              <Text style={styles.editBtnText}>Edit Profile</Text>
-            </TouchableOpacity>
-          )}
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Member Since — read-only */}
+          <View style={styles.row}>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Member Since</Text>
+              <Text style={styles.rowValueMuted}>{memberSince}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Save / Cancel — only while editing */}
+        {editing && (
+          <View style={styles.editActions}>
+            <View style={styles.editActionBtn}>
+              <PrimaryButton label="Save" onPress={handleSave} loading={saving} />
+            </View>
+            <View style={styles.editActionBtn}>
+              <PrimaryButton label="Cancel" variant="outline" onPress={() => setEditing(false)} />
+            </View>
+          </View>
+        )}
+
+        {/* Support / legal */}
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            // TODO: replace with real support destination (email/URL) before launch
+            onPress={() => Linking.openURL('https://iscalestudio.com')}
+            activeOpacity={0.7}
+          >
+            <Feather name="help-circle" size={16} color={colors.textSecondary} />
+            <Text style={styles.linkLabel}>Help & support</Text>
+            <Feather name="chevron-right" size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            // TODO: replace with real terms/privacy URL before launch
+            onPress={() => Linking.openURL('https://iscalestudio.com')}
+            activeOpacity={0.7}
+          >
+            <Feather name="file-text" size={16} color={colors.textSecondary} />
+            <Text style={styles.linkLabel}>Terms & privacy</Text>
+            <Feather name="chevron-right" size={18} color={colors.textFaint} />
+          </TouchableOpacity>
         </View>
 
         {/* Sign out */}
-        <TouchableOpacity style={styles.signOutBtn} onPress={confirmSignOut} activeOpacity={0.8}>
-          <Feather name="log-out" size={18} color="#EF4444" />
-          <Text style={styles.signOutText}>Sign Out</Text>
+        <TouchableOpacity style={styles.signOutCard} onPress={confirmSignOut} activeOpacity={0.8}>
+          <Feather name="log-out" size={18} color={colors.danger} />
+          <Text style={styles.signOutText}>Log out</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-// ─── Info row ─────────────────────────────────────────────────────────────────
-
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Feather name={icon as any} size={16} color="#9CA3AF" />
-      <View style={styles.infoRowBody}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    </View>
-  );
-}
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
+const AVATAR = 64;
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
+  screen: { flex: 1, backgroundColor: colors.bg },
   centered: { alignItems: 'center', justifyContent: 'center' },
 
-  // Scroll
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 24 },
-
-  // Avatar section
-  avatarSection: { alignItems: 'center', marginBottom: 28 },
-  avatarWrap: { position: 'relative', marginBottom: 12 },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+  // Dark header + profile block
+  header: {
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 40,
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
   },
-  avatarLoading: { backgroundColor: PRIMARY },
-  avatarInitials: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  headerTitle: { ...typography.title, color: colors.headerText },
+  profileBlock: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  avatarWrap: { position: 'relative' },
+  avatar: {
+    width: AVATAR,
+    height: AVATAR,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  avatarFallback: { backgroundColor: colors.primary },
+  avatarInitials: { fontSize: 22, fontWeight: '800', color: '#fff' },
   cameraOverlay: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: PRIMARY,
+    width: 24,
+    height: 24,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#F9FAFB',
+    borderColor: colors.headerBg,
   },
-  avatarName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  avatarSub: { fontSize: 13, color: '#9CA3AF' },
-  avatarId: { fontSize: 12, color: '#9CA3AF', fontFamily: 'monospace', marginTop: 2 },
+  profileInfo: { flex: 1 },
+  profileName: { fontSize: 19, fontWeight: '700', color: colors.headerText },
+  profilePhone: { ...typography.body, color: colors.headerSubtext, marginTop: 2 },
+  idPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    marginTop: spacing.sm,
+  },
+  idPillText: { fontSize: 12, color: colors.headerSubtext, fontWeight: '600' },
 
-  // Section
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  // Scroll — overlaps the header's bottom padding
+  scroll: { flex: 1, marginTop: -24 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 0, gap: spacing.md },
 
-  // Card
+  // Personal Information card
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+    borderColor: colors.cardBorder,
+    paddingVertical: spacing.sm,
+    ...shadows.card,
   },
-  rowDivider: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 48 },
-
-  // Info row
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  infoRowBody: { flex: 1 },
-  infoLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '500', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
-  infoValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
-
-  // Edit field
-  editFieldWrap: { paddingHorizontal: 16, paddingVertical: 14 },
-  editFieldLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '500', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 },
-  textInput: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#111827',
+  cardLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
-
-  // Edit / save / cancel
-  editBtn: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    marginTop: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: PRIMARY,
-    borderRadius: 8,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  editBtnText: { fontSize: 13, fontWeight: '600', color: PRIMARY },
-  editActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  saveBtn: {
-    flex: 1,
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
-    paddingVertical: 13,
+  rowBody: { flex: 1 },
+  rowLabel: { ...typography.label, color: colors.textMuted, marginBottom: 3 },
+  rowValue: { fontSize: 14, fontWeight: '600', color: colors.text },
+  rowValueMuted: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  divider: { height: 1, backgroundColor: colors.cardBorder, marginHorizontal: spacing.lg },
+
+  // Support / legal link rows (match the info-card row padding)
+  linkRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  cancelBtn: {
-    flex: 1,
+  linkLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
+
+  textInput: {
+    backgroundColor: colors.bg,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    paddingVertical: 13,
-    alignItems: 'center',
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: colors.text,
   },
-  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+
+  // Save / Cancel
+  editActions: { flexDirection: 'row', gap: spacing.sm },
+  editActionBtn: { flex: 1 },
 
   // Sign out
-  signOutBtn: {
+  signOutCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderColor: '#FCA5A5',
-    borderRadius: 12,
-    paddingVertical: 14,
-    backgroundColor: '#FFF5F5',
+    gap: spacing.sm,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    borderRadius: radii.md,
+    paddingVertical: spacing.lg,
   },
-  signOutText: { fontSize: 15, fontWeight: '700', color: '#EF4444' },
+  signOutText: { fontSize: 15, fontWeight: '500', color: colors.danger },
 });
