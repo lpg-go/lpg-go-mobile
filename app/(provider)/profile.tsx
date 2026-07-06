@@ -9,6 +9,7 @@ import {
   Image,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -16,9 +17,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import AppHeader from '../../components/AppHeader';
-import ProviderHeaderActions from '../../components/ProviderHeaderActions';
+import Card from '../../components/ui/Card';
+import DetailHeader from '../../components/ui/DetailHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
 import supabase from '../../lib/supabase';
+import { colors, radii, spacing, typography } from '../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +48,6 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 const H_PADDING = 20;
-const PRIMARY = '#16A34A';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -252,8 +254,8 @@ export default function ProviderProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -265,350 +267,337 @@ export default function ProviderProfileScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader showLogo logoHref="/(provider)" right={<ProviderHeaderActions />} />
+      <DetailHeader
+        title="Profile"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))}
+      />
+
+      {/* Dark profile block (continues the header) */}
+      <View style={styles.profileBlock}>
+        <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
+          <View style={styles.avatarWrap}>
+            {uploadingAvatar ? (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            ) : profile?.avatar_url ? (
+              <Image key={profile.avatar_url} source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.avatarInitials}>
+                  {profile ? getInitials(profile.full_name) : '?'}
+                </Text>
+              </View>
+            )}
+            <View style={styles.cameraOverlay}>
+              <Feather name="camera" size={12} color="#fff" />
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.profileInfo}>
+          <Text style={styles.profileName} numberOfLines={1}>{profile?.full_name}</Text>
+          <Text style={styles.profileRole}>{isDealer ? 'Dealer' : 'Rider'}</Text>
+          <View style={styles.pillsRow}>
+            {profile?.display_id ? (
+              <View style={styles.idPill}>
+                <Text style={styles.idPillText}>ID: {profile.display_id}</Text>
+              </View>
+            ) : null}
+            {profile?.loyalty_tier ? (
+              <View style={[styles.tierBadge, { backgroundColor: TIER_COLORS[profile.loyalty_tier] ?? '#9CA3AF' }]}>
+                <Text style={styles.tierBadgeText}>
+                  {profile.loyalty_tier.charAt(0).toUpperCase() + profile.loyalty_tier.slice(1)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </View>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
-            <View style={styles.avatarWrap}>
-              {uploadingAvatar ? (
-                <View style={[styles.avatar, { backgroundColor: PRIMARY }]}>
-                  <ActivityIndicator size="large" color="#fff" />
-                </View>
-              ) : profile?.avatar_url ? (
-                <Image key={profile.avatar_url} source={{ uri: profile.avatar_url }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, { backgroundColor: PRIMARY }]}>
-                  <Text style={styles.avatarInitials}>
-                    {profile ? getInitials(profile.full_name) : '?'}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.cameraOverlay}>
-                <Feather name="camera" size={12} color="#fff" />
-              </View>
+        {/* Online status */}
+        <Card style={styles.card}>
+          <View style={styles.statusRow}>
+            <View style={styles.rowBody}>
+              <Text style={styles.statusLabel}>Online status</Text>
+              <Text style={styles.statusHint}>You'll receive order requests when online.</Text>
             </View>
-          </TouchableOpacity>
-          <Text style={styles.avatarName}>{profile?.full_name}</Text>
-          <Text style={styles.avatarSub}>{isDealer ? 'Dealer' : 'Rider'}</Text>
-          {profile?.display_id ? (
-            <Text style={styles.avatarId}>ID: {profile.display_id}</Text>
-          ) : null}
-          {profile?.loyalty_tier ? (
-            <View style={[styles.tierBadge, { backgroundColor: TIER_COLORS[profile.loyalty_tier] ?? '#9CA3AF' }]}>
-              <Text style={styles.tierBadgeText}>
-                {profile.loyalty_tier.charAt(0).toUpperCase() + profile.loyalty_tier.slice(1)}
+            <View style={styles.statusRight}>
+              <Text style={[styles.statusValue, { color: profile?.is_online ? colors.primary : colors.textMuted }]}>
+                {profile?.is_online ? 'Online' : 'Offline'}
               </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Status */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Status</Text>
-          <View style={styles.card}>
-            <View style={styles.statusRow}>
-              <View style={styles.statusInfo}>
-                <Text style={styles.statusLabel}>Availability</Text>
-                <Text style={styles.statusHint}>
-                  {profile?.is_online
-                    ? 'You are receiving new orders'
-                    : 'You are not receiving new orders'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.onlinePill, { backgroundColor: profile?.is_online ? '#DCFCE7' : '#F3F4F6' }]}
-                onPress={() => handleToggleOnline(!profile?.is_online)}
+              <Switch
+                value={!!profile?.is_online}
+                onValueChange={handleToggleOnline}
                 disabled={togglingOnline}
-                activeOpacity={0.7}
-              >
-                {togglingOnline ? (
-                  <ActivityIndicator size="small" color={profile?.is_online ? PRIMARY : '#9CA3AF'} />
-                ) : (
-                  <>
-                    <View style={[styles.onlineDot, { backgroundColor: profile?.is_online ? PRIMARY : '#9CA3AF' }]} />
-                    <Text style={[styles.onlineLabel, { color: profile?.is_online ? PRIMARY : '#9CA3AF' }]}>
-                      {profile?.is_online ? 'Online' : 'Offline'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                trackColor={{ false: colors.grey300, true: colors.primary }}
+                thumbColor="#fff"
+                ios_backgroundColor={colors.grey300}
+              />
             </View>
           </View>
-        </View>
+        </Card>
 
-        {/* Personal info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-          <View style={styles.card}>
-            {editing ? (
-              <>
-                <View style={styles.editFieldWrap}>
-                  <Text style={styles.editFieldLabel}>Full Name</Text>
+        {/* Personal Information */}
+        <Card style={styles.card}>
+          <Text style={styles.cardLabel}>Personal Information</Text>
+
+          {/* Full Name — editable */}
+          <View style={styles.row}>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Full Name</Text>
+              {editing ? (
+                <TextInput
+                  style={styles.textInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Full name"
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
+                />
+              ) : (
+                <Text style={styles.rowValue}>{profile?.full_name ?? '—'}</Text>
+              )}
+            </View>
+            {!editing && (
+              <TouchableOpacity onPress={startEditing} hitSlop={8} activeOpacity={0.7}>
+                <Feather name="edit-2" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Business Name — dealers only */}
+          {isDealer && editing ? (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowLabel}>Business Name</Text>
                   <TextInput
                     style={styles.textInput}
-                    value={editName}
-                    onChangeText={setEditName}
-                    placeholder="Full name"
-                    placeholderTextColor="#9CA3AF"
-                    autoFocus
+                    value={editBusiness}
+                    onChangeText={setEditBusiness}
+                    placeholder="Business name"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
-                {isDealer && (
-                  <>
-                    <View style={styles.rowDivider} />
-                    <View style={styles.editFieldWrap}>
-                      <Text style={styles.editFieldLabel}>Business Name</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        value={editBusiness}
-                        onChangeText={setEditBusiness}
-                        placeholder="Business name"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    </View>
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <InfoRow icon="user" label="Full Name" value={profile?.full_name ?? '—'} />
-                {isDealer && profile?.business_name ? (
-                  <>
-                    <View style={styles.rowDivider} />
-                    <InfoRow icon="briefcase" label="Business Name" value={profile.business_name} />
-                  </>
-                ) : null}
-              </>
-            )}
-            <View style={styles.rowDivider} />
-            <InfoRow icon="phone" label="Phone" value={formatPhone(profile?.phone ?? '')} />
-            <View style={styles.rowDivider} />
-            <InfoRow icon="calendar" label="Member Since" value={memberSince} />
-            {profile?.avg_delivery_minutes != null && (
-              <>
-                <View style={styles.rowDivider} />
-                <InfoRow
-                  icon="clock"
-                  label="Avg Delivery Time"
-                  value={`${profile.avg_delivery_minutes} mins`}
-                />
-              </>
-            )}
-            {avgRating !== null && (
-              <>
-                <View style={styles.rowDivider} />
-                <TouchableOpacity onPress={() => router.push('/(provider)/reviews' as never)} activeOpacity={0.7}>
-                  <InfoRow
-                    icon="star"
-                    label="Avg Rating"
-                    value={`${avgRating.toFixed(1)} / 5 (${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'})`}
-                  />
-                </TouchableOpacity>
-              </>
-            )}
+              </View>
+            </>
+          ) : isDealer && profile?.business_name ? (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowLabel}>Business Name</Text>
+                  <Text style={styles.rowValue}>{profile.business_name}</Text>
+                </View>
+              </View>
+            </>
+          ) : null}
+
+          <View style={styles.divider} />
+          <View style={styles.row}>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Phone</Text>
+              <Text style={styles.rowValueMuted}>{formatPhone(profile?.phone ?? '')}</Text>
+            </View>
           </View>
 
-          {editing ? (
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-                onPress={handleSave}
-                disabled={saving}
-              >
-                {saving
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={styles.saveBtnText}>Save Changes</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditing(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
+          <View style={styles.divider} />
+          <View style={styles.row}>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Member Since</Text>
+              <Text style={styles.rowValueMuted}>{memberSince}</Text>
             </View>
-          ) : (
-            <TouchableOpacity style={styles.editBtn} onPress={startEditing}>
-              <Feather name="edit-2" size={14} color={PRIMARY} />
-              <Text style={styles.editBtnText}>Edit Profile</Text>
-            </TouchableOpacity>
+          </View>
+
+          {profile?.avg_delivery_minutes != null && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowLabel}>Avg Delivery Time</Text>
+                  <Text style={styles.rowValueMuted}>{profile.avg_delivery_minutes} mins</Text>
+                </View>
+              </View>
+            </>
           )}
-        </View>
+
+          {avgRating !== null && (
+            <>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => router.push('/(provider)/reviews' as never)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowLabel}>Avg Rating</Text>
+                  <View style={styles.ratingValueRow}>
+                    <Feather name="star" size={13} color={colors.amber} />
+                    <Text style={styles.rowValue}>
+                      {avgRating.toFixed(1)} / 5 ({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})
+                    </Text>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.textFaint} />
+              </TouchableOpacity>
+            </>
+          )}
+        </Card>
+
+        {/* Save / Cancel — only while editing */}
+        {editing && (
+          <View style={styles.editActions}>
+            <View style={styles.editActionBtn}>
+              <PrimaryButton label="Save" onPress={handleSave} loading={saving} />
+            </View>
+            <View style={styles.editActionBtn}>
+              <PrimaryButton label="Cancel" variant="outline" onPress={() => setEditing(false)} />
+            </View>
+          </View>
+        )}
 
         {/* Sign out */}
-        <TouchableOpacity style={styles.signOutBtn} onPress={confirmSignOut} activeOpacity={0.8}>
-          <Feather name="log-out" size={18} color="#EF4444" />
-          <Text style={styles.signOutText}>Sign Out</Text>
+        <TouchableOpacity style={styles.signOutCard} onPress={confirmSignOut} activeOpacity={0.8}>
+          <Feather name="log-out" size={18} color={colors.danger} />
+          <Text style={styles.signOutText}>Log out</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-// ─── Info row ─────────────────────────────────────────────────────────────────
-
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Feather name={icon as any} size={16} color="#9CA3AF" />
-      <View style={styles.infoRowBody}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    </View>
-  );
-}
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
+const AVATAR = 64;
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
-  centered: { alignItems: 'center', justifyContent: 'center' },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-
-  // Scroll
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 24 },
-
-  // Avatar section
-  avatarSection: { alignItems: 'center', marginBottom: 28 },
-  avatarWrap: { position: 'relative', marginBottom: 12 },
+  // Dark profile block (continues below DetailHeader)
+  profileBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 40,
+  },
+  avatarWrap: { position: 'relative' },
   avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: AVATAR,
+    height: AVATAR,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
-  avatarInitials: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  avatarFallback: { backgroundColor: colors.primary },
+  avatarInitials: { fontSize: 22, fontWeight: '800', color: '#fff' },
   cameraOverlay: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: PRIMARY,
+    width: 24,
+    height: 24,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#F9FAFB',
+    borderColor: colors.headerBg,
   },
-  avatarName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  avatarSub: { fontSize: 13, color: '#9CA3AF' },
-  tierBadge: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, alignSelf: 'center' },
-  tierBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
-  avatarId: { fontSize: 12, color: '#9CA3AF', fontFamily: 'monospace', marginTop: 2 },
+  profileInfo: { flex: 1 },
+  profileName: { fontSize: 19, fontWeight: '700', color: colors.headerText },
+  profileRole: { ...typography.body, color: colors.headerSubtext, marginTop: 2 },
+  pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  idPill: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  idPillText: { fontSize: 12, color: colors.headerSubtext, fontWeight: '600' },
+  tierBadge: { borderRadius: radii.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  tierBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
 
-  // Section
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  // Scroll — overlaps the header's bottom padding
+  scroll: { flex: 1, marginTop: -24 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 0, gap: spacing.md },
 
   // Card
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+  card: { paddingVertical: spacing.sm },
+  cardLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
-  rowDivider: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 48 },
 
-  // Status row + online pill
+  // Online status
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  statusInfo: { flex: 1 },
-  statusLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  statusHint: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  onlinePill: {
+  statusLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
+  statusHint: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  statusRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  statusValue: { fontSize: 13, fontWeight: '700' },
+
+  // Rows
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    minHeight: 30,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  onlineDot: { width: 8, height: 8, borderRadius: 4 },
-  onlineLabel: { fontSize: 13, fontWeight: '600' },
+  rowBody: { flex: 1 },
+  rowLabel: { ...typography.label, color: colors.textMuted, marginBottom: 3 },
+  rowValue: { fontSize: 14, fontWeight: '600', color: colors.text },
+  rowValueMuted: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  ratingValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  divider: { height: 1, backgroundColor: colors.cardBorder, marginHorizontal: spacing.lg },
 
-  // Info row
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  infoRowBody: { flex: 1 },
-  infoLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '500', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
-  infoValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
-
-  // Edit field
-  editFieldWrap: { paddingHorizontal: 16, paddingVertical: 14 },
-  editFieldLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '500', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 },
   textInput: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.bg,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#111827',
+    color: colors.text,
   },
 
-  // Edit / save / cancel
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    marginTop: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: PRIMARY,
-    borderRadius: 8,
-  },
-  editBtnText: { fontSize: 13, fontWeight: '600', color: PRIMARY },
-  editActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  saveBtn: {
-    flex: 1,
-    backgroundColor: PRIMARY,
-    borderRadius: 10,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  cancelBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  // Save / Cancel
+  editActions: { flexDirection: 'row', gap: spacing.sm },
+  editActionBtn: { flex: 1 },
 
   // Sign out
-  signOutBtn: {
+  signOutCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderColor: '#FCA5A5',
-    borderRadius: 12,
-    paddingVertical: 14,
-    backgroundColor: '#FFF5F5',
+    gap: spacing.sm,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    borderRadius: radii.md,
+    paddingVertical: spacing.lg,
   },
-  signOutText: { fontSize: 15, fontWeight: '700', color: '#EF4444' },
+  signOutText: { fontSize: 15, fontWeight: '500', color: colors.danger },
 });

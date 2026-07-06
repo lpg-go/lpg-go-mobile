@@ -465,7 +465,7 @@ export default function ActiveDeliveryScreen() {
   if (!order) {
     return (
       <View style={styles.screen}>
-        <DetailHeader title="Active Delivery" onBack={() => router.back()} />
+        <DetailHeader title="Active Delivery" onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))} />
         <View style={[styles.screen, styles.centered]}>
           <Text style={styles.errorText}>Order not found.</Text>
         </View>
@@ -492,7 +492,7 @@ export default function ActiveDeliveryScreen() {
       <DetailHeader
         title="Active Delivery"
         subtitle={`#${shortId}`}
-        onBack={() => router.back()}
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))}
         right={order.is_express ? <StatusBadge label="Express" tone="express" /> : undefined}
       />
 

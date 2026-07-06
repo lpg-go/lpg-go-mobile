@@ -92,7 +92,7 @@ export default function ProviderRecentOrdersScreen() {
 
   return (
     <View style={styles.screen}>
-      <DetailHeader title="Recent Orders" onBack={() => router.back()} />
+      <DetailHeader title="Recent Orders" onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))} />
 
       {loading ? (
         <View style={[styles.screen, styles.centered]}>
