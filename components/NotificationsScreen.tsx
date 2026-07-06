@@ -1,6 +1,5 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ReactNode } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -8,21 +7,44 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Notification, useNotifications } from '../lib/notificationsStore';
-import AppHeader from './AppHeader';
-
-const PRIMARY = '#16A34A';
+import { colors, radii, spacing, typography } from '../lib/theme';
 
 type Props = {
-  // When set, the header shows a tappable logo (→ this route) + headerRight.
-  // When omitted (provider fallback), it shows a back button + "Notifications".
+  // When set, the header's back control navigates to this route (Home).
+  // When omitted (provider fallback), it falls back to router.back().
   homeHref?: '/(customer)' | '/(provider)';
-  headerRight?: ReactNode;
 };
 
-export default function NotificationsScreen({ homeHref, headerRight }: Props) {
+// Maps a notification type to its icon + tinted circle colors. Covers the
+// common types and falls back to a gray bell for anything unknown. `lib`
+// selects the icon set (Feather by default; MaterialCommunityIcons for wallet).
+type NotifIcon = { lib: 'feather' | 'mci'; icon: string; bg: string; color: string };
+
+function getNotifIcon(type: string): NotifIcon {
+  const t = (type || '').toLowerCase();
+  if (t === 'dealer_selected' || t === 'accepted' || t === 'provider')
+    return { lib: 'feather', icon: 'check', bg: colors.primaryTint, color: colors.primary };
+  if (t === 'new_order')
+    return { lib: 'feather', icon: 'package', bg: '#DBEAFE', color: '#185FA5' };
+  if (t === 'in_transit' || t === 'on_the_way')
+    return { lib: 'feather', icon: 'truck', bg: colors.primaryTint, color: colors.primary };
+  if (t === 'delivered')
+    return { lib: 'feather', icon: 'check-circle', bg: colors.primaryTint, color: colors.primary };
+  if (t === 'review' || t === 'rate')
+    return { lib: 'feather', icon: 'star', bg: colors.amberTint, color: colors.amberDark };
+  if (t === 'balance' || t === 'topup' || t === 'payment')
+    return { lib: 'mci', icon: 'wallet', bg: colors.primaryTint, color: colors.primary };
+  if (t === 'promo' || t === 'welcome')
+    return { lib: 'feather', icon: 'gift', bg: '#EDE9FE', color: '#5B21B6' };
+  return { lib: 'feather', icon: 'bell', bg: colors.border, color: colors.textSecondary };
+}
+
+export default function NotificationsScreen({ homeHref }: Props) {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const insets = useSafeAreaInsets();
 
   function handleTap(n: Notification) {
     if (!n.is_read) markAsRead(n.id);
@@ -36,35 +58,51 @@ export default function NotificationsScreen({ homeHref, headerRight }: Props) {
     }
   }
 
+  // Back control preserves the original nav intent: go Home when a homeHref is
+  // provided (customer + provider hosts), else fall back to router.back().
+  function handleBack() {
+    if (homeHref) router.push(homeHref);
+    else router.back();
+  }
+
   return (
     <View style={styles.screen}>
-      {homeHref ? (
-        <AppHeader showLogo logoHref={homeHref} right={headerRight} />
-      ) : (
-        <AppHeader showBack title="Notifications" right={headerRight} />
-      )}
-
-      {/* Mark all read — moved below the header (no header action slot anymore) */}
-      <View style={styles.markAllRow}>
-        <TouchableOpacity
-          onPress={markAllAsRead}
-          disabled={unreadCount === 0}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text
-            style={[
-              styles.markAllText,
-              unreadCount === 0 && styles.markAllTextDisabled,
-            ]}
+      {/* Dark header — single row: back control + title + "Mark all read". */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={handleBack}
+            hitSlop={8}
+            activeOpacity={0.7}
           >
-            Mark all read
+            <Feather name="chevron-left" size={22} color={colors.headerText} />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            Notifications
           </Text>
-        </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={markAllAsRead}
+            disabled={unreadCount === 0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text
+              style={[
+                styles.markAllText,
+                unreadCount === 0 && styles.markAllTextDisabled,
+              ]}
+            >
+              Mark all read
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {notifications.length === 0 ? (
         <View style={styles.emptyState}>
-          <Feather name="bell-off" size={40} color="#D1D5DB" />
+          <Feather name="bell-off" size={40} color={colors.textFaint} />
           <Text style={styles.emptyText}>No notifications yet</Text>
         </View>
       ) : (
@@ -72,24 +110,37 @@ export default function NotificationsScreen({ homeHref, headerRight }: Props) {
           data={notifications}
           keyExtractor={(n) => n.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.item, !item.is_read && styles.itemUnread]}
-              onPress={() => handleTap(item)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.itemTop}>
-                <Text style={styles.itemTitle} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                {!item.is_read && <View style={styles.unreadDot} />}
-              </View>
-              <Text style={styles.itemBody} numberOfLines={3}>
-                {item.body}
-              </Text>
-              <Text style={styles.itemTime}>{timeAgo(item.created_at)}</Text>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            const meta = getNotifIcon(item.type);
+            return (
+              <TouchableOpacity
+                style={[styles.card, item.is_read ? styles.cardRead : styles.cardUnread]}
+                onPress={() => handleTap(item)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
+                  {meta.lib === 'mci' ? (
+                    <MaterialCommunityIcons name={meta.icon as never} size={18} color={meta.color} />
+                  ) : (
+                    <Feather name={meta.icon as never} size={18} color={meta.color} />
+                  )}
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.cardTopRow}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {!item.is_read && <View style={styles.unreadDot} />}
+                  </View>
+                  <Text style={styles.cardBody} numberOfLines={3}>
+                    {item.body}
+                  </Text>
+                  <Text style={styles.cardTime}>{timeAgo(item.created_at)}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
     </View>
@@ -111,46 +162,81 @@ function timeAgo(iso: string): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
-  markAllRow: {
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 4,
+  screen: { flex: 1, backgroundColor: colors.bg },
+
+  // Dark header
+  header: {
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
-  markAllText: { fontSize: 13, fontWeight: '600', color: PRIMARY },
-  markAllTextDisabled: { color: '#9CA3AF' },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { ...typography.sectionHeader, color: colors.headerText, flex: 1 },
 
-  listContent: { padding: 16, gap: 8 },
+  markAllText: { fontSize: 13, fontWeight: '500', color: colors.headerAccent },
+  markAllTextDisabled: { color: colors.headerSubtext },
 
-  item: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+  // List
+  listContent: { padding: spacing.lg, gap: spacing.sm },
+
+  card: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.cardBorder,
   },
-  itemUnread: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+  cardUnread: {
+    backgroundColor: colors.primaryTint,
+    borderColor: colors.primaryTintBorder,
   },
-  itemTop: {
+  cardRead: {
+    backgroundColor: colors.card,
+    borderColor: colors.cardBorder,
+  },
+
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  cardContent: { flex: 1 },
+  cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
-    gap: 8,
+    marginBottom: 3,
+    gap: spacing.sm,
   },
-  itemTitle: { fontSize: 14, fontWeight: '700', color: '#111827', flex: 1 },
+  cardTitle: { fontSize: 14, fontWeight: '500', color: colors.text, flex: 1 },
   unreadDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: PRIMARY,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
   },
-  itemBody: { fontSize: 13, color: '#374151', lineHeight: 18, marginBottom: 6 },
-  itemTime: { fontSize: 11, color: '#9CA3AF' },
+  cardBody: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 6 },
+  cardTime: { fontSize: 11, color: colors.textMuted },
 
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyText: { fontSize: 15, color: '#9CA3AF' },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  emptyText: { fontSize: 15, color: colors.textMuted },
 });
