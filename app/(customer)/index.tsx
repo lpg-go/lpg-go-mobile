@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HeaderDark from '../../components/ui/HeaderDark';
+import { useNotifications } from '../../lib/notificationsStore';
 import AddressBar from '../../components/ui/AddressBar';
 import SearchBar from '../../components/ui/SearchBar';
 import BrandCard from '../../components/ui/BrandCard';
@@ -63,6 +64,7 @@ export default function CustomerHomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { fullName, avatarUrl } = useProfileHeader();
+  const { unreadCount } = useNotifications();
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState('');
@@ -167,6 +169,7 @@ export default function CustomerHomeScreen() {
         <HeaderDark
           name={fullName}
           avatarUrl={avatarUrl}
+          unreadCount={unreadCount}
           onBellPress={() => router.push('/(customer)/notifications')}
           onAvatarPress={() => router.push('/(customer)/profile')}
         >

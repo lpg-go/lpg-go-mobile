@@ -16,6 +16,10 @@ type Props = {
   avatarUrl?: string | null;
   onBellPress?: () => void;
   onAvatarPress?: () => void;
+  // Unread notification count for the bell badge. Passed in by the host (Home
+  // reads useNotifications().unreadCount) to keep this UI component decoupled
+  // from the notifications store. Badge is hidden when 0 / omitted.
+  unreadCount?: number;
   children?: ReactNode;
 };
 
@@ -25,6 +29,7 @@ export default function HeaderDark({
   avatarUrl,
   onBellPress,
   onAvatarPress,
+  unreadCount = 0,
   children,
 }: Props) {
   const firstName = (name || '').trim().split(/\s+/)[0] || '';
@@ -47,6 +52,11 @@ export default function HeaderDark({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Feather name="bell" size={20} color={colors.headerText} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             onPress={onAvatarPress}
@@ -110,6 +120,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  badgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
   avatar: {
     width: AVATAR,
     height: AVATAR,

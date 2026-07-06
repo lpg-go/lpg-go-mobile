@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, spacing, radii, typography, shadows } from '../../lib/theme';
+import { useActiveOrderCount } from '../../lib/useActiveOrderCount';
 
 type Tab = 'home' | 'orders';
 
@@ -15,11 +16,14 @@ const TABS: { key: Tab; label: string; icon: keyof typeof Feather.glyphMap }[] =
 ];
 
 export default function FloatingPillNav({ active, onNavigate }: Props) {
+  const activeOrderCount = useActiveOrderCount();
+
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
       <View style={styles.pill}>
         {TABS.map((tab) => {
           const isActive = tab.key === active;
+          const showBadge = tab.key === 'orders' && activeOrderCount > 0;
           return (
             <TouchableOpacity
               key={tab.key}
@@ -27,11 +31,20 @@ export default function FloatingPillNav({ active, onNavigate }: Props) {
               onPress={() => onNavigate(tab.key)}
               activeOpacity={0.8}
             >
-              <Feather
-                name={tab.icon}
-                size={20}
-                color={isActive ? colors.headerText : colors.textMuted}
-              />
+              <View style={styles.iconWrap}>
+                <Feather
+                  name={tab.icon}
+                  size={20}
+                  color={isActive ? colors.headerText : colors.textMuted}
+                />
+                {showBadge && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {activeOrderCount > 9 ? '9+' : activeOrderCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
               {isActive ? (
                 <Text style={styles.labelActive}>{tab.label}</Text>
               ) : (
@@ -71,6 +84,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radii.pill,
   },
+  iconWrap: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  badgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
   tabActive: {
     backgroundColor: colors.headerBg,
   },
