@@ -1,7 +1,7 @@
+import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -11,9 +11,11 @@ import {
   View,
 } from 'react-native';
 
+import DetailHeader from '../../components/ui/DetailHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
 import { formatPhone } from '../../lib/auth';
+import { colors, radii, spacing } from '../../lib/theme';
 
-const PRIMARY = '#16A34A';
 const SEND_OTP_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/send-otp';
 
 export default function ForgotPasswordScreen() {
@@ -68,98 +70,77 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+    <View style={styles.screen}>
+      <DetailHeader
+        title="Forgot password"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/login'))}
+      />
 
-        <Text style={styles.title}>Forgot password?</Text>
-        <Text style={styles.subtitle}>
-          Enter your phone number and we'll send you a verification code to reset your password.
-        </Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.content}>
+          <Text style={styles.intro} numberOfLines={1}>
+            Enter your number to get a reset code.
+          </Text>
+          <View style={styles.inputRow}>
+            <Text style={styles.prefix}>🇵🇭 +63</Text>
+            <TextInput
+              style={styles.rowInput}
+              placeholder="9XX XXX XXXX"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={10}
+              value={phone}
+              onChangeText={handlePhoneChange}
+            />
+          </View>
 
-        <Text style={styles.label}>Phone number</Text>
-        <View style={styles.phoneRow}>
-          <Text style={styles.prefix}>🇵🇭 +63</Text>
-          <TextInput
-            style={styles.phoneInput}
-            placeholder="9XX XXX XXXX"
-            placeholderTextColor="#9CA3AF"
-            keyboardType="number-pad"
-            maxLength={10}
-            value={phone}
-            onChangeText={handlePhoneChange}
-          />
+          {error ? (
+            <View style={styles.errorCard}>
+              <Feather name="alert-circle" size={14} color={colors.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <PrimaryButton label="Send Code" onPress={handleSendOtp} loading={loading} />
         </View>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleSendOtp}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Send OTP</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
-  },
-  back: { marginBottom: 24 },
-  backText: { fontSize: 15, color: PRIMARY, fontWeight: '500' },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 6,
-  },
-  phoneRow: {
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
+
+  intro: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.lg },
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
+    marginBottom: spacing.lg,
   },
-  prefix: { fontSize: 15, color: '#111827', marginRight: 8 },
-  phoneInput: { flex: 1, fontSize: 15, color: '#111827', padding: 0 },
-  error: { fontSize: 13, color: '#EF4444', marginBottom: 12 },
-  button: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
+  prefix: { fontSize: 15, color: colors.textMuted },
+  rowInput: { flex: 1, fontSize: 15, color: colors.text, padding: 0 },
+
+  errorCard: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerTint,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  errorText: { flex: 1, fontSize: 13, color: colors.danger },
 });

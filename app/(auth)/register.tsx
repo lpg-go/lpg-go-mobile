@@ -1,8 +1,7 @@
+import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,16 +11,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Card from '../../components/ui/Card';
+import DetailHeader from '../../components/ui/DetailHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
 import { formatPhone } from '../../lib/auth';
 import supabase from '../../lib/supabase';
-import { useAppLogo } from '../../lib/useAppLogo';
+import { colors, radii, spacing, typography } from '../../lib/theme';
 
 type Role = 'customer' | 'provider';
 type ProviderType = 'dealer' | 'rider';
 
 export default function RegisterScreen() {
-  const { logoUrl } = useAppLogo();
+  const insets = useSafeAreaInsets();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -143,32 +146,40 @@ export default function RegisterScreen() {
   function renderMessages() {
     if (alreadyRegistered) {
       return (
-        <Text style={styles.error}>
-          This number is already registered.{' '}
-          <Text style={styles.linkBold} onPress={() => router.replace('/(auth)/login')}>
-            Please log in.
+        <View style={styles.errorCard}>
+          <Feather name="alert-circle" size={14} color={colors.danger} />
+          <Text style={styles.errorText}>
+            This number is already registered.{' '}
+            <Text style={styles.errorLink} onPress={() => router.replace('/(auth)/login')}>
+              Please log in.
+            </Text>
           </Text>
-        </Text>
+        </View>
       );
     }
-    if (error) return <Text style={styles.error}>{error}</Text>;
+    if (error) {
+      return (
+        <View style={styles.errorCard}>
+          <Feather name="alert-circle" size={14} color={colors.danger} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      );
+    }
     return null;
   }
 
   function renderSubmitButton() {
-    const disabled = loading || (role === 'provider' && !complianceAccepted);
+    // Providers must accept compliance before continuing (also gated in validation).
+    const disabled = role === 'provider' && !complianceAccepted;
     return (
-      <TouchableOpacity
-        style={[styles.button, disabled && styles.buttonDisabled]}
-        onPress={handleRegister}
-        disabled={disabled}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Register</Text>
-        )}
-      </TouchableOpacity>
+      <View style={styles.submitWrap}>
+        <PrimaryButton
+          label="Continue"
+          onPress={handleRegister}
+          disabled={disabled}
+          loading={loading}
+        />
+      </View>
     );
   }
 
@@ -176,8 +187,8 @@ export default function RegisterScreen() {
   // mandatory acceptance checkbox. Shown for providers only; gates the submit.
   function renderCompliance() {
     return (
-      <View style={styles.complianceBlock}>
-        <Text style={styles.label}>Provider Compliance & Indemnity Undertaking</Text>
+      <Card style={styles.complianceCard}>
+        <Text style={styles.complianceHeading}>Provider Compliance & Indemnity Undertaking</Text>
         <ScrollView
           style={styles.complianceTextBox}
           nestedScrollEnabled
@@ -191,13 +202,13 @@ export default function RegisterScreen() {
           activeOpacity={0.7}
         >
           <View style={[styles.checkbox, complianceAccepted && styles.checkboxChecked]}>
-            {complianceAccepted && <Text style={styles.checkmark}>✓</Text>}
+            {complianceAccepted && <Feather name="check" size={14} color="#fff" />}
           </View>
           <Text style={styles.checkboxLabel}>
             I have read, understood and affirm compliance.
           </Text>
         </TouchableOpacity>
-      </View>
+      </Card>
     );
   }
 
@@ -205,25 +216,23 @@ export default function RegisterScreen() {
   function renderSharedFields() {
     return (
       <>
-        {/* Full name */}
-        <Text style={styles.label}>Full name</Text>
+        <Text style={styles.fieldLabel}>Full name</Text>
         <TextInput
           style={styles.input}
           placeholder="Juan dela Cruz"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
           value={fullName}
           onChangeText={setFullName}
           autoCapitalize="words"
         />
 
-        {/* Phone */}
-        <Text style={styles.label}>Phone number</Text>
-        <View style={styles.phoneRow}>
+        <Text style={styles.fieldLabel}>Phone number</Text>
+        <View style={styles.inputRow}>
           <Text style={styles.prefix}>🇵🇭 +63</Text>
           <TextInput
-            style={styles.phoneInput}
+            style={styles.rowInput}
             placeholder="9XX XXX XXXX"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={colors.textMuted}
             keyboardType="number-pad"
             maxLength={10}
             value={phone}
@@ -231,35 +240,33 @@ export default function RegisterScreen() {
           />
         </View>
 
-        {/* Password */}
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.passwordRow}>
+        <Text style={styles.fieldLabel}>Password</Text>
+        <View style={styles.inputRow}>
           <TextInput
-            style={styles.passwordInput}
+            style={styles.rowInput}
             placeholder="At least 6 characters"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={colors.textMuted}
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
           />
-          <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton}>
-            <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+          <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton} hitSlop={8}>
+            <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
-        {/* Confirm password */}
-        <Text style={styles.label}>Confirm password</Text>
-        <View style={styles.passwordRow}>
+        <Text style={styles.fieldLabel}>Confirm password</Text>
+        <View style={styles.inputRow}>
           <TextInput
-            style={styles.passwordInput}
+            style={styles.rowInput}
             placeholder="Re-enter your password"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={colors.textMuted}
             secureTextEntry={!showConfirm}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
           />
-          <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeButton}>
-            <Text style={styles.eyeText}>{showConfirm ? 'Hide' : 'Show'}</Text>
+          <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeButton} hitSlop={8}>
+            <Feather name={showConfirm ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
       </>
@@ -267,97 +274,89 @@ export default function RegisterScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.screen}>
+      <DetailHeader
+        title="Create account"
+        subtitle="Join LPG Go"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/login'))}
+      />
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {logoUrl ? (
-          <Image
-            source={{ uri: logoUrl }}
-            style={styles.logoDynamic}
-            resizeMode="contain"
-          />
-        ) : (
-          <Image
-            source={require('../../assets/images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        )}
-
-        <Text style={styles.title}>Create account</Text>
-        <Text style={styles.subtitle}>Join LPG Go to get started.</Text>
-
-        {/* Role selection */}
-        <Text style={styles.label}>I am...</Text>
-        <View style={styles.optionGroup}>
-          <RoleOption
-            label="I'm a Customer"
-            selected={role === 'customer'}
-            onPress={() => { setRole('customer'); setProviderType(null); }}
-          />
-          <RoleOption
-            label="I'm a Provider"
-            selected={role === 'provider'}
-            onPress={() => setRole('provider')}
-          />
-        </View>
-
-        {/* Provider sub-options */}
-        {role === 'provider' && (
-          <>
-            <Text style={styles.label}>Provider type</Text>
-            <View style={styles.optionGroup}>
-              <RoleOption
-                label="Dealer"
-                selected={providerType === 'dealer'}
-                onPress={() => setProviderType('dealer')}
-              />
-              <RoleOption
-                label="Rider"
-                selected={providerType === 'rider'}
-                onPress={() => { setProviderType('rider'); setBusinessName(''); }}
-              />
-            </View>
-
-            {providerType === 'dealer' && (
-              <>
-                <Text style={styles.label}>Business name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Dela Cruz LPG"
-                  placeholderTextColor="#9CA3AF"
-                  value={businessName}
-                  onChangeText={setBusinessName}
-                  autoCapitalize="words"
-                />
-              </>
-            )}
-          </>
-        )}
-
-        {renderSharedFields()}
-
-        {role === 'provider' && renderCompliance()}
-
-        {renderMessages()}
-        {renderSubmitButton()}
-
-        <TouchableOpacity
-          style={styles.linkRow}
-          onPress={() => router.push('/(auth)/login')}
+        <ScrollView
+          contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + spacing.xxl }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.linkText}>
-            Already have an account?{' '}
-            <Text style={styles.linkBold}>Sign In</Text>
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* Role selection */}
+          <Text style={styles.fieldLabel}>I am a</Text>
+          <View style={styles.optionGroup}>
+            <RoleOption
+              label="I'm a Customer"
+              selected={role === 'customer'}
+              onPress={() => { setRole('customer'); setProviderType(null); }}
+            />
+            <RoleOption
+              label="I'm a Provider"
+              selected={role === 'provider'}
+              onPress={() => setRole('provider')}
+            />
+          </View>
+
+          {/* Provider sub-options */}
+          {role === 'provider' && (
+            <>
+              <Text style={styles.fieldLabel}>Provider type</Text>
+              <View style={styles.optionGroup}>
+                <RoleOption
+                  label="Dealer"
+                  selected={providerType === 'dealer'}
+                  onPress={() => setProviderType('dealer')}
+                />
+                <RoleOption
+                  label="Rider"
+                  selected={providerType === 'rider'}
+                  onPress={() => { setProviderType('rider'); setBusinessName(''); }}
+                />
+              </View>
+
+              {providerType === 'dealer' && (
+                <>
+                  <Text style={styles.fieldLabel}>Business name</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Dela Cruz LPG"
+                    placeholderTextColor={colors.textMuted}
+                    value={businessName}
+                    onChangeText={setBusinessName}
+                    autoCapitalize="words"
+                  />
+                </>
+              )}
+            </>
+          )}
+
+          {renderSharedFields()}
+
+          {role === 'provider' && renderCompliance()}
+
+          {renderMessages()}
+          {renderSubmitButton()}
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Text style={styles.linkText}>
+              Already have an account?{' '}
+              <Text style={styles.linkBold}>Sign In</Text>
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -374,139 +373,119 @@ function RoleOption({
     <TouchableOpacity
       onPress={onPress}
       style={[styles.roleOption, selected && styles.roleOptionSelected]}
+      activeOpacity={0.8}
     >
       <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>
         {label}
       </Text>
+      {selected ? <Feather name="check-circle" size={18} color={colors.primary} /> : null}
     </TouchableOpacity>
   );
 }
 
-const PRIMARY = '#16A34A';
-
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 40,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  container: { paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
+
+  // Field labels
+  fieldLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
   },
-  logo: {
-    width: 300,
-    height: 150,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  logoDynamic: {
-    width: 300,
-    height: 150,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 6,
-  },
+
+  // White field cards
   input: {
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
     fontSize: 15,
-    color: '#111827',
-    marginBottom: 16,
+    color: colors.text,
+    marginBottom: spacing.md,
   },
-  phoneRow: {
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
+    marginBottom: spacing.md,
   },
-  prefix: { fontSize: 15, color: '#111827', marginRight: 8 },
-  phoneInput: { flex: 1, fontSize: 15, color: '#111827', padding: 0 },
-  passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  passwordInput: { flex: 1, fontSize: 15, color: '#111827', padding: 0 },
-  eyeButton: { paddingLeft: 8 },
-  eyeText: { fontSize: 13, color: PRIMARY, fontWeight: '500' },
-  optionGroup: { gap: 10, marginBottom: 16 },
+  prefix: { fontSize: 15, color: colors.textMuted },
+  rowInput: { flex: 1, fontSize: 15, color: colors.text, padding: 0 },
+  eyeButton: { paddingLeft: spacing.sm },
+
+  // Role options
+  optionGroup: { gap: spacing.sm, marginBottom: spacing.sm },
   roleOption: {
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: 14,
   },
-  roleOptionSelected: {
-    borderColor: PRIMARY,
-    backgroundColor: '#F0FDF4',
-  },
-  roleOptionText: { fontSize: 15, fontWeight: '500', color: '#374151' },
-  roleOptionTextSelected: { color: PRIMARY },
-  complianceBlock: { marginBottom: 16 },
+  roleOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  roleOptionText: { fontSize: 15, fontWeight: '500', color: colors.grey700 },
+  roleOptionTextSelected: { color: colors.primary, fontWeight: '600' },
+
+  // Compliance (white card)
+  complianceCard: { padding: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.md },
+  complianceHeading: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
   complianceTextBox: {
     maxHeight: 180,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
+    backgroundColor: colors.grey50,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
   },
-  complianceText: { fontSize: 13, color: '#374151', lineHeight: 19 },
+  complianceText: { fontSize: 13, color: colors.grey700, lineHeight: 19 },
   checkboxRow: { flexDirection: 'row', alignItems: 'flex-start' },
   checkbox: {
     width: 22,
     height: 22,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: colors.grey300,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.md,
     marginTop: 1,
   },
-  checkboxChecked: { borderColor: PRIMARY, backgroundColor: PRIMARY },
-  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700', lineHeight: 16 },
-  checkboxLabel: { flex: 1, fontSize: 14, color: '#374151', lineHeight: 20 },
-  error: { fontSize: 13, color: '#EF4444', marginBottom: 12 },
-  button: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
+  checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
+  checkboxLabel: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20 },
+
+  // Error card
+  errorCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 4,
+    gap: spacing.sm,
+    backgroundColor: colors.dangerTint,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  errorText: { flex: 1, fontSize: 13, color: colors.danger },
+  errorLink: { color: colors.primary, fontWeight: '700' },
+
+  submitWrap: { marginTop: spacing.md, marginBottom: spacing.lg },
+
   linkRow: { alignItems: 'center' },
-  linkText: { fontSize: 14, color: '#6B7280' },
-  linkBold: { color: PRIMARY, fontWeight: '600' },
+  linkText: { fontSize: 14, color: colors.textSecondary },
+  linkBold: { color: colors.primary, fontWeight: '700' },
 });

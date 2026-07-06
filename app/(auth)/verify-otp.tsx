@@ -1,7 +1,7 @@
+import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -11,11 +11,13 @@ import {
   View,
 } from 'react-native';
 
+import DetailHeader from '../../components/ui/DetailHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
 import supabase from '../../lib/supabase';
+import { colors, radii, spacing } from '../../lib/theme';
 
 const SEND_OTP_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/send-otp';
 const VERIFY_OTP_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/verify-otp';
-const PRIMARY = '#16A34A';
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
 // Mirror the server's OTP validity window (send-otp sets expires_at = now + 15m).
@@ -194,135 +196,115 @@ export default function VerifyOtpScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+    <View style={styles.screen}>
+      <DetailHeader
+        title="Verify your number"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/login'))}
+      />
 
-        <Text style={styles.title}>Enter verification code</Text>
-        <Text style={styles.subtitle}>
-          We sent a 6-digit code to{'\n'}
-          <Text style={styles.phoneHighlight}>{phone}</Text>
-        </Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.content}>
+          <Text style={styles.subtitle}>Enter the 6-digit code sent to</Text>
+          <Text style={styles.phone}>{phone}</Text>
 
-        <View style={styles.otpRow}>
-          {digits.map((d, i) => (
-            <TextInput
-              key={i}
-              ref={(r) => { inputRefs.current[i] = r; }}
-              style={[styles.otpBox, d ? styles.otpBoxFilled : null]}
-              value={d}
-              onChangeText={(t) => handleDigitChange(t, i)}
-              onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
-              keyboardType="number-pad"
-              maxLength={1}
-              selectTextOnFocus
-            />
-          ))}
-        </View>
+          <View style={styles.otpRow}>
+            {digits.map((d, i) => (
+              <TextInput
+                key={i}
+                ref={(r) => { inputRefs.current[i] = r; }}
+                style={[styles.otpBox, d ? styles.otpBoxFilled : null]}
+                value={d}
+                onChangeText={(t) => handleDigitChange(t, i)}
+                onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
+                keyboardType="number-pad"
+                maxLength={1}
+                selectTextOnFocus
+              />
+            ))}
+          </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorCard}>
+              <Feather name="alert-circle" size={14} color={colors.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleVerify}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Verify</Text>
-          )}
-        </TouchableOpacity>
+          <PrimaryButton label="Verify" onPress={handleVerify} loading={loading} />
 
-        <View style={styles.timerBlock}>
-          {expiry > 0 ? (
-            <Text style={styles.expiryText}>
-              Code expires in <Text style={styles.expiryBold}>{formatTime(expiry)}</Text>
-            </Text>
-          ) : (
-            <Text style={styles.expiredText}>Code expired. Please resend.</Text>
-          )}
-
-          <View style={styles.resendRow}>
-            <TouchableOpacity
-              onPress={handleResend}
-              disabled={countdown > 0}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.resendLink, countdown > 0 && styles.resendLinkDisabled]}>
-                Resend code
+          <View style={styles.timerBlock}>
+            {expiry > 0 ? (
+              <Text style={styles.expiryText}>
+                Code expires in <Text style={styles.expiryBold}>{formatTime(expiry)}</Text>
               </Text>
-            </TouchableOpacity>
+            ) : (
+              <Text style={styles.expiredText}>Code expired. Please resend.</Text>
+            )}
+
+            {countdown > 0 ? (
+              <Text style={styles.resendMuted}>Resend code in {formatTime(countdown)}</Text>
+            ) : (
+              <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
+                <Text style={styles.resendLink}>Resend code</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
-  },
-  back: { marginBottom: 24 },
-  backText: { fontSize: 15, color: PRIMARY, fontWeight: '500' },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  phoneHighlight: { color: '#111827', fontWeight: '600' },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl, alignItems: 'center' },
+
+  subtitle: { fontSize: 14, color: colors.textSecondary },
+  phone: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 2 },
+
   otpRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 8,
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.lg,
   },
   otpBox: {
     flex: 1,
     height: 56,
+    backgroundColor: colors.card,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     textAlign: 'center',
     fontSize: 22,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
-  otpBoxFilled: {
-    borderColor: PRIMARY,
-    backgroundColor: '#F0FDF4',
-  },
-  error: { fontSize: 13, color: '#EF4444', marginBottom: 12 },
-  button: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
+  otpBoxFilled: { borderColor: colors.primary },
+
+  errorCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerTint,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  timerBlock: { alignItems: 'center', gap: 8 },
-  expiryText: { fontSize: 14, color: '#6B7280' },
-  expiryBold: { fontWeight: '700', color: '#111827' },
-  expiredText: { fontSize: 14, color: '#EF4444', fontWeight: '600' },
-  resendRow: { alignItems: 'center' },
-  resendLink: { fontSize: 14, color: PRIMARY, fontWeight: '600' },
-  resendLinkDisabled: { opacity: 0.4 },
+  errorText: { flex: 1, fontSize: 13, color: colors.danger },
+
+  timerBlock: { alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl },
+  expiryText: { fontSize: 14, color: colors.textMuted },
+  expiryBold: { fontWeight: '700', color: colors.text },
+  expiredText: { fontSize: 14, color: colors.danger, fontWeight: '600' },
+  resendMuted: { fontSize: 14, color: colors.textMuted },
+  resendLink: { fontSize: 14, color: colors.primary, fontWeight: '700' },
 });

@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, spacing, radii, typography } from '../../lib/theme';
 
-type Tone = 'success' | 'pending' | 'express' | 'danger' | 'neutral';
+type Tone = 'success' | 'pending' | 'express' | 'review' | 'danger' | 'neutral';
 
 type Props = {
   label: string;
@@ -12,6 +12,7 @@ const TONES: Record<Tone, { bg: string; text: string }> = {
   success: { bg: colors.primaryTint, text: colors.primaryDark },
   pending: { bg: '#DBEAFE', text: '#185FA5' },
   express: { bg: colors.amberTint, text: colors.amberText },
+  review: { bg: colors.amberTint, text: colors.amberDark },
   danger: { bg: colors.dangerTint, text: colors.danger },
   neutral: { bg: '#F3F4F6', text: colors.textSecondary },
 };

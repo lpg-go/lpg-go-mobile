@@ -1,3 +1,4 @@
+import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -12,11 +13,14 @@ import {
   View,
 } from 'react-native';
 
+import Card from '../../components/ui/Card';
+import DetailHeader from '../../components/ui/DetailHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
+import StatusBadge from '../../components/ui/StatusBadge';
 import supabase from '../../lib/supabase';
+import { colors, radii, spacing } from '../../lib/theme';
 
 type ProviderType = 'dealer' | 'rider' | null;
-
-const GREEN = '#16A34A';
 
 export default function UploadDocumentScreen() {
   const [providerType, setProviderType] = useState<ProviderType>(null);
@@ -158,241 +162,169 @@ export default function UploadDocumentScreen() {
     await supabase.auth.signOut();
   }
 
-  // ── Submitted state ──────────────────────────────────────────────────────────
+  // ── Submitted / under-review state ────────────────────────────────────────────
   if (submittedDocUrl) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Document Submitted!</Text>
-        <Text style={styles.description}>
-          Your document is under review. We'll notify you once approved.
-        </Text>
+      <View style={styles.screen}>
+        <DetailHeader title="Verification" />
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Card style={styles.reviewCard}>
+            <View style={styles.reviewTop}>
+              <Text style={styles.cardTitle}>Document submitted</Text>
+              <StatusBadge label="Under review" tone="review" />
+            </View>
+            <Text style={styles.description}>
+              Your document is under review. We'll notify you once approved.
+            </Text>
+            <Image source={{ uri: submittedDocUrl }} style={styles.submittedPreview} resizeMode="cover" />
+            <View style={styles.pollingRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.pollingText}>Checking approval status…</Text>
+            </View>
+          </Card>
 
-        <Image
-          source={{ uri: submittedDocUrl }}
-          style={styles.submittedPreview}
-          resizeMode="cover"
-        />
-
-        <View style={styles.pollingRow}>
-          <ActivityIndicator size="small" color={GREEN} />
-          <Text style={styles.pollingText}>Checking approval status…</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
     );
   }
 
   // ── Upload form ──────────────────────────────────────────────────────────────
-
-  // ── Rejection banner ─────────────────────────────────────────────────────────
-  const rejectionBanner = rejectionReason ? (
-    <View style={styles.rejectionBanner}>
-      <Text style={styles.rejectionTitle}>Application Rejected</Text>
-      <Text style={styles.rejectionText}>{rejectionReason}</Text>
-      <Text style={styles.rejectionSub}>Please upload a new document to reapply.</Text>
-    </View>
-  ) : null;
-
   const descriptionText =
     providerType === 'rider'
       ? "Please upload your Driver's License to complete your registration."
       : "Please upload any one of the following to complete your registration: Mayor's Permit, DTI, or SEC registration.";
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      {rejectionBanner}
-      <Text style={styles.title}>Document Required</Text>
-      <Text style={styles.description}>{descriptionText}</Text>
+    <View style={styles.screen}>
+      <DetailHeader title="Verification" />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {rejectionReason ? (
+          <Card style={styles.rejectionCard}>
+            <View style={styles.reviewTop}>
+              <Text style={styles.rejectionTitle}>Application rejected</Text>
+              <StatusBadge label="Rejected" tone="danger" />
+            </View>
+            <Text style={styles.rejectionText}>{rejectionReason}</Text>
+            <Text style={styles.rejectionSub}>Please upload a new document to reapply.</Text>
+          </Card>
+        ) : null}
 
-      <TouchableOpacity style={styles.pickButton} onPress={pickImage} activeOpacity={0.7}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="cover" />
-        ) : (
-          <View style={styles.pickPlaceholder}>
-            <Text style={styles.pickIcon}>📄</Text>
-            <Text style={styles.pickLabel}>Tap to select document</Text>
-            <Text style={styles.pickSub}>Take a photo or upload an image of your document</Text>
+        <Text style={styles.title}>Document required</Text>
+        <Text style={styles.description}>{descriptionText}</Text>
+
+        <TouchableOpacity style={styles.pickCard} onPress={pickImage} activeOpacity={0.7}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="cover" />
+          ) : (
+            <View style={styles.pickPlaceholder}>
+              <Feather name="upload-cloud" size={34} color={colors.primary} />
+              <Text style={styles.pickLabel}>Tap to select document</Text>
+              <Text style={styles.pickSub}>Take a photo or upload an image of your document</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {imageUri && (
+          <TouchableOpacity onPress={pickImage} style={styles.changeLink}>
+            <Text style={styles.changeLinkText}>Change image</Text>
+          </TouchableOpacity>
+        )}
+
+        {!!error && (
+          <View style={styles.errorCard}>
+            <Feather name="alert-circle" size={14} color={colors.danger} />
+            <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-      </TouchableOpacity>
 
-      {imageUri && (
-        <TouchableOpacity onPress={pickImage} style={styles.changeLink}>
-          <Text style={styles.changeLinkText}>Change image</Text>
-        </TouchableOpacity>
-      )}
-
-      {!!error && <Text style={styles.error}>{error}</Text>}
-
-      <TouchableOpacity
-        style={[styles.submitButton, uploading && styles.submitButtonDisabled]}
-        onPress={handleSubmit}
-        disabled={uploading}
-        activeOpacity={0.8}
-      >
-        {uploading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.submitText}>Submit for Review</Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+        <View style={styles.submitWrap}>
+          <PrimaryButton label="Submit for Review" onPress={handleSubmit} loading={uploading} />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 64,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 15,
-    color: '#6B7280',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: 40 },
 
-  // Success state
+  title: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
+  description: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginBottom: spacing.lg },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+
+  // Review (under-review) card
+  reviewCard: { padding: spacing.lg, marginBottom: spacing.lg },
+  reviewTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   submittedPreview: {
     width: '100%',
     height: 220,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 16,
+    borderRadius: radii.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
-  pollingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 28,
-  },
-  pollingText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
+  pollingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  pollingText: { fontSize: 13, color: colors.textSecondary },
+
   signOutButton: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
     alignItems: 'center',
   },
-  signOutText: {
-    color: '#6B7280',
-    fontSize: 15,
-    fontWeight: '500',
-  },
+  signOutText: { color: colors.textSecondary, fontSize: 15, fontWeight: '500' },
 
-  // Upload form
-  pickButton: {
+  // Upload area
+  pickCard: {
     width: '100%',
     height: 200,
-    borderRadius: 14,
+    borderRadius: radii.md,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderStyle: 'dashed',
+    backgroundColor: colors.card,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  pickPlaceholder: {
-    flex: 1,
+  pickPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.lg },
+  pickLabel: { fontSize: 15, fontWeight: '600', color: colors.text, marginTop: spacing.xs },
+  pickSub: { fontSize: 12, color: colors.textMuted, textAlign: 'center' },
+  preview: { width: '100%', height: '100%' },
+  changeLink: { alignSelf: 'center', marginBottom: spacing.md },
+  changeLinkText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+
+  submitWrap: { marginTop: spacing.sm },
+
+  // Rejection card
+  rejectionCard: { padding: spacing.lg, marginBottom: spacing.lg, backgroundColor: colors.dangerTint, borderColor: colors.dangerBorder },
+  rejectionTitle: { fontSize: 15, fontWeight: '700', color: colors.danger },
+  rejectionText: { fontSize: 14, color: colors.danger, lineHeight: 20, marginBottom: spacing.xs },
+  rejectionSub: { fontSize: 13, color: colors.danger, opacity: 0.85 },
+
+  // Error
+  errorCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    gap: spacing.sm,
+    backgroundColor: colors.dangerTint,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
-  pickIcon: {
-    fontSize: 36,
-  },
-  pickLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  pickSub: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  preview: {
-    width: '100%',
-    height: '100%',
-  },
-  changeLink: {
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  changeLinkText: {
-    fontSize: 14,
-    color: GREEN,
-    fontWeight: '500',
-  },
-  error: {
-    color: '#EF4444',
-    fontSize: 13,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  submitButton: {
-    backgroundColor: GREEN,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  rejectionBanner: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  rejectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#B91C1C',
-    marginBottom: 4,
-  },
-  rejectionText: {
-    fontSize: 14,
-    color: '#7F1D1D',
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  rejectionSub: {
-    fontSize: 13,
-    color: '#B91C1C',
-  },
+  errorText: { flex: 1, fontSize: 13, color: colors.danger },
 });

@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import { registerForPushNotificationsAsync } from '../../lib/notifications';
 import { useState } from 'react';
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,11 +18,9 @@ import PrimaryButton from '../../components/ui/PrimaryButton';
 import { formatPhoneAsEmail } from '../../lib/auth';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing } from '../../lib/theme';
-import { useAppLogo } from '../../lib/useAppLogo';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { logoUrl } = useAppLogo();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -71,10 +68,6 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* Decorative depth circles (behind content) */}
-      <View style={styles.circleTop} pointerEvents="none" />
-      <View style={styles.circleLeft} pointerEvents="none" />
-
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -84,19 +77,8 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* HERO — brand-dominant top ~⅔; logo + heading centered vertically */}
-          <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
-            <View style={styles.logoBox}>
-              {logoUrl ? (
-                <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
-              ) : (
-                <Image source={require('../../assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
-              )}
-            </View>
-            <Text style={styles.heading}>Welcome</Text>
-            <Text style={styles.headingAccent}>back 👋</Text>
-            <Text style={styles.subtitle}>Sign in to order LPG in minutes</Text>
-          </View>
+          {/* HERO — pure green immersive space above the form */}
+          <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]} />
 
           {/* FORM — compact bottom ~⅓ */}
           <View style={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}>
@@ -157,48 +139,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: { flexGrow: 1 },
 
-  // Decorative circles
-  circleTop: {
-    position: 'absolute',
-    top: -60,
-    right: -50,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(22,163,74,0.25)',
-  },
-  circleLeft: {
-    position: 'absolute',
-    top: 300,
-    left: -60,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(74,222,128,0.12)',
-  },
-
-  // HERO — flex:1 pushes the form down and centers the brand block
-  hero: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxl,
-    paddingBottom: spacing.xl,
-  },
-  logoBox: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-    overflow: 'hidden',
-  },
-  logo: { width: 50, height: 50 },
-  heading: { fontSize: 30, fontWeight: '800', color: colors.headerText, letterSpacing: -0.5, lineHeight: 34 },
-  headingAccent: { fontSize: 30, fontWeight: '800', color: colors.headerAccent, letterSpacing: -0.5, lineHeight: 34 },
-  subtitle: { fontSize: 14, color: colors.headerSubtext, marginTop: spacing.sm },
+  // HERO — flex:1 pushes the form down; pure green immersive space
+  hero: { flex: 1 },
 
   // FORM — compact light sheet rising over the green hero
   form: {

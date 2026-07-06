@@ -1,7 +1,7 @@
+import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -12,7 +12,10 @@ import {
   View,
 } from 'react-native';
 
-const PRIMARY = '#16A34A';
+import DetailHeader from '../../components/ui/DetailHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
+import { colors, radii, spacing, typography } from '../../lib/theme';
+
 const RESET_PASSWORD_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/reset-password';
 
 export default function ResetPasswordScreen() {
@@ -57,143 +60,108 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+    <View style={styles.screen}>
+      <DetailHeader
+        title="New password"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/login'))}
+      />
 
-        <Text style={styles.title}>Set new password</Text>
-        <Text style={styles.subtitle}>
-          Choose a new password for your account.
-        </Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.content}>
+          <View style={styles.iconCircle}>
+            <Feather name="key" size={26} color={colors.primary} />
+          </View>
+          <Text style={styles.intro}>Create a new password for your account</Text>
 
-        <Text style={styles.label}>New password</Text>
-        <View style={styles.passwordRow}>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="At least 6 characters"
-            placeholderTextColor="#9CA3AF"
-            secureTextEntry={!showPassword}
-            value={newPassword}
-            onChangeText={setNewPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton}>
-            <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
-          </TouchableOpacity>
+          <Text style={styles.fieldLabel}>New password</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.rowInput}
+              placeholder="At least 6 characters"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry={!showPassword}
+              value={newPassword}
+              onChangeText={setNewPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton} hitSlop={8}>
+              <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.fieldLabel}>Confirm new password</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.rowInput}
+              placeholder="Re-enter your password"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry={!showConfirm}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+            />
+            <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeButton} hitSlop={8}>
+              <Feather name={showConfirm ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          {error ? (
+            <View style={styles.errorCard}>
+              <Feather name="alert-circle" size={14} color={colors.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <PrimaryButton label="Reset Password" onPress={handleReset} loading={loading} />
         </View>
-
-        <Text style={styles.label}>Confirm new password</Text>
-        <View style={styles.passwordRow}>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="Re-enter your password"
-            placeholderTextColor="#9CA3AF"
-            secureTextEntry={!showConfirm}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-          />
-          <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeButton}>
-            <Text style={styles.eyeText}>{showConfirm ? 'Hide' : 'Show'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleReset}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Reset Password</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
+
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
   },
-  back: { marginBottom: 24 },
-  backText: { fontSize: 15, color: PRIMARY, fontWeight: '500' },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 6,
-  },
-  passwordRow: {
+  intro: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: spacing.xxl },
+
+  fieldLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
+    marginBottom: spacing.lg,
   },
-  passwordInput: { flex: 1, fontSize: 15, color: '#111827', padding: 0 },
-  eyeButton: { paddingLeft: 8 },
-  eyeText: { fontSize: 13, color: PRIMARY, fontWeight: '500' },
-  error: { fontSize: 13, color: '#EF4444', marginBottom: 12 },
-  button: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 15,
+  rowInput: { flex: 1, fontSize: 15, color: colors.text, padding: 0 },
+  eyeButton: { paddingLeft: spacing.sm },
+
+  errorCard: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerTint,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  successBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  successIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  successSubtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 22,
-  },
+  errorText: { flex: 1, fontSize: 13, color: colors.danger },
 });
