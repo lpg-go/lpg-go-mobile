@@ -7,9 +7,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -82,7 +82,6 @@ export default function ProviderProfileScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avgRating, setAvgRating] = useState<number | null>(null);
   const [reviewCount, setReviewCount] = useState(0);
-  const [togglingOnline, setTogglingOnline] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -127,21 +126,6 @@ export default function ProviderProfileScreen() {
 
     await fetchReviewStats(user.id);
     setLoading(false);
-  }
-
-  async function handleToggleOnline(value: boolean) {
-    if (!profile) return;
-    setTogglingOnline(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_online: value })
-      .eq('id', profile.id);
-    setTogglingOnline(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setProfile((prev) => prev ? { ...prev, is_online: value } : prev);
-    }
   }
 
   async function fetchReviewStats(uid: string) {
@@ -321,29 +305,6 @@ export default function ProviderProfileScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Online status */}
-        <Card style={styles.card}>
-          <View style={styles.statusRow}>
-            <View style={styles.rowBody}>
-              <Text style={styles.statusLabel}>Online status</Text>
-              <Text style={styles.statusHint}>You'll receive order requests when online.</Text>
-            </View>
-            <View style={styles.statusRight}>
-              <Text style={[styles.statusValue, { color: profile?.is_online ? colors.primary : colors.textMuted }]}>
-                {profile?.is_online ? 'Online' : 'Offline'}
-              </Text>
-              <Switch
-                value={!!profile?.is_online}
-                onValueChange={handleToggleOnline}
-                disabled={togglingOnline}
-                trackColor={{ false: colors.grey300, true: colors.primary }}
-                thumbColor="#fff"
-                ios_backgroundColor={colors.grey300}
-              />
-            </View>
-          </View>
-        </Card>
-
         {/* Personal Information */}
         <Card style={styles.card}>
           <Text style={styles.cardLabel}>Personal Information</Text>
@@ -464,6 +425,33 @@ export default function ProviderProfileScreen() {
           </View>
         )}
 
+        {/* Support / legal */}
+        <Card style={styles.card}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            // TODO: replace with real support destination (email/URL) before launch
+            onPress={() => Linking.openURL('https://iscalestudio.com')}
+            activeOpacity={0.7}
+          >
+            <Feather name="help-circle" size={16} color={colors.textSecondary} />
+            <Text style={styles.linkLabel}>Help & support</Text>
+            <Feather name="chevron-right" size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            // TODO: replace with real terms/privacy URL before launch
+            onPress={() => Linking.openURL('https://iscalestudio.com')}
+            activeOpacity={0.7}
+          >
+            <Feather name="file-text" size={16} color={colors.textSecondary} />
+            <Text style={styles.linkLabel}>Terms & privacy</Text>
+            <Feather name="chevron-right" size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+        </Card>
+
         {/* Sign out */}
         <TouchableOpacity style={styles.signOutCard} onPress={confirmSignOut} activeOpacity={0.8}>
           <Feather name="log-out" size={18} color={colors.danger} />
@@ -544,19 +532,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
 
-  // Online status
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  statusLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
-  statusHint: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  statusRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  statusValue: { fontSize: 13, fontWeight: '700' },
-
   // Rows
   row: {
     flexDirection: 'row',
@@ -571,6 +546,16 @@ const styles = StyleSheet.create({
   rowValueMuted: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
   ratingValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   divider: { height: 1, backgroundColor: colors.cardBorder, marginHorizontal: spacing.lg },
+
+  // Support / legal link rows (match the info-card row padding)
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  linkLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
 
   textInput: {
     backgroundColor: colors.bg,

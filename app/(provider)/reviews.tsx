@@ -2,18 +2,21 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Card from '../../components/ui/Card';
+import DetailHeader from '../../components/ui/DetailHeader';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 import { speedLabel } from '../../lib/reviewSpeed';
 import supabase from '../../lib/supabase';
+import { colors, radii, spacing } from '../../lib/theme';
 
 type Review = {
   id: string;
@@ -25,7 +28,17 @@ type Review = {
 };
 
 const H_PADDING = 20;
-const PRIMARY = '#16A34A';
+
+function getInitials(name: string): string {
+  return (
+    name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join('') || '?'
+  );
+}
 
 export default function ProviderReviewsScreen() {
   const insets = useSafeAreaInsets();
@@ -66,183 +79,178 @@ export default function ProviderReviewsScreen() {
     : null;
 
   if (loading) {
-    return (
-      <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY} />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace('/(provider)/profile')} style={styles.backButton} hitSlop={8}>
-          <Feather name="chevron-left" size={26} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Reviews</Text>
-        <View style={{ width: 34 }} />
-      </View>
+    <View style={styles.screen}>
+      <DetailHeader
+        title="My Reviews"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)/profile'))}
+      />
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 32 + insets.bottom }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PRIMARY} colors={[PRIMARY]} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Average rating card */}
+        {/* Rating summary */}
         {reviews.length > 0 && avgRating !== null && (
-          <View style={styles.avgCard}>
-            <Text style={styles.avgNumber}>{avgRating.toFixed(1)}</Text>
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((s) => (
-                <Feather
-                  key={s}
-                  name="star"
-                  size={20}
-                  color={s <= Math.round(avgRating) ? '#FBBF24' : '#E5E7EB'}
-                />
-              ))}
+          <Card style={styles.avgCard}>
+            <View style={styles.avgLeft}>
+              <Text style={styles.avgNumber}>{avgRating.toFixed(1)}</Text>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Feather
+                    key={s}
+                    name="star"
+                    size={16}
+                    color={s <= Math.round(avgRating) ? colors.amber : colors.border}
+                  />
+                ))}
+              </View>
+              <Text style={styles.avgSub}>
+                {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+              </Text>
             </View>
-            <Text style={styles.avgSub}>
-              Based on {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
-            </Text>
-          </View>
+
+            <View style={styles.avgRight}>
+              {[5, 4, 3, 2, 1].map((star) => {
+                const count = reviews.filter((r) => r.rating === star).length;
+                const pct = reviews.length ? (count / reviews.length) * 100 : 0;
+                return (
+                  <View key={star} style={styles.distRow}>
+                    <Text style={styles.distStar}>{star}</Text>
+                    <Feather name="star" size={10} color={colors.amber} />
+                    <View style={styles.distTrack}>
+                      <View style={[styles.distFill, { width: `${pct}%` }]} />
+                    </View>
+                    <Text style={styles.distCount}>{count}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </Card>
         )}
 
         {/* Review list */}
         {reviews.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="star" size={40} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No reviews yet.{'\n'}Complete deliveries to receive ratings.</Text>
-          </View>
+          <EmptyState
+            icon="star"
+            message="No reviews yet"
+            subtitle="Complete deliveries to receive ratings."
+            style={styles.emptyPad}
+          />
         ) : (
-          <View style={styles.reviewList}>
-            {reviews.map((review, index) => (
-              <ReviewRow
-                key={review.id}
-                review={review}
-                isLast={index === reviews.length - 1}
-              />
-            ))}
-          </View>
+          reviews.map((review) => <ReviewCard key={review.id} review={review} />)
         )}
       </ScrollView>
     </View>
   );
 }
 
-function ReviewRow({ review, isLast }: { review: Review; isLast: boolean }) {
+function ReviewCard({ review }: { review: Review }) {
   const date = new Date(review.created_at).toLocaleDateString('en-PH', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
   });
+  const label = speedLabel(review.delivery_speed);
+  const isFast = review.delivery_speed === 'very_fast' || review.delivery_speed === 'fast';
 
   return (
-    <View style={[styles.reviewRow, !isLast && styles.reviewRowBorder]}>
+    <Card style={styles.reviewCard}>
       <View style={styles.reviewTop}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.reviewCustomer}>{review.customer?.full_name ?? 'Customer'}</Text>
+        <View style={styles.reviewAvatar}>
+          <Text style={styles.reviewAvatarText}>
+            {getInitials(review.customer?.full_name ?? 'Customer')}
+          </Text>
+        </View>
+        <View style={styles.reviewIdentity}>
+          <Text style={styles.reviewCustomer} numberOfLines={1}>
+            {review.customer?.full_name ?? 'Customer'}
+          </Text>
           <Text style={styles.reviewDate}>{date}</Text>
         </View>
         <View style={styles.starsRow}>
           {[1, 2, 3, 4, 5].map((s) => (
-            <Feather key={s} name="star" size={14} color={s <= review.rating ? '#FBBF24' : '#E5E7EB'} />
+            <Feather key={s} name="star" size={13} color={s <= review.rating ? colors.amber : colors.border} />
           ))}
         </View>
       </View>
+
       {review.comment ? (
         <Text style={styles.reviewComment}>{review.comment}</Text>
       ) : null}
-      {speedLabel(review.delivery_speed) ? (
-        <View style={styles.speedPill}>
+
+      {label ? (
+        <View style={[styles.speedPill, isFast ? styles.speedPillFast : styles.speedPillSlow]}>
           <Feather
-            name={review.delivery_speed === 'very_fast' || review.delivery_speed === 'fast' ? 'zap' : 'clock'}
+            name={isFast ? 'zap' : 'clock'}
             size={11}
-            color={PRIMARY}
+            color={isFast ? colors.primaryDark : colors.textSecondary}
           />
-          <Text style={styles.speedPillText}>Speed: {speedLabel(review.delivery_speed)}</Text>
+          <Text style={[styles.speedPillText, { color: isFast ? colors.primaryDark : colors.textSecondary }]}>
+            {label}
+          </Text>
         </View>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F9FAFB' },
-  centered: { alignItems: 'center', justifyContent: 'center' },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: H_PADDING,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  backButton: { width: 34 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  screen: { flex: 1, backgroundColor: colors.bg },
 
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: 20 },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, gap: spacing.md },
 
-  // Average card
-  avgCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 6,
-  },
-  avgNumber: { fontSize: 48, fontWeight: '800', color: '#111827', lineHeight: 56 },
-  starsRow: { flexDirection: 'row', gap: 4 },
-  avgSub: { fontSize: 13, color: '#9CA3AF', marginTop: 2 },
+  // Rating summary
+  avgCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl, padding: spacing.lg },
+  avgLeft: { alignItems: 'center', gap: spacing.xs },
+  avgNumber: { fontSize: 44, fontWeight: '800', color: colors.text, lineHeight: 50 },
+  starsRow: { flexDirection: 'row', gap: 3 },
+  avgSub: { fontSize: 12, color: colors.textMuted },
 
-  // Review list
-  reviewList: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  reviewRow: { paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
-  reviewRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  reviewTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avgRight: { flex: 1, gap: 5 },
+  distRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  distStar: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, width: 10, textAlign: 'center' },
+  distTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.grey100, overflow: 'hidden' },
+  distFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
+  distCount: { fontSize: 11, color: colors.textMuted, width: 18, textAlign: 'right' },
+
+  // Review card
+  reviewCard: { padding: spacing.lg, gap: spacing.sm },
+  reviewTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   reviewAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#DCFCE7',
+    width: 36,
+    height: 36,
+    borderRadius: radii.pill,
+    backgroundColor: colors.headerBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reviewCustomer: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  reviewDate: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  reviewComment: { fontSize: 13, color: '#6B7280', lineHeight: 19 },
+  reviewAvatarText: { fontSize: 13, fontWeight: '700', color: colors.headerAccent },
+  reviewIdentity: { flex: 1 },
+  reviewCustomer: { fontSize: 14, fontWeight: '600', color: colors.text },
+  reviewDate: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  reviewComment: { fontSize: 13, color: colors.grey700, lineHeight: 18 },
   speedPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 4,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 999,
-    paddingHorizontal: 10,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
     paddingVertical: 4,
   },
-  speedPillText: { fontSize: 12, fontWeight: '600', color: PRIMARY },
+  speedPillFast: { backgroundColor: colors.primaryTint },
+  speedPillSlow: { backgroundColor: colors.grey100 },
+  speedPillText: { fontSize: 12, fontWeight: '600' },
 
   // Empty state
-  emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 22 },
+  emptyPad: { flex: undefined, paddingTop: spacing.xxxl * 2 },
 });
