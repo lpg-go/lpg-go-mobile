@@ -3,9 +3,9 @@ import { router } from 'expo-router';
 import { registerForPushNotificationsAsync } from '../../lib/notifications';
 import { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,15 +17,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PrimaryButton from '../../components/ui/PrimaryButton';
 import { formatPhoneAsEmail } from '../../lib/auth';
 import supabase from '../../lib/supabase';
+import { useAppLogo } from '../../lib/useAppLogo';
 import { colors, radii, spacing } from '../../lib/theme';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
+  const { logoUrl } = useAppLogo();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   // Keep digits only, drop any leading 0 (the national trunk prefix — "+63" is
   // already shown), and cap at 10 digits, so "0917..." becomes "917..." and the
@@ -72,63 +76,114 @@ export default function LoginScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* HERO — pure green immersive space above the form */}
-          <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]} />
-
-          {/* FORM — compact bottom ~⅓ */}
-          <View style={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}>
-            <View style={styles.inputCard}>
-              <Text style={styles.prefix}>🇵🇭 +63</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="9XX XXX XXXX"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="number-pad"
-                maxLength={10}
-                value={phone}
-                onChangeText={handlePhoneChange}
+        {/* TOP GREEN ZONE — flexible, shrinks when keyboard is up */}
+        <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
+          <View style={styles.logoBadge}>
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={styles.logoImage} resizeMode="contain" />
+            ) : (
+              <Image
+                source={require('../../assets/images/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
               />
-            </View>
-
-            <View style={styles.inputCard}>
-              <Feather name="lock" size={18} color={colors.primary} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor={colors.textMuted}
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton} hitSlop={8}>
-                <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            {error ? (
-              <View style={styles.errorCard}>
-                <Feather name="alert-circle" size={14} color={colors.danger} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            <PrimaryButton label="Sign In" onPress={handleSignIn} loading={loading} />
-
-            <View style={styles.bottomLinks}>
-              <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} hitSlop={6}>
-                <Text style={styles.forgotText}>Forgot password?</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/(auth)/register')} hitSlop={6}>
-                <Text style={styles.createBold}>Create account</Text>
-              </TouchableOpacity>
-            </View>
+            )}
           </View>
-        </ScrollView>
+          <Text style={styles.brand}>LPG Go</Text>
+          <Text style={styles.tagline}>Gas delivered to your door</Text>
+        </View>
+
+        {/* BOTTOM WHITE SHEET */}
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xl }]}>
+          <Text style={styles.heading}>Sign in</Text>
+
+          {/* Phone — floating label */}
+          <View
+            style={[
+              styles.field,
+              { borderColor: phoneFocused ? colors.primary : colors.border },
+            ]}
+          >
+            <Text
+              style={[
+                styles.floatingLabel,
+                { color: phoneFocused ? colors.primary : colors.textMuted },
+              ]}
+            >
+              Phone number
+            </Text>
+            <Text style={styles.prefix}>🇵🇭 +63</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="9XX XXX XXXX"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={10}
+              value={phone}
+              onChangeText={handlePhoneChange}
+              onFocus={() => setPhoneFocused(true)}
+              onBlur={() => setPhoneFocused(false)}
+            />
+          </View>
+
+          {/* Password — floating label */}
+          <View
+            style={[
+              styles.field,
+              { borderColor: passwordFocused ? colors.primary : colors.border },
+            ]}
+          >
+            <Text
+              style={[
+                styles.floatingLabel,
+                { color: passwordFocused ? colors.primary : colors.textMuted },
+              ]}
+            >
+              Password
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword((v) => !v)}
+              style={styles.eyeButton}
+              hitSlop={8}
+            >
+              <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => router.push('/(auth)/forgot-password')}
+            hitSlop={6}
+            style={styles.forgotWrap}
+          >
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+
+          {error ? (
+            <View style={styles.errorCard}>
+              <Feather name="alert-circle" size={14} color={colors.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <PrimaryButton label="Sign In" onPress={handleSignIn} loading={loading} />
+
+          <View style={styles.createRow}>
+            <Text style={styles.createMuted}>New here? </Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/register')} hitSlop={6}>
+              <Text style={styles.createBold}>Create account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -137,35 +192,63 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.headerBg, overflow: 'hidden' },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1 },
 
-  // HERO — flex:1 pushes the form down; pure green immersive space
-  hero: { flex: 1 },
+  // TOP GREEN ZONE — flex:1 fills the space above the sheet; content centered.
+  hero: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xxl,
+  },
+  logoBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  logoImage: { width: 46, height: 46 },
+  brand: { fontSize: 26, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
+  tagline: { fontSize: 14, color: colors.headerSubtext, marginTop: spacing.xs },
 
-  // FORM — compact light sheet rising over the green hero
-  form: {
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  // BOTTOM WHITE SHEET — rounded top, overlaps the green.
+  sheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: spacing.xxl,
     paddingTop: spacing.xxl,
   },
-  inputCard: {
+  heading: { fontSize: 19, fontWeight: '700', color: colors.text, marginBottom: spacing.xl },
+
+  // Floating-label field — position relative so the label can notch the border.
+  field: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
     borderRadius: radii.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: 13,
-    marginBottom: spacing.md,
+    paddingVertical: 15,
+    marginBottom: spacing.lg,
   },
-  prefix: { fontSize: 15, color: colors.textMuted },
+  floatingLabel: {
+    position: 'absolute',
+    top: -8,
+    left: 12,
+    paddingHorizontal: 4,
+    backgroundColor: colors.card,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  prefix: { fontSize: 15, color: colors.text },
   input: { flex: 1, fontSize: 15, color: colors.text, padding: 0 },
   eyeButton: { paddingLeft: spacing.sm },
 
+  forgotWrap: { alignSelf: 'flex-end', marginBottom: spacing.lg },
   forgotText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
 
   errorCard: {
@@ -180,11 +263,12 @@ const styles = StyleSheet.create({
   },
   errorText: { flex: 1, fontSize: 13, color: colors.danger },
 
-  bottomLinks: {
+  createRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
+    justifyContent: 'center',
+    marginTop: spacing.xl,
   },
+  createMuted: { fontSize: 14, color: colors.textSecondary },
   createBold: { fontSize: 14, color: colors.primary, fontWeight: '700' },
 });

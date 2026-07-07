@@ -240,6 +240,20 @@ export default function RegisterScreen() {
           />
         </View>
 
+        {role === 'provider' && providerType === 'dealer' && (
+          <>
+            <Text style={styles.fieldLabel}>Business name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Dela Cruz LPG"
+              placeholderTextColor={colors.textMuted}
+              value={businessName}
+              onChangeText={setBusinessName}
+              autoCapitalize="words"
+            />
+          </>
+        )}
+
         <Text style={styles.fieldLabel}>Password</Text>
         <View style={styles.inputRow}>
           <TextInput
@@ -294,12 +308,14 @@ export default function RegisterScreen() {
           <Text style={styles.fieldLabel}>I am a</Text>
           <View style={styles.optionGroup}>
             <RoleOption
-              label="I'm a Customer"
+              label="Customer"
+              icon="user"
               selected={role === 'customer'}
               onPress={() => { setRole('customer'); setProviderType(null); }}
             />
             <RoleOption
-              label="I'm a Provider"
+              label="Provider"
+              icon="briefcase"
               selected={role === 'provider'}
               onPress={() => setRole('provider')}
             />
@@ -309,32 +325,18 @@ export default function RegisterScreen() {
           {role === 'provider' && (
             <>
               <Text style={styles.fieldLabel}>Provider type</Text>
-              <View style={styles.optionGroup}>
-                <RoleOption
+              <View style={styles.optionGroupCol}>
+                <RoleRow
                   label="Dealer"
                   selected={providerType === 'dealer'}
                   onPress={() => setProviderType('dealer')}
                 />
-                <RoleOption
+                <RoleRow
                   label="Rider"
                   selected={providerType === 'rider'}
                   onPress={() => { setProviderType('rider'); setBusinessName(''); }}
                 />
               </View>
-
-              {providerType === 'dealer' && (
-                <>
-                  <Text style={styles.fieldLabel}>Business name</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Dela Cruz LPG"
-                    placeholderTextColor={colors.textMuted}
-                    value={businessName}
-                    onChangeText={setBusinessName}
-                    autoCapitalize="words"
-                  />
-                </>
-              )}
             </>
           )}
 
@@ -362,6 +364,41 @@ export default function RegisterScreen() {
 
 function RoleOption({
   label,
+  icon,
+  selected,
+  onPress,
+}: {
+  label: string;
+  icon: React.ComponentProps<typeof Feather>['name'];
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.roleOption, selected && styles.roleOptionSelected]}
+      activeOpacity={0.85}
+    >
+      <View style={styles.roleIconZone}>
+        <Feather name={icon} size={24} color={colors.primary} />
+        <Text
+          style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </View>
+      {selected ? (
+        <View style={styles.roleCheckBadge}>
+          <Feather name="check" size={12} color="#fff" />
+        </View>
+      ) : null}
+    </TouchableOpacity>
+  );
+}
+
+function RoleRow({
+  label,
   selected,
   onPress,
 }: {
@@ -372,10 +409,10 @@ function RoleOption({
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={[styles.roleOption, selected && styles.roleOptionSelected]}
+      style={[styles.roleRow, selected && styles.roleRowSelected]}
       activeOpacity={0.8}
     >
-      <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>
+      <Text style={[styles.roleRowText, selected && styles.roleRowTextSelected]}>
         {label}
       </Text>
       {selected ? <Feather name="check-circle" size={18} color={colors.primary} /> : null}
@@ -424,9 +461,42 @@ const styles = StyleSheet.create({
   rowInput: { flex: 1, fontSize: 15, color: colors.text, padding: 0 },
   eyeButton: { paddingLeft: spacing.sm },
 
-  // Role options
-  optionGroup: { gap: spacing.sm, marginBottom: spacing.sm },
+  // Role options — brand-style square boxes (tinted zone, icon + label centered)
+  optionGroup: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   roleOption: {
+    flex: 1,
+    aspectRatio: 1.5,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+    borderRadius: radii.md,
+    overflow: 'hidden',
+  },
+  roleOptionSelected: { borderColor: colors.primary },
+  roleIconZone: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  roleOptionText: { fontSize: 14, fontWeight: '600', color: colors.grey700 },
+  roleOptionTextSelected: { color: colors.primary },
+  roleCheckBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 20,
+    height: 20,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Provider-type options — full-width list rows
+  optionGroupCol: { gap: spacing.sm, marginBottom: spacing.sm },
+  roleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -437,9 +507,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: 14,
   },
-  roleOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
-  roleOptionText: { fontSize: 15, fontWeight: '500', color: colors.grey700 },
-  roleOptionTextSelected: { color: colors.primary, fontWeight: '600' },
+  roleRowSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  roleRowText: { fontSize: 15, fontWeight: '500', color: colors.grey700 },
+  roleRowTextSelected: { color: colors.primary, fontWeight: '600' },
 
   // Compliance (white card)
   complianceCard: { padding: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.md },
