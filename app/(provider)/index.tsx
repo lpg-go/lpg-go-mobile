@@ -90,6 +90,7 @@ export default function ProviderIncomingOrdersScreen() {
 
   const providerIdRef = useRef<string | null>(null);
   const availableProductIdsRef = useRef<string[]>([]);
+  const providerTypeRef = useRef<'dealer' | 'rider' | null>(null);
 
   useEffect(() => {
     boot();
@@ -109,6 +110,23 @@ export default function ProviderIncomingOrdersScreen() {
       const uid = providerIdRef.current;
       if (uid) fetchProfile(uid);
     }, [])
+  );
+
+  // Safety-net polling for the RLS-blinded selection case: once a customer picks
+  // another provider, selected_provider_id is set to them and non-selected
+  // providers lose SELECT on the row — so Supabase Realtime never delivers that
+  // UPDATE here and the realtime handler can't remove it. Refetch on focus, then
+  // poll every 12s while online + focused. fetchOrders filters
+  // selected_provider_id IS NULL, so any order taken by someone else drops out on
+  // the next tick. Interval is cleared on blur/unmount/going offline.
+  useFocusEffect(
+    useCallback(() => {
+      if (!providerIdRef.current) return;
+      fetchOrders();
+      if (!isOnline) return;
+      const interval = setInterval(() => { fetchOrders(); }, 12000);
+      return () => clearInterval(interval);
+    }, [isOnline])
   );
 
   // Realtime subscription (mount/unmount only)
@@ -181,7 +199,9 @@ export default function ProviderIncomingOrdersScreen() {
       setBalance(Number(data.balance));
       setProviderName(data.full_name ?? '');
       setAvatarUrl(data.avatar_url ?? null);
-      setProviderType((data.provider_type as 'dealer' | 'rider' | null) ?? null);
+      const nextType = (data.provider_type as 'dealer' | 'rider' | null) ?? null;
+      providerTypeRef.current = nextType;
+      setProviderType(nextType);
       setDisplayId(data.display_id ?? null);
     }
   }
@@ -243,12 +263,16 @@ export default function ProviderIncomingOrdersScreen() {
     const { data: orderRows } = await query;
 
     // 4. Filter client-side to orders the provider can fulfill (has an
-    //    enabled listing for at least one of the ordered products)
-    const filteredOrders = orderRows?.filter((order) =>
-      (order.order_items as { product_id: string }[])?.some((item) =>
+    //    enabled listing for at least one of the ordered products).
+    //    Dealers additionally never see express orders — accept_order blocks
+    //    them server-side, so they must not surface in the incoming list at all.
+    const isDealer = providerTypeRef.current === 'dealer';
+    const filteredOrders = orderRows?.filter((order) => {
+      if (isDealer && order.is_express) return false;
+      return (order.order_items as { product_id: string }[])?.some((item) =>
         myAvailableProductIds.includes(item.product_id)
-      )
-    ) || [];
+      );
+    }) || [];
 
     if (filteredOrders.length === 0) {
       setOrders([]);
