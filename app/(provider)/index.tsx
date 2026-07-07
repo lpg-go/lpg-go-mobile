@@ -650,7 +650,7 @@ function OnlineToggle({
   });
   const translateX = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [3, 25],
+    outputRange: [3, 21],
     extrapolate: 'clamp',
   });
 
@@ -666,7 +666,7 @@ function OnlineToggle({
         style={[styles.toggleTrack, { backgroundColor: trackColor }, value && styles.toggleTrackOnline]}
       >
         <Animated.View style={[styles.toggleThumb, { transform: [{ translateX }] }]}>
-          <Feather name="power" size={12} color={value ? colors.headerBg : colors.textMuted} />
+          <Feather name="power" size={10} color={value ? colors.headerBg : colors.textMuted} />
         </Animated.View>
       </Animated.View>
     </TouchableOpacity>
@@ -775,9 +775,9 @@ const styles = StyleSheet.create({
 
   // Custom online toggle (fits the dark status card)
   toggleTrack: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
+    width: 40,
+    height: 22,
+    borderRadius: 11,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
@@ -791,9 +791,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   toggleThumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',

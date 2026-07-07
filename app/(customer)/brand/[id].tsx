@@ -27,7 +27,7 @@ type Product = {
 
 const COLS = 3;
 const H_PADDING = 16;
-const GRID_GAP = 8;
+const GRID_GAP = 16;
 const CARD_WIDTH = (Dimensions.get('window').width - H_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS;
 
 export default function BrandProductsScreen() {

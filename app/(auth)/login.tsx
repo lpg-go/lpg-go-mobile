@@ -17,12 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PrimaryButton from '../../components/ui/PrimaryButton';
 import { formatPhoneAsEmail } from '../../lib/auth';
 import supabase from '../../lib/supabase';
-import { useAppLogo } from '../../lib/useAppLogo';
 import { colors, radii, spacing } from '../../lib/theme';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { logoUrl } = useAppLogo();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -79,15 +77,11 @@ export default function LoginScreen() {
         {/* TOP GREEN ZONE — flexible, shrinks when keyboard is up */}
         <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
           <View style={styles.logoBadge}>
-            {logoUrl ? (
-              <Image source={{ uri: logoUrl }} style={styles.logoImage} resizeMode="contain" />
-            ) : (
-              <Image
-                source={require('../../assets/images/logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            )}
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.brand}>LPG Go</Text>
           <Text style={styles.tagline}>Gas delivered to your door</Text>

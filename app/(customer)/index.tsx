@@ -30,7 +30,7 @@ type Brand = {
 };
 
 const H_PADDING = 18;
-const GRID_GAP = 8;
+const GRID_GAP = 16;
 const COLS = 3;
 
 // Fetches the signed-in user's name + avatar for the dark header. Mirrors the
