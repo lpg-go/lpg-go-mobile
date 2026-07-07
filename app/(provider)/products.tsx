@@ -1,10 +1,9 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import BrandProductImage from '../../components/ui/BrandProductImage';
 import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
@@ -221,13 +221,15 @@ export default function ProviderProductsScreen() {
                   onPress={() => toggleBrand(group.brand_name)}
                   activeOpacity={0.7}
                 >
-                  {group.logo_url ? (
-                    <Image source={{ uri: group.logo_url }} style={styles.brandLogo} resizeMode="contain" />
-                  ) : (
-                    <View style={[styles.brandIconSquare, { backgroundColor: tint.bg }]}>
-                      <MaterialCommunityIcons name="gas-cylinder" size={22} color={tint.icon} />
-                    </View>
-                  )}
+                  <BrandProductImage
+                    url={group.logo_url}
+                    size={40}
+                    borderRadius={radii.sm}
+                    resizeMode="contain"
+                    iconSize={22}
+                    iconColor={tint.icon}
+                    backgroundColor={tint.bg}
+                  />
                   <Text style={styles.brandHeader} numberOfLines={1}>{group.brand_name}</Text>
                   {sellingCount > 0 ? (
                     <View style={styles.sellingBadge}>

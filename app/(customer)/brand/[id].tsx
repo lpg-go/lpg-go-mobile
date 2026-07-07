@@ -1,16 +1,16 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import BrandProductImage from '../../../components/ui/BrandProductImage';
 import DetailHeader from '../../../components/ui/DetailHeader';
 import { colors, radii, spacing, shadows } from '../../../lib/theme';
 import supabase from '../../../lib/supabase';
@@ -173,11 +173,13 @@ function ProductCard({
       activeOpacity={0.75}
     >
       <View style={styles.imageZone}>
-        {product.image_url ? (
-          <Image source={{ uri: product.image_url }} style={styles.image} resizeMode="cover" />
-        ) : (
-          <MaterialCommunityIcons name="gas-cylinder" size={32} color={colors.primary} />
-        )}
+        <BrandProductImage
+          url={product.image_url}
+          style={styles.image}
+          resizeMode="cover"
+          iconSize={32}
+          iconColor={colors.primary}
+        />
         {!inStock && (
           <View style={styles.unavailableOverlay}>
             <View style={styles.unavailablePill}>

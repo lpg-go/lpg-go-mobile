@@ -504,7 +504,7 @@ export default function ProviderIncomingOrdersScreen() {
                 <View
                   style={[styles.statusDot, isOnline ? styles.statusDotOnline : styles.statusDotOffline]}
                 />
-                <Text style={styles.statValue}>{isOnline ? 'Online' : 'Offline'}</Text>
+                <Text style={[styles.statValue, styles.statusValue]}>{isOnline ? 'Online' : 'Offline'}</Text>
               </View>
               <OnlineToggle value={isOnline} disabled={togglingOnline} onToggle={handleToggleOnline} />
             </View>
@@ -760,6 +760,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: { color: colors.headerText, fontSize: 18, fontWeight: '700' },
+  statusValue: { fontSize: 15 },
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   statusValueRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },

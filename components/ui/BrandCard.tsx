@@ -1,6 +1,6 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, spacing, radii, brandTints } from '../../lib/theme';
+import BrandProductImage from './BrandProductImage';
 
 type Props = {
   name: string;
@@ -26,11 +26,13 @@ export default function BrandCard({
       activeOpacity={0.85}
     >
       <View style={[styles.imageZone, { backgroundColor: tint.bg }]}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
-        ) : (
-          <MaterialCommunityIcons name="gas-cylinder" size={30} color={tint.icon} />
-        )}
+        <BrandProductImage
+          url={imageUrl}
+          style={styles.image}
+          resizeMode="cover"
+          iconSize={30}
+          iconColor={tint.icon}
+        />
       </View>
       {isFeatured ? (
         <View style={styles.featuredPill}>
