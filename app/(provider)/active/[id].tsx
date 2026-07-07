@@ -538,6 +538,7 @@ export default function ActiveDeliveryScreen() {
             <PartyCard
               name={order.customer.full_name}
               avatarUrl={order.customer.avatar_url}
+              showAvatar={false}
               subtitle={order.delivery_address}
               onCall={callChatActive && order.customer.phone ? handleCall : undefined}
               onChat={callChatActive ? handleChat : undefined}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import supabase from '../lib/supabase';
+import Avatar from './ui/Avatar';
 
 const PRIMARY = '#16A34A';
 
@@ -59,17 +60,14 @@ export default function HeaderAvatar({ href, online, active = false }: Props) {
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       <View style={styles.wrap}>
-        {avatarUrl ? (
-          <Image key={avatarUrl} source={{ uri: avatarUrl }} style={[styles.avatar, active && styles.avatarActive]} />
-        ) : (
-          <View style={[styles.avatar, styles.fallback, active && styles.avatarActive]}>
-            {initials ? (
-              <Text style={styles.initials}>{initials}</Text>
-            ) : (
-              <Feather name="user" size={18} color={PRIMARY} />
-            )}
-          </View>
-        )}
+        <Avatar
+          url={avatarUrl}
+          name={fullName ?? undefined}
+          size={34}
+          backgroundColor="#DCFCE7"
+          textColor={PRIMARY}
+          style={active ? styles.avatarActive : undefined}
+        />
         {online != null && (
           <View style={[styles.statusDot, { backgroundColor: online ? PRIMARY : '#9CA3AF' }]} />
         )}

@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import PrimaryButton from '../ui/PrimaryButton';
+import Avatar from '../ui/Avatar';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -266,13 +267,14 @@ function ProviderCard({
       onPress={onSelect}
       activeOpacity={0.8}
     >
-      <View style={styles.providerAvatar}>
-        {provider?.avatar_url ? (
-          <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
-        ) : (
-          <Text style={styles.providerInitials}>{initials}</Text>
-        )}
-      </View>
+      <Avatar
+        url={provider?.avatar_url}
+        name={name}
+        size={46}
+        backgroundColor={colors.headerBg}
+        textColor={colors.headerAccent}
+        style={styles.providerAvatar}
+      />
       <View style={styles.providerInfo}>
         <Text style={styles.providerName} numberOfLines={1}>{name}</Text>
         <View style={styles.ratingRow}>

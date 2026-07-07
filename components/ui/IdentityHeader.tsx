@@ -1,3 +1,4 @@
+import { Feather } from '@expo/vector-icons';
 import { ReactNode } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,13 +51,9 @@ export default function IdentityHeader({
 
   const avatar = (
     <View style={styles.avatarWrap}>
-      {avatarUrl ? (
-        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatar, styles.avatarFallback]}>
-          <Text style={styles.avatarInitials}>{getInitials(name)}</Text>
-        </View>
-      )}
+      <View style={styles.profileIcon}>
+        <Feather name="user" size={22} color={colors.headerAccent} />
+      </View>
       {online !== undefined && (
         <View
           style={[
@@ -71,14 +68,6 @@ export default function IdentityHeader({
   return (
     <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.identityRow}>
-        {onAvatarPress ? (
-          <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.7}>
-            {avatar}
-          </TouchableOpacity>
-        ) : (
-          avatar
-        )}
-
         <View style={styles.identityText}>
           <Text style={styles.greeting} numberOfLines={1}>
             {timeGreeting()}
@@ -89,6 +78,14 @@ export default function IdentityHeader({
         </View>
 
         {right ? <View style={styles.rightSlot}>{right}</View> : null}
+
+        {onAvatarPress ? (
+          <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.7}>
+            {avatar}
+          </TouchableOpacity>
+        ) : (
+          avatar
+        )}
       </View>
 
       {children ? <View style={styles.children}>{children}</View> : null}
@@ -110,6 +107,16 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   avatarWrap: { position: 'relative' },
+  profileIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.headerSurface,
+    borderWidth: 1,
+    borderColor: colors.headerSurfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatar: { width: 42, height: 42, borderRadius: 21 },
   avatarFallback: {
     backgroundColor: colors.primary,

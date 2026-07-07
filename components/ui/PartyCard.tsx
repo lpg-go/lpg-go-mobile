@@ -2,11 +2,14 @@ import { Feather } from '@expo/vector-icons';
 import { Image, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 
 import { colors, radii, spacing, typography } from '../../lib/theme';
+import Avatar from './Avatar';
 import Card from './Card';
 
 type Props = {
   name: string;
   avatarUrl?: string | null;
+  // Hide the avatar entirely (e.g. the provider "Deliver to" card). Default: shown.
+  showAvatar?: boolean;
   // Free-text second line (e.g. "LPG Provider"). Shown below the rating/meta row.
   subtitle?: string;
   // When provided, a star + value is shown on the meta row.
@@ -38,6 +41,7 @@ function initials(name: string): string {
 export default function PartyCard({
   name,
   avatarUrl,
+  showAvatar = true,
   subtitle,
   rating,
   ratingCount,
@@ -54,16 +58,18 @@ export default function PartyCard({
 
   return (
     <Card onPress={onPress} style={[styles.container, style]}>
-      <View style={styles.avatarWrap}>
-        <View style={styles.avatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
-          ) : (
-            <Text style={styles.avatarInitials}>{initials(name)}</Text>
-          )}
+      {showAvatar ? (
+        <View style={styles.avatarWrap}>
+          <Avatar
+            url={avatarUrl}
+            name={name}
+            size={AVATAR}
+            backgroundColor={colors.headerBg}
+            textColor={colors.headerAccent}
+          />
+          {online ? <View style={styles.onlineDot} /> : null}
         </View>
-        {online ? <View style={styles.onlineDot} /> : null}
-      </View>
+      ) : null}
 
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{name}</Text>

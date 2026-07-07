@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, spacing, radii, typography } from '../../lib/theme';
+import Avatar from './Avatar';
 
 function defaultGreeting(): string {
   const hour = new Date().getHours();
@@ -63,13 +64,13 @@ export default function HeaderDark({
             activeOpacity={0.8}
             disabled={!onAvatarPress}
           >
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarInitial}>{initial}</Text>
-              </View>
-            )}
+            <Avatar
+              url={avatarUrl}
+              name={firstName || undefined}
+              size={AVATAR}
+              backgroundColor={colors.primary}
+              textColor={colors.headerText}
+            />
           </TouchableOpacity>
         </View>
       </View>

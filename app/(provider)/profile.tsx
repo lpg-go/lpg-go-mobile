@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Avatar from '../../components/ui/Avatar';
 import Card from '../../components/ui/Card';
 import DetailHeader from '../../components/ui/DetailHeader';
 import PrimaryButton from '../../components/ui/PrimaryButton';
@@ -264,14 +265,15 @@ export default function ProviderProfileScreen() {
               <View style={[styles.avatar, styles.avatarFallback]}>
                 <ActivityIndicator color="#fff" />
               </View>
-            ) : profile?.avatar_url ? (
-              <Image key={profile.avatar_url} source={{ uri: profile.avatar_url }} style={styles.avatar} />
             ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarInitials}>
-                  {profile ? getInitials(profile.full_name) : '?'}
-                </Text>
-              </View>
+              <Avatar
+                url={profile?.avatar_url}
+                name={profile?.full_name}
+                size={AVATAR}
+                backgroundColor={colors.primary}
+                textColor="#fff"
+                style={styles.avatar}
+              />
             )}
             <View style={styles.cameraOverlay}>
               <Feather name="camera" size={12} color="#fff" />

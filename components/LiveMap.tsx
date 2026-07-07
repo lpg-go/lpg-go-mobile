@@ -5,6 +5,7 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native
 
 import { decodePolyline } from '../lib/decodePolyline';
 import { colors, radii, spacing, typography, shadows } from '../lib/theme';
+import Avatar from './ui/Avatar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -317,13 +318,13 @@ export default function LiveMap({
         {/* Provider row */}
         <View style={styles.providerRow}>
           <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
-              ) : (
-                <Text style={styles.avatarInitials}>{initials(providerName)}</Text>
-              )}
-            </View>
+            <Avatar
+              url={avatarUrl}
+              name={providerName ?? undefined}
+              size={48}
+              backgroundColor={colors.headerBg}
+              textColor={colors.headerAccent}
+            />
             <View style={styles.onlineDot} />
           </View>
 

@@ -163,11 +163,6 @@ function ReviewCard({ review }: { review: Review }) {
   return (
     <Card style={styles.reviewCard}>
       <View style={styles.reviewTop}>
-        <View style={styles.reviewAvatar}>
-          <Text style={styles.reviewAvatarText}>
-            {getInitials(review.customer?.full_name ?? 'Customer')}
-          </Text>
-        </View>
         <View style={styles.reviewIdentity}>
           <Text style={styles.reviewCustomer} numberOfLines={1}>
             {review.customer?.full_name ?? 'Customer'}

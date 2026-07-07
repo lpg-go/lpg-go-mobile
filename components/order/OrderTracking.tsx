@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DELIVERY_SPEED_OPTIONS, speedLabel } from '../../lib/reviewSpeed';
+import Avatar from '../ui/Avatar';
 import { SAFETY_ITEMS } from '../../lib/safety';
 import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import LiveMap from '../LiveMap';
@@ -311,13 +312,14 @@ export default function OrderTracking({
               onPress={onOpenMap}
               disabled={order.status !== 'in_transit' || selectedProvider?.provider_type !== 'rider'}
             >
-              <View style={styles.providerAvatar}>
-                {selectedProvider.avatar_url ? (
-                  <Image source={{ uri: selectedProvider.avatar_url }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={styles.providerInitials}>{providerInitials}</Text>
-                )}
-              </View>
+              <Avatar
+                url={selectedProvider.avatar_url}
+                name={providerLabel}
+                size={44}
+                backgroundColor={colors.headerBg}
+                textColor={colors.headerAccent}
+                style={styles.providerAvatar}
+              />
               <View style={styles.providerInfo}>
                 <Text style={styles.providerName}>{providerLabel}</Text>
                 <View style={styles.providerMetaRow}>

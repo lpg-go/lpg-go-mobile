@@ -180,14 +180,6 @@ export default function ChatScreen({
           <Feather name="chevron-down" size={22} color={colors.headerText} />
         </TouchableOpacity>
 
-        <View style={styles.headerAvatar}>
-          {otherAvatarUrl ? (
-            <Image source={{ uri: otherAvatarUrl }} style={styles.headerAvatarImg} />
-          ) : (
-            <Text style={styles.headerAvatarInitials}>{initials}</Text>
-          )}
-        </View>
-
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerName} numberOfLines={1}>{otherUserName}</Text>
           <View style={styles.headerSubRow}>
