@@ -104,7 +104,7 @@ const STATUS_CONFIG: Record<
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function OrderTrackingScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const insets = useSafeAreaInsets();
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -677,7 +677,7 @@ export default function OrderTrackingScreen() {
       <DetailHeader
         title={`Order #${shortId}`}
         subtitle={statusCfg.label}
-        onBack={() => router.back()}
+        onBack={() => (from === 'history' ? router.replace('/(customer)/history') : router.back())}
         right={order.is_express ? <StatusBadge label="Express" tone="express" /> : undefined}
       />
 

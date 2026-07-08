@@ -17,6 +17,7 @@ export default function CustomerLayout() {
       >
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen name="orders" options={{ href: null }} />
+        <Tabs.Screen name="history" options={{ href: null }} />
         <Tabs.Screen name="chat" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ href: null }} />
         {/* Detail / utility screens */}

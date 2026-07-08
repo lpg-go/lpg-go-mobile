@@ -71,9 +71,6 @@ export default function ResetPasswordScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
-          <View style={styles.iconCircle}>
-            <Feather name="key" size={26} color={colors.primary} />
-          </View>
           <Text style={styles.intro}>Create a new password for your account</Text>
 
           <Text style={styles.fieldLabel}>New password</Text>
@@ -125,16 +122,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
 
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
-  },
   intro: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: spacing.xxl },
 
   fieldLabel: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },

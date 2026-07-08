@@ -236,10 +236,12 @@ export default function CustomerHomeScreen() {
         tabs={[
           { key: 'home', label: 'Home', icon: 'home' },
           { key: 'orders', label: 'Orders', icon: 'package', badgeCount: activeOrderCount },
+          { key: 'history', label: 'History', icon: 'clock' },
         ]}
         activeKey="home"
         onNavigate={(tab) => {
           if (tab === 'orders') router.push('/(customer)/orders');
+          else if (tab === 'history') router.push('/(customer)/history');
           // home → already here
         }}
       />

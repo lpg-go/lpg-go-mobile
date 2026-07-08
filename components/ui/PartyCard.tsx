@@ -12,6 +12,8 @@ type Props = {
   showAvatar?: boolean;
   // Free-text second line (e.g. "LPG Provider"). Shown below the rating/meta row.
   subtitle?: string;
+  // Optional Feather icon rendered before the subtitle (e.g. 'map-pin' for an address).
+  subtitleIcon?: keyof typeof Feather.glyphMap;
   // When provided, a star + value is shown on the meta row.
   rating?: number | null;
   // Optional "(N)" review count next to the rating.
@@ -43,6 +45,7 @@ export default function PartyCard({
   avatarUrl,
   showAvatar = true,
   subtitle,
+  subtitleIcon,
   rating,
   ratingCount,
   meta,
@@ -93,7 +96,12 @@ export default function PartyCard({
           </View>
         ) : null}
 
-        {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+        {subtitle ? (
+          <View style={styles.subtitleRow}>
+            {subtitleIcon ? <Feather name={subtitleIcon} size={12} color={colors.textMuted} /> : null}
+            <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+          </View>
+        ) : null}
       </View>
 
       {(onCall || onChat) ? (
@@ -157,7 +165,8 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   metaText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   metaCount: { fontSize: 13, color: colors.textMuted },
-  subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  subtitle: { ...typography.caption, color: colors.textSecondary, flexShrink: 1 },
 
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   callBtn: {

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,14 +13,17 @@ import {
   View,
 } from 'react-native';
 
+import ActiveDeliveryCard from '../../components/order/ActiveDeliveryCard';
 import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import IdentityHeader from '../../components/ui/IdentityHeader';
+import StatCard from '../../components/ui/StatCard';
 import StatusBadge from '../../components/ui/StatusBadge';
+import StatusToggle from '../../components/ui/StatusToggle';
 import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
-import { colors, radii, shadows, spacing } from '../../lib/theme';
+import { colors, radii, spacing } from '../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -489,26 +491,34 @@ export default function ProviderIncomingOrdersScreen() {
       >
         {/* Stat cards */}
         <View style={styles.statRow}>
-          <TouchableOpacity
-            style={styles.statCard}
-            onPress={() => router.push('/(provider)/earnings')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.statLabel}>Balance</Text>
-            <Text style={styles.statValue}>{balance.toLocaleString()}</Text>
-          </TouchableOpacity>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Status</Text>
-            <View style={styles.statusRow}>
+          {/* Balance card — mirrors the Status card structure so the top-up
+              button lands at the same size/position as the status toggle. */}
+          <StatCard
+            label="Balance"
+            value={balance.toLocaleString()}
+            right={
+              <TouchableOpacity
+                style={styles.balanceTopUpBtn}
+                onPress={() => router.push('/(provider)/topup' as never)}
+                activeOpacity={0.8}
+                hitSlop={8}
+              >
+                <Feather name="plus" size={16} color="#fff" />
+              </TouchableOpacity>
+            }
+          />
+          <StatCard
+            label="Status"
+            value={
               <View style={styles.statusValueRow}>
                 <View
                   style={[styles.statusDot, isOnline ? styles.statusDotOnline : styles.statusDotOffline]}
                 />
                 <Text style={[styles.statValue, styles.statusValue]}>{isOnline ? 'Online' : 'Offline'}</Text>
               </View>
-              <OnlineToggle value={isOnline} disabled={togglingOnline} onToggle={handleToggleOnline} />
-            </View>
-          </View>
+            }
+            right={<StatusToggle value={isOnline} disabled={togglingOnline} onToggle={handleToggleOnline} />}
+          />
         </View>
       </IdentityHeader>
 
@@ -530,23 +540,13 @@ export default function ProviderIncomingOrdersScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Active delivery</Text>
             {activeOrders.map((order) => (
-              <TouchableOpacity
+              <ActiveDeliveryCard
                 key={order.id}
-                style={styles.activeCard}
+                itemSummary={order.itemSummary}
+                statusLabel={ACTIVE_STATUS_LABEL[order.status]}
+                address={order.delivery_address}
                 onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
-                activeOpacity={0.85}
-              >
-                <View style={styles.activeTopRow}>
-                  <Text style={styles.activeItems} numberOfLines={1}>{order.itemSummary}</Text>
-                  <View style={styles.activePill}>
-                    <Text style={styles.activePillText}>{ACTIVE_STATUS_LABEL[order.status]}</Text>
-                  </View>
-                </View>
-                <View style={styles.activeAddrRow}>
-                  <Feather name="map-pin" size={13} color="rgba(255,255,255,0.85)" />
-                  <Text style={styles.activeAddr} numberOfLines={1}>{order.delivery_address}</Text>
-                </View>
-              </TouchableOpacity>
+              />
             ))}
           </View>
         )}
@@ -556,11 +556,6 @@ export default function ProviderIncomingOrdersScreen() {
           <View style={styles.sectionTitleRow}>
             <View style={styles.sectionTitleLeft}>
               <Text style={styles.sectionTitle}>New orders</Text>
-              {showIncoming && orders.length > 0 && (
-                <View style={styles.countBadge}>
-                  <Text style={styles.countBadgeText}>{orders.length}</Text>
-                </View>
-              )}
             </View>
             <TouchableOpacity
               onPress={() => router.push('/(provider)/recent-orders')}
@@ -608,68 +603,18 @@ export default function ProviderIncomingOrdersScreen() {
       {/* ── Provider nav ────────────────────────────────────────────── */}
       <FloatingPillNav
         tabs={[
-          { key: 'home', label: 'Home', icon: 'home', badgeCount: showIncoming ? orders.length : 0 },
+          { key: 'home', label: 'Home', icon: 'home', badgeCount: (showIncoming ? orders.length : 0) + activeOrders.length },
           { key: 'products', label: 'Products', icon: 'package' },
+          { key: 'earnings', label: 'Earnings', icon: 'wallet', iconLib: 'material' },
         ]}
         activeKey="home"
         onNavigate={(key) => {
           if (key === 'products') router.push('/(provider)/products');
+          else if (key === 'earnings') router.push('/(provider)/earnings');
           // home → already here
         }}
       />
     </View>
-  );
-}
-
-// ─── Online toggle ──────────────────────────────────────────────────────────────
-
-function OnlineToggle({
-  value,
-  disabled,
-  onToggle,
-}: {
-  value: boolean;
-  disabled: boolean;
-  onToggle: (next: boolean) => void;
-}) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.spring(anim, {
-      toValue: value ? 1 : 0,
-      useNativeDriver: false,
-      friction: 7,
-      tension: 70,
-    }).start();
-  }, [value, anim]);
-
-  const trackColor = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(255,255,255,0.18)', colors.headerAccent],
-    extrapolate: 'clamp',
-  });
-  const translateX = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [3, 21],
-    extrapolate: 'clamp',
-  });
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={() => onToggle(!value)}
-      disabled={disabled}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={disabled && styles.toggleDisabled}
-    >
-      <Animated.View
-        style={[styles.toggleTrack, { backgroundColor: trackColor }, value && styles.toggleTrackOnline]}
-      >
-        <Animated.View style={[styles.toggleThumb, { transform: [{ translateX }] }]}>
-          <Feather name="power" size={10} color={value ? colors.headerBg : colors.textMuted} />
-        </Animated.View>
-      </Animated.View>
-    </TouchableOpacity>
   );
 }
 
@@ -687,24 +632,24 @@ function OrderCard({
   const disabled = accepting || order.alreadyAccepted;
   return (
     <Card style={styles.orderCard}>
-      <View style={styles.orderTopRow}>
-        {order.is_express ? (
+      {order.is_express && (
+        <View style={styles.orderTopRow}>
           <StatusBadge tone="express" label="Express" />
-        ) : (
-          <Text style={styles.standardLabel}>Standard order</Text>
-        )}
-        <Text style={styles.timeAgo}>{timeAgo(order.created_at)}</Text>
-      </View>
+        </View>
+      )}
 
-      <Text style={styles.orderItems} numberOfLines={1}>{order.itemSummary}</Text>
+      <View style={styles.orderItemsRow}>
+        <Text style={styles.orderItems} numberOfLines={1}>{order.itemSummary}</Text>
+        <Text style={styles.orderPrice}>₱{Number(order.total_amount).toLocaleString()}</Text>
+      </View>
 
       <View style={styles.orderAddrRow}>
         <Feather name="map-pin" size={13} color={colors.textMuted} />
         <Text style={styles.orderAddr} numberOfLines={2}>{order.delivery_address}</Text>
+        <Text style={styles.timeAgo}>{timeAgo(order.created_at)}</Text>
       </View>
 
       <View style={styles.orderBottomRow}>
-        <Text style={styles.orderPrice}>₱{Number(order.total_amount).toLocaleString()}</Text>
         <TouchableOpacity
           style={[styles.acceptBtn, disabled && styles.acceptBtnDisabled]}
           onPress={onAccept}
@@ -742,26 +687,20 @@ const styles = StyleSheet.create({
 
   // Stat cards (rendered in the IdentityHeader children slot)
   statRow: { flexDirection: 'row', gap: spacing.md },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.headerSurface,
+  // Matches the StatusToggle track (40×22) so it sits identically to the toggle
+  // on the adjacent Status card.
+  balanceTopUpBtn: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderWidth: 1,
-    borderColor: colors.headerSurfaceBorder,
-    borderRadius: radii.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
-  statLabel: {
-    color: colors.headerSubtext,
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   statValue: { color: colors.headerText, fontSize: 18, fontWeight: '700' },
   statusValue: { fontSize: 15 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   statusValueRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusDotOnline: {
@@ -773,38 +712,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   statusDotOffline: { backgroundColor: 'rgba(255,255,255,0.35)' },
-
-  // Custom online toggle (fits the dark status card)
-  toggleTrack: {
-    width: 40,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  toggleTrackOnline: {
-    borderColor: 'transparent',
-    shadowColor: colors.headerAccent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  toggleThumb: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  toggleDisabled: { opacity: 0.55 },
 
   // Scroll
   scroll: { flex: 1 },
@@ -822,44 +729,9 @@ const styles = StyleSheet.create({
   },
   sectionTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   seeAll: { fontSize: 14, fontWeight: '600', color: colors.primary },
-  countBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  countBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   emptyPad: { flex: undefined, paddingVertical: spacing.xxxl },
 
-  // Active delivery card (green)
-  activeCard: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
-    ...shadows.card,
-  },
-  activeTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  activePill: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  activePillText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  activeItems: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
-  activeAddrRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  activeAddr: { color: 'rgba(255,255,255,0.85)', fontSize: 12, flex: 1 },
 
   // Incoming order card (white)
   orderCard: { padding: spacing.lg, marginBottom: spacing.sm },
@@ -869,18 +741,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
-  standardLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  timeAgo: { fontSize: 12, color: colors.textMuted },
-  orderItems: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  timeAgo: { fontSize: 12, color: colors.textMuted, marginLeft: 'auto' },
+  orderItemsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: 4,
+  },
+  orderItems: { fontSize: 14, fontWeight: '600', color: colors.text, flex: 1 },
   orderAddrRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: spacing.md },
   orderAddr: { fontSize: 12, color: colors.textSecondary, flex: 1 },
   orderBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   orderPrice: { fontSize: 17, fontWeight: '700', color: colors.primary },
   acceptBtn: {
+    flex: 1,
     backgroundColor: colors.primary,
     borderRadius: radii.sm,
     paddingHorizontal: spacing.xl,

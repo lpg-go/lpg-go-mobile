@@ -52,7 +52,9 @@ serve(async (req) => {
     .eq('phone', lookupPhone)
     .maybeSingle();
 
-  console.log('[send-otp] purpose:', purpose, 'lookupPhone:', lookupPhone, 'existingProfile:', JSON.stringify(existingProfile), 'lookupErr:', JSON.stringify(lookupErr));
+  // Never log the full phone number (PII). Redact to the last 4 digits.
+  const redactedPhone = '***' + phone.slice(-4);
+  console.log('[send-otp] purpose:', purpose, 'phone:', redactedPhone, 'existingProfile:', existingProfile ? 'yes' : 'no');
 
   if (lookupErr) {
     console.error('[send-otp] profile lookup error:', lookupErr);
@@ -149,10 +151,15 @@ serve(async (req) => {
   });
 
   const smsBody = await smsRes.text();
-  console.log('[send-otp] semaphore response:', smsRes.status, smsBody);
+  // Do NOT log smsBody: Semaphore echoes the submitted message, which contains
+  // the live OTP code. Log only the HTTP status.
+  console.log('[send-otp] semaphore status:', smsRes.status);
 
   if (!smsRes.ok) {
-    return new Response(JSON.stringify({ error: 'Failed to send SMS.', details: smsBody }), { status: 502, headers: CORS });
+    // Don't echo smsBody: Semaphore responses can contain the message text (and
+    // thus the OTP code). Surface only the HTTP status for debugging.
+    console.error('[send-otp] semaphore send failed, status:', smsRes.status);
+    return new Response(JSON.stringify({ error: 'Failed to send SMS.' }), { status: 502, headers: CORS });
   }
 
   // Semaphore returns HTTP 200 even on logical failures (insufficient credit,
@@ -176,7 +183,10 @@ serve(async (req) => {
   }
 
   if (!smsOk) {
-    return new Response(JSON.stringify({ error: 'Failed to send SMS.', details: smsBody }), { status: 502, headers: CORS });
+    // Same as above: a Failed/Rejected Semaphore payload still echoes the code,
+    // so never return it to the caller.
+    console.error('[send-otp] semaphore rejected the message, status:', smsRes.status);
+    return new Response(JSON.stringify({ error: 'Failed to send SMS.' }), { status: 502, headers: CORS });
   }
 
   return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS });

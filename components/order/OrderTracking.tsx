@@ -13,12 +13,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DELIVERY_SPEED_OPTIONS, speedLabel } from '../../lib/reviewSpeed';
-import Avatar from '../ui/Avatar';
 import { SAFETY_ITEMS } from '../../lib/safety';
 import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import LiveMap from '../LiveMap';
 import SheetHeader from '../SheetHeader';
 import PrimaryButton from '../ui/PrimaryButton';
+import OrderItemsCard from './OrderItemsCard';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -176,13 +176,6 @@ export default function OrderTracking({
 
   const providerLabel =
     selectedProvider?.business_name || selectedProvider?.full_name || 'Provider';
-  const providerInitials = providerLabel
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
 
   const methodLabel = order.payment_method === 'card' ? 'Card' : 'Cash on delivery';
 
@@ -312,14 +305,6 @@ export default function OrderTracking({
               onPress={onOpenMap}
               disabled={order.status !== 'in_transit' || selectedProvider?.provider_type !== 'rider'}
             >
-              <Avatar
-                url={selectedProvider.avatar_url}
-                name={providerLabel}
-                size={44}
-                backgroundColor={colors.headerBg}
-                textColor={colors.headerAccent}
-                style={styles.providerAvatar}
-              />
               <View style={styles.providerInfo}>
                 <Text style={styles.providerName}>{providerLabel}</Text>
                 <View style={styles.providerMetaRow}>
@@ -341,30 +326,14 @@ export default function OrderTracking({
         {/* Payment summary */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Payment · {methodLabel}</Text>
-          <View style={styles.itemsCard}>
-            {items.map((item, index) => (
-              <View
-                key={item.id}
-                style={[styles.itemRow, index < items.length - 1 && styles.itemRowBorder]}
-              >
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {item.product?.name ?? 'Product'}
-                </Text>
-                <Text style={styles.itemQty}>×{item.quantity}</Text>
-                <Text style={styles.itemSubtotal}>₱{Number(item.subtotal).toLocaleString()}</Text>
-              </View>
-            ))}
-            {order.is_express && (
-              <View style={styles.expressFeeRow}>
-                <Text style={styles.expressFeeLabel}>Express delivery</Text>
-                <Text style={styles.expressFeeValue}>+₱{Number(order.express_fee).toLocaleString()}</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.totalPill}>
-            <Text style={styles.totalPillLabel}>Total to pay</Text>
-            <Text style={styles.totalPillValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
-          </View>
+          <OrderItemsCard
+            items={items}
+            isExpress={order.is_express}
+            expressFee={order.express_fee}
+            totalAmount={order.total_amount}
+            totalLabel="Total to pay"
+            totalVariant="pill"
+          />
         </View>
 
         {/* Review — shown after delivery */}
@@ -663,18 +632,6 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     ...shadows.card,
   },
-  providerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.pill,
-    backgroundColor: colors.headerBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-    overflow: 'hidden',
-  },
-  avatarImage: { width: 44, height: 44, borderRadius: radii.pill },
-  providerInitials: { fontSize: 16, fontWeight: '700', color: colors.headerAccent },
   providerInfo: { flex: 1 },
   providerName: { ...typography.cardTitle, color: colors.text },
   providerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
@@ -713,51 +670,6 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   chatBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
-
-  // Order items / payment
-  itemsCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    overflow: 'hidden',
-    ...shadows.card,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  itemRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  itemName: { flex: 1, fontSize: 13, color: colors.text },
-  itemQty: { fontSize: 13, color: colors.textMuted, marginHorizontal: spacing.md },
-  itemSubtotal: { fontSize: 13, fontWeight: '600', color: colors.text, minWidth: 64, textAlign: 'right' },
-  expressFeeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  expressFeeLabel: { fontSize: 13, color: colors.amberDark, fontWeight: '600' },
-  expressFeeValue: { fontSize: 13, fontWeight: '700', color: colors.amberDark },
-
-  // Green total pill
-  totalPill: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.primaryTint,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    marginTop: spacing.sm,
-  },
-  totalPillLabel: { fontSize: 14, fontWeight: '700', color: colors.primaryDark },
-  totalPillValue: { ...typography.price, color: colors.primaryDark },
 
   // Pinned bottom bar
   bottomBar: {

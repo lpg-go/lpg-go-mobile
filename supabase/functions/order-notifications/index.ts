@@ -3,7 +3,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const APP_SECRET = Deno.env.get('APP_SECRET');
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -102,6 +101,17 @@ async function getAcceptingProviderIds(orderId: string): Promise<string[]> {
     .eq('order_id', orderId)
     .is('withdrawn_at', null);
   return (data ?? []).map((r) => r.provider_id);
+}
+
+// Authorization: is this user a participant of the order? A participant is the
+// order's customer, its selected provider, or a provider that has accepted it
+// (every notification event is triggered by one of these actors).
+async function isParticipant(orderId: string, userId: string): Promise<boolean> {
+  const order = await getOrder(orderId);
+  if (!order) return false;
+  if (order.customer_id === userId || order.selected_provider_id === userId) return true;
+  const accepting = await getAcceptingProviderIds(orderId);
+  return accepting.includes(userId);
 }
 
 async function getPlatformSettings() {
@@ -322,7 +332,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-app-secret' },
+      headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type' },
     });
   }
 
@@ -330,8 +340,16 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: CORS });
   }
 
-  const secret = req.headers.get('x-app-secret');
-  if (!APP_SECRET || secret !== APP_SECRET) {
+  // Authenticate the caller via their Supabase user JWT (the client sends its
+  // session access_token as the Bearer). The previous x-app-secret gate was a
+  // static secret compiled into the app bundle, so it was effectively public.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
+  }
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
   }
 
@@ -343,6 +361,16 @@ serve(async (req) => {
   }
 
   const { orderId, providerId, event } = body;
+
+  // Authorize: the caller must be a participant of the order being notified.
+  // low_balance carries no orderId — a caller may only notify themselves.
+  if (event === 'low_balance') {
+    if (!providerId || providerId !== user.id) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: CORS });
+    }
+  } else if (!orderId || !(await isParticipant(orderId, user.id))) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: CORS });
+  }
 
   try {
     let result: HandlerResult;
@@ -362,12 +390,12 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: `Unknown event: ${event}` }), { status: 400, headers: CORS });
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, event, orderId, providerTokensFound: result.tokensFound, pushResult: result.pushResult }),
-      { status: 200, headers: CORS }
-    );
+    // Fire-and-forget side effects (notification rows + push) run inside the
+    // handlers above; do NOT return token counts / push receipts to the caller.
+    void result;
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: CORS });
   } catch (err) {
     console.error(`[order-notifications] event=${event} error:`, err);
-    return new Response(JSON.stringify({ error: 'Internal error', details: String(err) }), { status: 500, headers: CORS });
+    return new Response(JSON.stringify({ error: 'Internal error' }), { status: 500, headers: CORS });
   }
 });

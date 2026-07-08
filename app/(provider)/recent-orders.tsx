@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -15,7 +15,7 @@ import DetailHeader from '../../components/ui/DetailHeader';
 import EmptyState from '../../components/ui/EmptyState';
 import StatusBadge from '../../components/ui/StatusBadge';
 import supabase from '../../lib/supabase';
-import { colors, radii, spacing, typography } from '../../lib/theme';
+import { colors, spacing, typography } from '../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ type RecentOrder = {
   created_at: string;
   delivery_address: string;
   itemSummary: string;
+  rating: number | null;
+  comment: string | null;
 };
 
 const H_PADDING = 20;
@@ -58,10 +60,16 @@ export default function ProviderRecentOrdersScreen() {
     }
 
     const orderIds = orderRows.map((o) => o.id);
-    const { data: itemRows } = await supabase
-      .from('order_items')
-      .select('order_id, quantity, product:products(name)')
-      .in('order_id', orderIds);
+    const [{ data: itemRows }, { data: reviewRows }] = await Promise.all([
+      supabase
+        .from('order_items')
+        .select('order_id, quantity, product:products(name)')
+        .in('order_id', orderIds),
+      supabase
+        .from('reviews')
+        .select('order_id, rating, comment')
+        .in('order_id', orderIds),
+    ]);
 
     const summaryByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
@@ -72,6 +80,11 @@ export default function ProviderRecentOrdersScreen() {
         : part;
     }
 
+    const reviewByOrder: Record<string, { rating: number; comment: string | null }> = {};
+    for (const row of reviewRows ?? []) {
+      reviewByOrder[row.order_id] = { rating: row.rating, comment: row.comment };
+    }
+
     setOrders(
       orderRows.map((o) => ({
         id: o.id,
@@ -80,6 +93,8 @@ export default function ProviderRecentOrdersScreen() {
         created_at: o.created_at,
         delivery_address: o.delivery_address,
         itemSummary: summaryByOrder[o.id] ?? 'Order',
+        rating: reviewByOrder[o.id]?.rating ?? null,
+        comment: reviewByOrder[o.id]?.comment ?? null,
       }))
     );
   }
@@ -132,42 +147,42 @@ export default function ProviderRecentOrdersScreen() {
 
 function RecentOrderCard({ order }: { order: RecentOrder }) {
   const isCancelled = order.status === 'cancelled';
-  const shortId = order.id.slice(-8).toUpperCase();
-  const date = new Date(order.created_at).toLocaleString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
   return (
     <Card
-      onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
+      onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id, from: 'recent-orders' } })}
       style={[styles.historyCard, isCancelled && styles.historyCardDim]}
     >
-      <View style={styles.cardTop}>
-        <Text style={styles.historyMeta} numberOfLines={1}>#{shortId} · {date}</Text>
+      <View style={styles.productRow}>
+        <Text style={styles.historyProduct} numberOfLines={1}>{order.itemSummary}</Text>
         <StatusBadge
           label={isCancelled ? 'Cancelled' : 'Delivered'}
           tone={isCancelled ? 'danger' : 'success'}
         />
       </View>
-      <View style={styles.cardMid}>
-        <View style={styles.historyIconSquare}>
-          <MaterialCommunityIcons name="gas-cylinder" size={22} color={colors.primary} />
-        </View>
-        <View style={styles.cardMidText}>
-          <Text style={styles.historyProduct} numberOfLines={1}>{order.itemSummary}</Text>
-          <View style={styles.addressRow}>
-            <Feather name="map-pin" size={12} color={colors.textMuted} />
-            <Text style={styles.historyAddress} numberOfLines={1}>{order.delivery_address}</Text>
-          </View>
-        </View>
-      </View>
-      <View style={styles.historyBottom}>
-        <Text style={styles.historyTotalLabel}>Total</Text>
+      <View style={styles.addressRow}>
+        <Feather name="map-pin" size={12} color={colors.textMuted} />
+        <Text style={styles.historyAddress} numberOfLines={1}>{order.delivery_address}</Text>
         <Text style={styles.historyTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
       </View>
+
+      {!isCancelled && order.rating != null && (
+        <View style={styles.reviewRow}>
+          <View style={styles.reviewStars}>
+            {[1, 2, 3, 4, 5].map((s) => (
+              <Feather
+                key={s}
+                name="star"
+                size={13}
+                color={s <= order.rating! ? colors.amber : colors.border}
+              />
+            ))}
+          </View>
+          {order.comment ? (
+            <Text style={styles.reviewComment} numberOfLines={1}>"{order.comment}"</Text>
+          ) : null}
+        </View>
+      )}
     </Card>
   );
 }
@@ -183,38 +198,25 @@ const styles = StyleSheet.create({
 
   emptyPad: { flex: undefined, paddingVertical: spacing.xxxl },
 
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  cardMid: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
-  cardMidText: { flex: 1 },
-  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  productRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
 
   historyCard: { padding: spacing.lg, marginBottom: spacing.md },
   historyCardDim: { opacity: 0.85 },
-  historyMeta: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textMuted },
-  historyIconSquare: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.sm,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyProduct: { ...typography.cardTitle, color: colors.text },
+  historyProduct: { ...typography.cardTitle, color: colors.text, flex: 1 },
   historyAddress: { flex: 1, fontSize: 12, color: colors.textMuted },
-  historyBottom: {
+  historyTotalValue: { fontSize: 15, fontWeight: '800', color: colors.text, marginLeft: spacing.sm },
+
+  // Customer review (delivered orders that have been reviewed)
+  reviewRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
+    gap: spacing.sm,
+    marginTop: spacing.md,
     paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.grey100,
   },
-  historyTotalLabel: { fontSize: 13, color: colors.textSecondary },
-  historyTotalValue: { fontSize: 15, fontWeight: '800', color: colors.text },
+  reviewStars: { flexDirection: 'row', gap: 2 },
+  reviewComment: { flex: 1, fontSize: 12, color: colors.textMuted, fontStyle: 'italic' },
 });

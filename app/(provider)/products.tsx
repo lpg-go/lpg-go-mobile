@@ -7,7 +7,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -15,12 +14,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import BrandProductImage from '../../components/ui/BrandProductImage';
 import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
+import StatusToggle from '../../components/ui/StatusToggle';
 import supabase from '../../lib/supabase';
-import { brandTints, colors, radii, spacing } from '../../lib/theme';
+import { colors, radii, spacing } from '../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,7 +29,6 @@ type ProviderProduct = {
   product_name: string;
   size_kg: number;
   brand_name: string;
-  logo_url: string | null;
   image_url: string | null;
   price: number;
   is_available: boolean;
@@ -39,7 +37,6 @@ type ProviderProduct = {
 
 type BrandGroup = {
   brand_name: string;
-  logo_url: string | null;
   products: ProviderProduct[];
 };
 
@@ -97,7 +94,7 @@ export default function ProviderProductsScreen() {
           size_kg,
           image_url,
           admin_fee,
-          brand:brands ( name, logo_url )
+          brand:brands ( name )
         )
       `)
       .eq('provider_id', user.id)
@@ -113,7 +110,6 @@ export default function ProviderProductsScreen() {
         product_name: row.product.name,
         size_kg: row.product.size_kg,
         brand_name: row.product.brand.name,
-        logo_url: row.product.brand.logo_url ?? null,
         image_url: row.product.image_url ?? null,
         price: Number(row.price),
         is_available: row.is_available,
@@ -154,14 +150,14 @@ export default function ProviderProductsScreen() {
   for (const p of products) {
     const group = brandGroups.find((g) => g.brand_name === p.brand_name);
     if (group) group.products.push(p);
-    else brandGroups.push({ brand_name: p.brand_name, logo_url: p.logo_url, products: [p] });
+    else brandGroups.push({ brand_name: p.brand_name, products: [p] });
   }
   brandGroups.sort((a, b) => a.brand_name.localeCompare(b.brand_name));
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
       <Text style={styles.headerTitle}>My Products</Text>
-      <Text style={styles.headerSubtitle}>Set price + availability per item</Text>
+      <Text style={styles.headerSubtitle}>Set price and availability per item</Text>
     </View>
   );
 
@@ -170,10 +166,12 @@ export default function ProviderProductsScreen() {
       tabs={[
         { key: 'home', label: 'Home', icon: 'home' },
         { key: 'products', label: 'Products', icon: 'package' },
+        { key: 'earnings', label: 'Earnings', icon: 'wallet', iconLib: 'material' },
       ]}
       activeKey="products"
       onNavigate={(key) => {
         if (key === 'home') router.replace('/(provider)');
+        else if (key === 'earnings') router.push('/(provider)/earnings');
         // products → already here
       }}
     />
@@ -210,9 +208,8 @@ export default function ProviderProductsScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {brandGroups.map((group, gi) => {
+          {brandGroups.map((group) => {
             const collapsed = collapsedBrands.has(group.brand_name);
-            const tint = brandTints[gi % brandTints.length];
             const sellingCount = group.products.filter((p) => p.is_available).length;
             return (
               <Card key={group.brand_name} style={styles.brandCard}>
@@ -221,15 +218,6 @@ export default function ProviderProductsScreen() {
                   onPress={() => toggleBrand(group.brand_name)}
                   activeOpacity={0.7}
                 >
-                  <BrandProductImage
-                    url={group.logo_url}
-                    size={40}
-                    borderRadius={radii.sm}
-                    resizeMode="contain"
-                    iconSize={22}
-                    iconColor={tint.icon}
-                    backgroundColor={tint.bg}
-                  />
                   <Text style={styles.brandHeader} numberOfLines={1}>{group.brand_name}</Text>
                   {sellingCount > 0 ? (
                     <View style={styles.sellingBadge}>
@@ -349,46 +337,44 @@ function ProductRow({
 
   return (
     <View style={[styles.productRow, !isLast && styles.productRowBorder]}>
-      {/* Top: size + admin fee · availability toggle */}
+      {/* One row: size + admin fee · price · availability toggle. Price stays
+          editable while OFF so a provider can set it, then enable "Selling"
+          (which requires price > 0). */}
       <View style={styles.rowTop}>
         <View style={styles.rowTopLeft}>
           <Text style={styles.sizeText}>{product.size_kg} kg</Text>
-          <Text style={styles.adminFeeText}>Admin fee ₱{product.admin_fee.toLocaleString()}</Text>
+          <Text style={styles.adminFeeText} numberOfLines={1}>Fee: ₱{product.admin_fee.toLocaleString()}</Text>
         </View>
-        <Switch
+        <TouchableOpacity
+          style={styles.priceField}
+          onPress={() => priceRef.current?.focus()}
+          activeOpacity={1}
+        >
+          <Text style={styles.pesoPrefix}>₱</Text>
+          <TextInput
+            ref={priceRef}
+            style={styles.priceInput}
+            value={priceText}
+            onChangeText={setPriceText}
+            placeholder="Set price"
+            placeholderTextColor={colors.textFaint}
+            keyboardType="decimal-pad"
+            returnKeyType="done"
+            onBlur={savePrice}
+            onSubmitEditing={savePrice}
+            selectTextOnFocus
+          />
+          {priceSave === 'saving' && <ActivityIndicator size="small" color={colors.textMuted} />}
+          {priceSave === 'saved' && <Feather name="check" size={16} color={colors.primary} />}
+        </TouchableOpacity>
+        <StatusToggle
           value={available}
-          onValueChange={toggleAvailable}
+          onToggle={toggleAvailable}
           disabled={toggleSaving}
-          trackColor={{ false: colors.grey300, true: colors.primary }}
-          thumbColor="#fff"
-          ios_backgroundColor={colors.grey300}
+          offColor={colors.grey300}
+          offBorderColor={colors.grey300}
         />
       </View>
-
-      {/* Price field — always editable so a provider can set a price while the
-          product is OFF, then enable "Selling" (which requires price > 0). */}
-      <TouchableOpacity
-        style={styles.priceField}
-        onPress={() => priceRef.current?.focus()}
-        activeOpacity={1}
-      >
-        <Text style={styles.pesoPrefix}>₱</Text>
-        <TextInput
-          ref={priceRef}
-          style={styles.priceInput}
-          value={priceText}
-          onChangeText={setPriceText}
-          placeholder="Set price"
-          placeholderTextColor={colors.textFaint}
-          keyboardType="decimal-pad"
-          returnKeyType="done"
-          onBlur={savePrice}
-          onSubmitEditing={savePrice}
-          selectTextOnFocus
-        />
-        {priceSave === 'saving' && <ActivityIndicator size="small" color={colors.textMuted} />}
-        {priceSave === 'saved' && <Feather name="check" size={16} color={colors.primary} />}
-      </TouchableOpacity>
     </View>
   );
 }
@@ -421,14 +407,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  brandLogo: { width: 40, height: 40, borderRadius: radii.sm },
-  brandIconSquare: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   brandHeader: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
   sellingBadge: {
     backgroundColor: colors.primaryTint,
@@ -455,14 +433,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  rowTopLeft: { flex: 1 },
+  rowTopLeft: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
   sizeText: { fontSize: 15, fontWeight: '500', color: colors.text },
-  adminFeeText: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  adminFeeText: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
   priceField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: spacing.sm,
+    width: 84,
+    flexShrink: 0,
     backgroundColor: colors.grey50,
     borderWidth: 1,
     borderColor: colors.border,

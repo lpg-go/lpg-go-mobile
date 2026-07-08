@@ -7,12 +7,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '../../components/ui/Card';
-import DetailHeader from '../../components/ui/DetailHeader';
 import EmptyState from '../../components/ui/EmptyState';
+import FloatingPillNav from '../../components/ui/FloatingPillNav';
+import StatCard from '../../components/ui/StatCard';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing } from '../../lib/theme';
 
@@ -57,6 +58,7 @@ export default function ProviderEarningsScreen() {
   const [completedOrders, setCompletedOrders] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     boot();
@@ -167,12 +169,32 @@ export default function ProviderEarningsScreen() {
     );
   }
 
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <Text style={styles.headerTitle}>Earnings</Text>
+      <Text style={styles.headerSubtitle}>Your balance, fees, and history</Text>
+    </View>
+  );
+
+  const nav = (
+    <FloatingPillNav
+      tabs={[
+        { key: 'home', label: 'Home', icon: 'home' },
+        { key: 'products', label: 'Products', icon: 'package' },
+        { key: 'earnings', label: 'Earnings', icon: 'wallet', iconLib: 'material' },
+      ]}
+      activeKey="earnings"
+      onNavigate={(key) => {
+        if (key === 'home') router.replace('/(provider)');
+        else if (key === 'products') router.push('/(provider)/products');
+        // earnings → already here
+      }}
+    />
+  );
+
   return (
     <View style={styles.screen}>
-      <DetailHeader
-        title="Earnings"
-        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))}
-      />
+      {header}
 
       <ScrollView
         style={styles.scroll}
@@ -187,24 +209,6 @@ export default function ProviderEarningsScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Balance card */}
-        <View style={styles.balanceCard}>
-          <View style={styles.balanceLeft}>
-            <Text style={styles.balanceLabel}>Available balance</Text>
-            <Text style={styles.balanceAmount}>
-              {balance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.topUpBtn}
-            onPress={() => router.push('/(provider)/topup' as never)}
-            activeOpacity={0.8}
-          >
-            <Feather name="plus-circle" size={15} color="#fff" />
-            <Text style={styles.topUpBtnText}>Top Up</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Low balance warning */}
         {minBalance > 0 && balance < minBalance && (
           <View style={styles.lowBalanceWarning}>
@@ -218,21 +222,9 @@ export default function ProviderEarningsScreen() {
 
         {/* Stat cards */}
         <View style={styles.statsRow}>
-          <Card style={styles.statCard}>
-            <Text style={styles.statTitle}>This month</Text>
-            <Text style={styles.statValue}>{peso(monthlyFees)}</Text>
-            <Text style={styles.statUnit}>in fees</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={styles.statTitle}>All time</Text>
-            <Text style={styles.statValue}>{peso(allTimeFees)}</Text>
-            <Text style={styles.statUnit}>in fees</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={styles.statTitle}>Delivered</Text>
-            <Text style={styles.statValue}>{completedOrders}</Text>
-            <Text style={styles.statUnit}>orders</Text>
-          </Card>
+          <StatCard variant="standalone" label="This month" value={peso(monthlyFees)} />
+          <StatCard variant="standalone" label="All time" value={peso(allTimeFees)} />
+          <StatCard variant="standalone" label="Delivered" value={String(completedOrders)} />
         </View>
 
         {/* Transaction history */}
@@ -257,6 +249,8 @@ export default function ProviderEarningsScreen() {
           </Card>
         )}
       </ScrollView>
+
+      {nav}
     </View>
   );
 }
@@ -301,36 +295,18 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
+  // Header
+  header: {
+    backgroundColor: colors.headerBg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: colors.headerText },
+  headerSubtitle: { fontSize: 13, color: colors.headerSubtext, marginTop: 2 },
+
   // Scroll
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, paddingBottom: spacing.xxxl },
-
-  // Balance card
-  balanceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    backgroundColor: colors.primary,
-    borderRadius: radii.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  balanceLeft: { flex: 1 },
-  balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
-  balanceAmount: { fontSize: 36, fontWeight: '800', color: '#fff', marginTop: 4 },
-  topUpBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    borderRadius: radii.pill,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.lg,
-  },
-  topUpBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg, paddingBottom: 100 },
 
   // Low balance warning
   lowBalanceWarning: {
@@ -348,10 +324,6 @@ const styles = StyleSheet.create({
 
   // Stat cards
   statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xxl },
-  statCard: { flex: 1, padding: spacing.md, alignItems: 'flex-start' },
-  statTitle: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
-  statValue: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 4 },
-  statUnit: { fontSize: 10, color: colors.textMuted, marginTop: 1 },
 
   // Section title
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.md },

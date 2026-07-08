@@ -120,7 +120,7 @@ export default function TopUpScreen() {
       <View style={styles.screen}>
         <DetailHeader
           title="Top Up Balance"
-          onBack={() => router.replace('/(provider)/earnings')}
+          onBack={() => router.replace('/(provider)')}
         />
 
         <ScrollView

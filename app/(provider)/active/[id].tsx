@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ChatModal from '../../../components/ChatModal';
+import OrderItemsCard from '../../../components/order/OrderItemsCard';
 import LiveMap from '../../../components/LiveMap';
 import SheetHeader from '../../../components/SheetHeader';
 import Card from '../../../components/ui/Card';
@@ -93,8 +94,17 @@ const H_PADDING = 20;
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ActiveDeliveryScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const insets = useSafeAreaInsets();
+
+  // Back target: history items (from Recent Orders) return there; otherwise fall
+  // back to the previous screen, then home.
+  const handleBack = () =>
+    from === 'recent-orders'
+      ? router.replace('/(provider)/recent-orders')
+      : router.canGoBack()
+        ? router.back()
+        : router.replace('/(provider)');
 
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -465,7 +475,7 @@ export default function ActiveDeliveryScreen() {
   if (!order) {
     return (
       <View style={styles.screen}>
-        <DetailHeader title="Active Delivery" onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))} />
+        <DetailHeader title="Active Delivery" onBack={handleBack} />
         <View style={[styles.screen, styles.centered]}>
           <Text style={styles.errorText}>Order not found.</Text>
         </View>
@@ -492,7 +502,7 @@ export default function ActiveDeliveryScreen() {
       <DetailHeader
         title="Active Delivery"
         subtitle={`#${shortId}`}
-        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(provider)'))}
+        onBack={handleBack}
         right={order.is_express ? <StatusBadge label="Express" tone="express" /> : undefined}
       />
 
@@ -540,6 +550,7 @@ export default function ActiveDeliveryScreen() {
               avatarUrl={order.customer.avatar_url}
               showAvatar={false}
               subtitle={order.delivery_address}
+              subtitleIcon="map-pin"
               onCall={callChatActive && order.customer.phone ? handleCall : undefined}
               onChat={callChatActive ? handleChat : undefined}
               chatBadge={unreadCount}
@@ -560,34 +571,14 @@ export default function ActiveDeliveryScreen() {
         {/* Order */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order</Text>
-          <Card style={styles.itemsCard}>
-            {items.map((item, index) => (
-              <View
-                key={item.id}
-                style={[styles.itemRow, index < items.length - 1 && styles.itemRowBorder]}
-              >
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {item.product?.name ?? 'Product'}
-                </Text>
-                <Text style={styles.itemQty}>×{item.quantity}</Text>
-                <Text style={styles.itemSubtotal}>
-                  ₱{Number(item.subtotal).toLocaleString()}
-                </Text>
-              </View>
-            ))}
-            {order.is_express && (
-              <View style={styles.expressFeeRow}>
-                <Text style={styles.expressFeeLabel}>Express delivery</Text>
-                <Text style={styles.expressFeeValue}>+₱{Number(order.express_fee).toLocaleString()}</Text>
-              </View>
-            )}
-            <View style={styles.itemTotalRow}>
-              <Text style={styles.itemTotalLabel}>Total ({isCOD ? 'COD' : 'Card'})</Text>
-              <Text style={styles.itemTotalValue}>
-                ₱{Number(order.total_amount).toLocaleString()}
-              </Text>
-            </View>
-          </Card>
+          <OrderItemsCard
+            items={items}
+            isExpress={order.is_express}
+            expressFee={order.express_fee}
+            totalAmount={order.total_amount}
+            totalLabel={`Total (${isCOD ? 'COD' : 'Card'})`}
+            totalVariant="row"
+          />
         </View>
 
         {/* Customer review (delivered) */}
@@ -767,36 +758,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   mapBtnText: { fontSize: 16, fontWeight: '600', color: colors.primary },
-
-  // Items card
-  itemsCard: { overflow: 'hidden' },
-  itemRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  itemRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.grey100 },
-  itemName: { flex: 1, fontSize: 13, color: colors.grey700 },
-  itemQty: { fontSize: 13, color: colors.textMuted, marginHorizontal: spacing.md },
-  itemSubtotal: { fontSize: 13, fontWeight: '600', color: colors.text, minWidth: 64, textAlign: 'right' },
-  expressFeeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.grey100,
-  },
-  expressFeeLabel: { fontSize: 13, color: colors.amberText, fontWeight: '600' },
-  expressFeeValue: { fontSize: 13, fontWeight: '700', color: colors.amberText },
-  itemTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.grey50,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  itemTotalLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
-  itemTotalValue: { fontSize: 14, fontWeight: '800', color: colors.primary },
 
   // Customer review card
   reviewCard: { padding: spacing.lg, marginBottom: spacing.lg, alignItems: 'center', gap: spacing.sm },

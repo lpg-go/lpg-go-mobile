@@ -5,22 +5,26 @@ import { Platform } from 'react-native';
 import supabase from './supabase';
 
 const NOTIFICATIONS_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1/order-notifications';
-const APP_SECRET = process.env.EXPO_PUBLIC_APP_SECRET!;
 
 export async function sendOrderNotification(orderId: string, event: string): Promise<void> {
-  console.log('[sendOrderNotification] calling', event, orderId);
   try {
+    // Authenticate with the caller's own session JWT. The edge function verifies
+    // it and confirms the user participates in the order, so we no longer ship a
+    // static shared secret in the bundle.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
     const res = await fetch(NOTIFICATIONS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-app-secret': APP_SECRET,
-        'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ orderId, event }),
     });
-    const text = await res.text();
-    console.log('[sendOrderNotification] full response:', text);
+    if (!res.ok) {
+      console.warn('[sendOrderNotification] non-OK status', res.status);
+    }
   } catch (err) {
     console.error('[sendOrderNotification] fetch error', err);
   }
