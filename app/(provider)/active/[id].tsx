@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ChatModal from '../../../components/ChatModal';
 import OrderItemsCard from '../../../components/order/OrderItemsCard';
+import OrderStatusTimeline from '../../../components/order/OrderStatusTimeline';
 import LiveMap from '../../../components/LiveMap';
 import SheetHeader from '../../../components/SheetHeader';
 import Card from '../../../components/ui/Card';
@@ -79,15 +80,6 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   delivered: 'Delivered',
   cancelled: 'Cancelled',
 };
-
-const STATUS_TONE = {
-  pending: 'neutral',
-  awaiting_dealer_selection: 'neutral',
-  in_transit: 'success',
-  awaiting_confirmation: 'pending',
-  delivered: 'success',
-  cancelled: 'danger',
-} as const;
 
 const H_PADDING = 20;
 
@@ -500,8 +492,8 @@ export default function ActiveDeliveryScreen() {
   return (
     <View style={styles.screen}>
       <DetailHeader
-        title="Active Delivery"
-        subtitle={`#${shortId}`}
+        title={`Order #${shortId}`}
+        subtitle={STATUS_LABEL[order.status]}
         onBack={handleBack}
         right={order.is_express ? <StatusBadge label="Express" tone="express" /> : undefined}
       />
@@ -511,24 +503,15 @@ export default function ActiveDeliveryScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: (inTransit ? 110 : 40) + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Status + ETA */}
-        <Card style={styles.statusCard}>
-          <View style={styles.statusTopRow}>
-            <StatusBadge label={STATUS_LABEL[order.status]} tone={STATUS_TONE[order.status]} />
-            <Text style={styles.placedAt}>Placed {placedAt}</Text>
-          </View>
-          {order.is_express && order.eta_deadline && (
-            <View style={styles.etaRow}>
-              <Feather name="clock" size={14} color={colors.amberText} />
-              <Text style={styles.etaDeadline}>
-                Deliver by {new Date(order.eta_deadline).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}
-              </Text>
-              {order.eta_minutes != null && (
-                <Text style={styles.etaMinutes}>· ~{order.eta_minutes} mins</Text>
-              )}
-            </View>
-          )}
-        </Card>
+        {/* Status timeline */}
+        <OrderStatusTimeline
+          status={order.status}
+          placedAt={placedAt}
+          isExpress={order.is_express}
+          etaDeadline={order.eta_deadline}
+          etaMinutes={order.eta_minutes}
+          showAddress={false}
+        />
 
         {/* Location banner — rider, in transit, sharing live */}
         {locationActive && (
@@ -719,14 +702,6 @@ const styles = StyleSheet.create({
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
-
-  // Status card
-  statusCard: { padding: spacing.lg, marginBottom: spacing.lg },
-  statusTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  placedAt: { fontSize: 12, color: colors.textMuted },
-  etaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.sm },
-  etaDeadline: { fontSize: 13, fontWeight: '700', color: colors.amberText },
-  etaMinutes: { fontSize: 12, fontWeight: '600', color: colors.amberDark },
 
   // Location banner (blue info)
   locBanner: {

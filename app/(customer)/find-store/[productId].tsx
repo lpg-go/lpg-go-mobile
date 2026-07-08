@@ -622,7 +622,11 @@ export default function FindStoreScreen() {
       <DetailHeader
         title={brandName || displayName}
         subtitle={phase === 'bidding' ? `Order #${orderShort}` : 'Set delivery details'}
-        onBack={() => router.back()}
+        onBack={() =>
+          orderId
+            ? router.replace({ pathname: '/(customer)/order/[id]', params: { id: orderId } })
+            : router.replace('/(customer)/orders')
+        }
         right={phase === 'bidding' && isExpress ? <StatusBadge label="Express" tone="express" /> : undefined}
       />
 

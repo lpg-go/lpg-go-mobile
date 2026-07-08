@@ -19,6 +19,7 @@ import LiveMap from '../LiveMap';
 import SheetHeader from '../SheetHeader';
 import PrimaryButton from '../ui/PrimaryButton';
 import OrderItemsCard from './OrderItemsCard';
+import OrderStatusTimeline from './OrderStatusTimeline';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -154,26 +155,6 @@ export default function OrderTracking({
   const showSelectedProvider =
     order.selected_provider_id !== null && order.status !== 'cancelled';
 
-  // Timeline progress — how far the order has advanced.
-  //   pending / awaiting_dealer_selection → node 1
-  //   in_transit                          → nodes 1+2
-  //   awaiting_confirmation / delivered   → all nodes
-  const stageIndex =
-    order.status === 'in_transit'
-      ? 1
-      : order.status === 'awaiting_confirmation' || order.status === 'delivered'
-      ? 2
-      : 0;
-  const stages: { label: string; icon: keyof typeof Feather.glyphMap; time: string | null }[] = [
-    { label: 'Order confirmed', icon: 'check', time: placedAt },
-    { label: 'Rider on the way', icon: 'truck', time: null },
-    { label: 'Delivered', icon: 'package', time: null },
-  ];
-
-  const etaTime = order.eta_deadline
-    ? new Date(order.eta_deadline).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })
-    : null;
-
   const providerLabel =
     selectedProvider?.business_name || selectedProvider?.full_name || 'Provider';
 
@@ -190,52 +171,15 @@ export default function OrderTracking({
       >
         {/* Status timeline */}
         {order.status !== 'cancelled' && (
-          <View style={styles.trackCard}>
-            {order.is_express && etaTime && order.eta_minutes != null && (
-              <View style={styles.etaRow}>
-                <Feather name="zap" size={14} color={colors.amberDark} />
-                <Text style={styles.etaText}>
-                  Deliver by {etaTime} · ~{order.eta_minutes} min
-                </Text>
-              </View>
-            )}
-            {stages.map((stage, i) => {
-              const active = i <= stageIndex;
-              const isLast = i === stages.length - 1;
-              const connectorActive = i < stageIndex;
-              return (
-                <View key={stage.label} style={styles.timelineRow}>
-                  <View style={styles.timelineLeft}>
-                    <View style={[styles.node, active ? styles.nodeActive : styles.nodeFuture]}>
-                      <Feather name={stage.icon} size={14} color={active ? '#fff' : colors.textFaint} />
-                    </View>
-                    {!isLast && (
-                      <View
-                        style={[
-                          styles.connector,
-                          connectorActive ? styles.connectorActive : styles.connectorFuture,
-                        ]}
-                      />
-                    )}
-                  </View>
-                  <View style={styles.timelineText}>
-                    <Text style={[styles.timelineLabel, !active && styles.timelineLabelFuture]}>
-                      {stage.label}
-                    </Text>
-                    {active && stage.time ? (
-                      <Text style={styles.timelineTime}>{stage.time}</Text>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })}
-            <View style={styles.trackAddressRow}>
-              <Feather name="map-pin" size={14} color={colors.textMuted} />
-              <Text style={styles.trackAddressText} numberOfLines={2}>
-                {order.delivery_address}
-              </Text>
-            </View>
-          </View>
+          <OrderStatusTimeline
+            status={order.status}
+            placedAt={placedAt}
+            deliveryAddress={order.delivery_address}
+            isExpress={order.is_express}
+            etaDeadline={order.eta_deadline}
+            etaMinutes={order.eta_minutes}
+            showAddress
+          />
         )}
 
         {/* System-expired order notice */}
@@ -249,19 +193,6 @@ export default function OrderTracking({
             <TouchableOpacity style={styles.newOrderBtn} onPress={onPlaceNewOrder}>
               <Text style={styles.newOrderBtnText}>Place New Order</Text>
             </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Confirm delivery — prompt card; the action button is pinned below */}
-        {order.status === 'awaiting_confirmation' && (
-          <View style={styles.confirmCard}>
-            <View style={styles.confirmIconCircle}>
-              <Feather name="package" size={26} color={colors.primary} />
-            </View>
-            <Text style={styles.confirmCardTitle}>Order delivered?</Text>
-            <Text style={styles.confirmCardSubtitle}>
-              Tap confirm below once you&apos;ve received your order from the rider.
-            </Text>
           </View>
         )}
 
@@ -485,58 +416,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
 
-  // Status timeline card
-  trackCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    ...shadows.card,
-  },
-  etaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.amberTint,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  etaText: { fontSize: 13, fontWeight: '700', color: colors.amberDark },
-
-  timelineRow: { flexDirection: 'row' },
-  timelineLeft: { alignItems: 'center', width: 28 },
-  node: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nodeActive: { backgroundColor: colors.primary },
-  nodeFuture: { borderWidth: 2, borderColor: colors.border, backgroundColor: colors.card },
-  connector: { width: 2, height: 22 },
-  connectorActive: { backgroundColor: colors.primary },
-  connectorFuture: { backgroundColor: colors.border },
-  timelineText: { flex: 1, marginLeft: spacing.md, paddingTop: 4 },
-  timelineLabel: { ...typography.cardTitle, color: colors.text },
-  timelineLabelFuture: { color: colors.textFaint, fontWeight: '400' },
-  timelineTime: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
-  trackAddressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-  },
-  trackAddressText: { flex: 1, ...typography.body, color: colors.textSecondary },
-
   // System-expired card
   expiredCard: {
     backgroundColor: colors.dangerTint,
@@ -558,30 +437,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
   },
   newOrderBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-
-  // Confirm delivery prompt card
-  confirmCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.sm,
-    ...shadows.card,
-  },
-  confirmIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  confirmCardTitle: { fontSize: 17, fontWeight: '700', color: colors.text, textAlign: 'center' },
-  confirmCardSubtitle: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 18 },
 
   // Safety check result
   safetyCard: {
