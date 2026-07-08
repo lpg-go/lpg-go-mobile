@@ -20,6 +20,7 @@ import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import IdentityHeader from '../../components/ui/IdentityHeader';
 import StatCard from '../../components/ui/StatCard';
 import StatusBadge from '../../components/ui/StatusBadge';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 import StatusToggle from '../../components/ui/StatusToggle';
 import { sendOrderNotification } from '../../lib/notifications';
 import supabase from '../../lib/supabase';
@@ -89,6 +90,7 @@ export default function ProviderIncomingOrdersScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [confirmOrderId, setConfirmOrderId] = useState<string | null>(null); // order awaiting accept-confirmation
 
   const providerIdRef = useRef<string | null>(null);
   const availableProductIdsRef = useRef<string[]>([]);
@@ -376,7 +378,7 @@ export default function ProviderIncomingOrdersScreen() {
     setIsOnline(value);
   }
 
-  async function handleAccept(orderId: string) {
+  function handleAccept(orderId: string) {
     if (!providerId) return;
 
     if (balance < minBalance) {
@@ -387,6 +389,12 @@ export default function ProviderIncomingOrdersScreen() {
       return;
     }
 
+    // Open the styled confirmation popup; actual accept runs on confirm.
+    setConfirmOrderId(orderId);
+  }
+
+  async function acceptOrder(orderId: string) {
+    setConfirmOrderId(null);
     setAccepting(orderId);
 
     // Re-verify the provider still has an enabled listing for at least one item
@@ -614,6 +622,16 @@ export default function ProviderIncomingOrdersScreen() {
           // home → already here
         }}
       />
+
+      <ConfirmModal
+        visible={confirmOrderId != null}
+        title="Accept Order"
+        message="Are you sure you want to accept this order?"
+        confirmLabel="Accept"
+        loading={accepting != null}
+        onConfirm={() => confirmOrderId && acceptOrder(confirmOrderId)}
+        onCancel={() => setConfirmOrderId(null)}
+      />
     </View>
   );
 }
@@ -632,15 +650,13 @@ function OrderCard({
   const disabled = accepting || order.alreadyAccepted;
   return (
     <Card style={styles.orderCard}>
-      {order.is_express && (
-        <View style={styles.orderTopRow}>
-          <StatusBadge tone="express" label="Express" />
-        </View>
-      )}
-
       <View style={styles.orderItemsRow}>
         <Text style={styles.orderItems} numberOfLines={1}>{order.itemSummary}</Text>
-        <Text style={styles.orderPrice}>₱{Number(order.total_amount).toLocaleString()}</Text>
+        {order.is_express ? (
+          <StatusBadge tone="express" label="Express" />
+        ) : (
+          <StatusBadge tone="successSolid" label="New" />
+        )}
       </View>
 
       <View style={styles.orderAddrRow}>
@@ -735,12 +751,6 @@ const styles = StyleSheet.create({
 
   // Incoming order card (white)
   orderCard: { padding: spacing.lg, marginBottom: spacing.sm },
-  orderTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
   timeAgo: { fontSize: 12, color: colors.textMuted, marginLeft: 'auto' },
   orderItemsRow: {
     flexDirection: 'row',
@@ -756,7 +766,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  orderPrice: { fontSize: 17, fontWeight: '700', color: colors.primary },
   acceptBtn: {
     flex: 1,
     backgroundColor: colors.primary,

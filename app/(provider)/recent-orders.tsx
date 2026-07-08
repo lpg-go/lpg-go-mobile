@@ -26,8 +26,6 @@ type RecentOrder = {
   created_at: string;
   delivery_address: string;
   itemSummary: string;
-  rating: number | null;
-  comment: string | null;
 };
 
 const H_PADDING = 20;
@@ -60,16 +58,10 @@ export default function ProviderRecentOrdersScreen() {
     }
 
     const orderIds = orderRows.map((o) => o.id);
-    const [{ data: itemRows }, { data: reviewRows }] = await Promise.all([
-      supabase
-        .from('order_items')
-        .select('order_id, quantity, product:products(name)')
-        .in('order_id', orderIds),
-      supabase
-        .from('reviews')
-        .select('order_id, rating, comment')
-        .in('order_id', orderIds),
-    ]);
+    const { data: itemRows } = await supabase
+      .from('order_items')
+      .select('order_id, quantity, product:products(name)')
+      .in('order_id', orderIds);
 
     const summaryByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
@@ -80,11 +72,6 @@ export default function ProviderRecentOrdersScreen() {
         : part;
     }
 
-    const reviewByOrder: Record<string, { rating: number; comment: string | null }> = {};
-    for (const row of reviewRows ?? []) {
-      reviewByOrder[row.order_id] = { rating: row.rating, comment: row.comment };
-    }
-
     setOrders(
       orderRows.map((o) => ({
         id: o.id,
@@ -93,8 +80,6 @@ export default function ProviderRecentOrdersScreen() {
         created_at: o.created_at,
         delivery_address: o.delivery_address,
         itemSummary: summaryByOrder[o.id] ?? 'Order',
-        rating: reviewByOrder[o.id]?.rating ?? null,
-        comment: reviewByOrder[o.id]?.comment ?? null,
       }))
     );
   }
@@ -165,24 +150,6 @@ function RecentOrderCard({ order }: { order: RecentOrder }) {
         <Text style={styles.historyAddress} numberOfLines={1}>{order.delivery_address}</Text>
         <Text style={styles.historyTotalValue}>₱{Number(order.total_amount).toLocaleString()}</Text>
       </View>
-
-      {!isCancelled && order.rating != null && (
-        <View style={styles.reviewRow}>
-          <View style={styles.reviewStars}>
-            {[1, 2, 3, 4, 5].map((s) => (
-              <Feather
-                key={s}
-                name="star"
-                size={13}
-                color={s <= order.rating! ? colors.amber : colors.border}
-              />
-            ))}
-          </View>
-          {order.comment ? (
-            <Text style={styles.reviewComment} numberOfLines={1}>"{order.comment}"</Text>
-          ) : null}
-        </View>
-      )}
     </Card>
   );
 }
@@ -206,17 +173,4 @@ const styles = StyleSheet.create({
   historyProduct: { ...typography.cardTitle, color: colors.text, flex: 1 },
   historyAddress: { flex: 1, fontSize: 12, color: colors.textMuted },
   historyTotalValue: { fontSize: 15, fontWeight: '800', color: colors.text, marginLeft: spacing.sm },
-
-  // Customer review (delivered orders that have been reviewed)
-  reviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.grey100,
-  },
-  reviewStars: { flexDirection: 'row', gap: 2 },
-  reviewComment: { flex: 1, fontSize: 12, color: colors.textMuted, fontStyle: 'italic' },
 });

@@ -58,6 +58,14 @@ export default function OrderStatusTimeline({
 
   return (
     <View style={styles.trackCard}>
+      {showAddress && (
+        <View style={styles.trackAddressRow}>
+          <Feather name="map-pin" size={14} color={colors.textMuted} />
+          <Text style={styles.trackAddressText} numberOfLines={2}>
+            {deliveryAddress}
+          </Text>
+        </View>
+      )}
       {isExpress && etaTime && etaMinutes != null && (
         <View style={styles.etaRow}>
           <Feather name="zap" size={14} color={colors.amberDark} />
@@ -96,14 +104,6 @@ export default function OrderStatusTimeline({
           </View>
         );
       })}
-      {showAddress && (
-        <View style={styles.trackAddressRow}>
-          <Feather name="map-pin" size={14} color={colors.textMuted} />
-          <Text style={styles.trackAddressText} numberOfLines={2}>
-            {deliveryAddress}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -155,10 +155,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
   },
   trackAddressText: { flex: 1, ...typography.body, color: colors.textSecondary },
 });

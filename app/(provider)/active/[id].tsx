@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -22,7 +22,6 @@ import OrderItemsCard from '../../../components/order/OrderItemsCard';
 import OrderStatusTimeline from '../../../components/order/OrderStatusTimeline';
 import LiveMap from '../../../components/LiveMap';
 import SheetHeader from '../../../components/SheetHeader';
-import Card from '../../../components/ui/Card';
 import DetailHeader from '../../../components/ui/DetailHeader';
 import PartyCard from '../../../components/ui/PartyCard';
 import PrimaryButton from '../../../components/ui/PrimaryButton';
@@ -507,10 +506,11 @@ export default function ActiveDeliveryScreen() {
         <OrderStatusTimeline
           status={order.status}
           placedAt={placedAt}
+          deliveryAddress={order.delivery_address}
           isExpress={order.is_express}
           etaDeadline={order.eta_deadline}
           etaMinutes={order.eta_minutes}
-          showAddress={false}
+          showAddress
         />
 
         {/* Location banner — rider, in transit, sharing live */}
@@ -527,13 +527,11 @@ export default function ActiveDeliveryScreen() {
         {/* Deliver to — customer */}
         {order.customer && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Deliver to</Text>
             <PartyCard
               name={order.customer.full_name}
               avatarUrl={order.customer.avatar_url}
               showAvatar={false}
-              subtitle={order.delivery_address}
-              subtitleIcon="map-pin"
+              subtitle="Customer"
               onCall={callChatActive && order.customer.phone ? handleCall : undefined}
               onChat={callChatActive ? handleChat : undefined}
               chatBadge={unreadCount}
@@ -553,7 +551,6 @@ export default function ActiveDeliveryScreen() {
 
         {/* Order */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order</Text>
           <OrderItemsCard
             items={items}
             isExpress={order.is_express}
@@ -566,31 +563,46 @@ export default function ActiveDeliveryScreen() {
 
         {/* Customer review (delivered) */}
         {order.status === 'delivered' && (
-          <Card style={styles.reviewCard}>
+          <View style={styles.reviewDoneCard}>
             {customerReview ? (
               <>
-                <Feather name="check-circle" size={20} color={colors.primary} />
-                <Text style={styles.reviewTitle}>Customer Review</Text>
-                <View style={styles.reviewStarsRow}>
+                <View style={styles.starsRow}>
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Feather key={s} name="star" size={16} color={s <= customerReview.rating ? colors.amber : colors.border} />
+                    <MaterialCommunityIcons
+                      key={s}
+                      name={s <= customerReview.rating ? 'star' : 'star-outline'}
+                      size={20}
+                      color={s <= customerReview.rating ? colors.amber : colors.border}
+                    />
                   ))}
                 </View>
+                <Text style={styles.reviewDoneTitle}>Customer Review</Text>
+                {customerReview.customerName ? (
+                  <Text style={styles.reviewDoneSub}>from {customerReview.customerName}</Text>
+                ) : null}
                 {customerReview.comment ? (
-                  <Text style={styles.reviewComment}>"{customerReview.comment}"</Text>
+                  <Text style={styles.reviewDoneComment}>&quot;{customerReview.comment}&quot;</Text>
                 ) : null}
                 {speedLabel(customerReview.delivery_speed) ? (
-                  <Text style={styles.reviewSpeed}>Speed: {speedLabel(customerReview.delivery_speed)}</Text>
+                  <View style={styles.reviewSpeedPill}>
+                    <Text style={styles.reviewSpeedPillText}>
+                      Speed: {speedLabel(customerReview.delivery_speed)}
+                    </Text>
+                  </View>
                 ) : null}
               </>
             ) : (
               <>
-                <Feather name="star" size={20} color={colors.grey300} />
-                <Text style={styles.reviewTitle}>Customer Review</Text>
-                <Text style={styles.reviewPending}>Waiting for customer review...</Text>
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <MaterialCommunityIcons key={s} name="star-outline" size={20} color={colors.border} />
+                  ))}
+                </View>
+                <Text style={styles.reviewDoneTitle}>Customer Review</Text>
+                <Text style={styles.reviewDoneSub}>Waiting for customer review…</Text>
               </>
             )}
-          </Card>
+          </View>
         )}
       </ScrollView>
 
@@ -719,7 +731,6 @@ const styles = StyleSheet.create({
 
   // Section
   section: { marginBottom: spacing.lg },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
   mapBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -735,12 +746,29 @@ const styles = StyleSheet.create({
   mapBtnText: { fontSize: 16, fontWeight: '600', color: colors.primary },
 
   // Customer review card
-  reviewCard: { padding: spacing.lg, marginBottom: spacing.lg, alignItems: 'center', gap: spacing.sm },
-  reviewTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
-  reviewStarsRow: { flexDirection: 'row', gap: 6 },
-  reviewComment: { fontSize: 12, color: colors.textSecondary, textAlign: 'center' },
-  reviewSpeed: { fontSize: 12, fontWeight: '600', color: colors.grey700 },
-  reviewPending: { fontSize: 12, color: colors.textMuted, fontStyle: 'italic' },
+  reviewDoneCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
+    ...shadows.card,
+  },
+  starsRow: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'center' },
+  reviewDoneTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  reviewDoneSub: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
+  reviewDoneComment: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic' },
+  reviewSpeedPill: {
+    backgroundColor: colors.primaryTintStrong,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  reviewSpeedPillText: { fontSize: 13, fontWeight: '600', color: colors.primaryDark },
 
   // Bottom bar
   bottomBar: {

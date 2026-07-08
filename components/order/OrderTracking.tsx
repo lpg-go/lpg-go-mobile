@@ -13,13 +13,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DELIVERY_SPEED_OPTIONS, speedLabel } from '../../lib/reviewSpeed';
-import { SAFETY_ITEMS } from '../../lib/safety';
 import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import LiveMap from '../LiveMap';
 import SheetHeader from '../SheetHeader';
 import PrimaryButton from '../ui/PrimaryButton';
 import OrderItemsCard from './OrderItemsCard';
 import OrderStatusTimeline from './OrderStatusTimeline';
+import PartyCard from '../ui/PartyCard';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -158,7 +158,11 @@ export default function OrderTracking({
   const providerLabel =
     selectedProvider?.business_name || selectedProvider?.full_name || 'Provider';
 
-  const methodLabel = order.payment_method === 'card' ? 'Card' : 'Cash on delivery';
+  // Call/chat are available once the delivery is live — mirrors the provider
+  // screen's "Deliver to" PartyCard gating.
+  const contactActive =
+    order.status === 'in_transit' || order.status === 'awaiting_confirmation';
+
 
   const bottomPad = order.status === 'awaiting_confirmation' ? 96 : 40;
 
@@ -196,22 +200,10 @@ export default function OrderTracking({
           </View>
         )}
 
-        {/* Safety check result — recorded by the rider before delivery */}
+        {/* Safety check result — only surfaced when the rider reported an issue */}
         {(order.status === 'awaiting_confirmation' || order.status === 'delivered') &&
           safetyCheck != null &&
-          (safetyCheck.passed ? (
-            <View style={styles.safetyCard}>
-              <Text style={styles.safetyLabel}>Safety check passed</Text>
-              {SAFETY_ITEMS.map((label) => (
-                <View key={label} style={styles.safetyItemRow}>
-                  <View style={styles.safetyCheckCircle}>
-                    <Feather name="check" size={12} color="#fff" />
-                  </View>
-                  <Text style={styles.safetyItemText}>{label}</Text>
-                </View>
-              ))}
-            </View>
-          ) : (
+          !safetyCheck.passed && (
             <View style={styles.safetyCardWarn}>
               <View style={styles.safetyItemRow}>
                 <Feather name="alert-triangle" size={18} color={colors.amberDark} />
@@ -221,7 +213,7 @@ export default function OrderTracking({
                 <Text style={styles.safetyNotesText}>{safetyCheck.notes}</Text>
               ) : null}
             </View>
-          ))}
+          )}
 
         {/* Provider acceptances (bidding) — owned by the parent screen */}
         {children}
@@ -229,41 +221,33 @@ export default function OrderTracking({
         {/* Selected provider — contact card */}
         {showSelectedProvider && selectedProvider && (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Your provider</Text>
-            <TouchableOpacity
-              style={styles.providerCard}
-              activeOpacity={0.8}
-              onPress={onOpenMap}
-              disabled={order.status !== 'in_transit' || selectedProvider?.provider_type !== 'rider'}
-            >
-              <View style={styles.providerInfo}>
-                <Text style={styles.providerName}>{providerLabel}</Text>
-                <View style={styles.providerMetaRow}>
-                  <Feather name="shield" size={12} color={colors.primary} />
-                  <Text style={styles.providerBusiness}>LPG Provider</Text>
-                </View>
-              </View>
-              {order.status === 'in_transit' && selectedProvider?.provider_type === 'rider' && (
-                <View style={styles.providerActions}>
-                  <TouchableOpacity style={styles.actionOutline} onPress={onOpenMap} hitSlop={6} activeOpacity={0.7}>
-                    <Feather name="map-pin" size={18} color={colors.primary} />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </TouchableOpacity>
+            <PartyCard
+              name={providerLabel}
+              avatarUrl={selectedProvider.avatar_url}
+              showAvatar={false}
+              subtitle="LPG Provider"
+              onCall={contactActive ? onCall : undefined}
+              onChat={contactActive ? onChat : undefined}
+              chatBadge={unreadCount}
+            />
+            {order.status === 'in_transit' && selectedProvider.provider_type === 'rider' && (
+              <TouchableOpacity style={styles.mapBtn} onPress={onOpenMap} activeOpacity={0.7}>
+                <Feather name="map-pin" size={18} color={colors.primary} />
+                <Text style={styles.mapBtnText}>Open live map</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
         {/* Payment summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Payment · {methodLabel}</Text>
           <OrderItemsCard
             items={items}
             isExpress={order.is_express}
             expressFee={order.express_fee}
             totalAmount={order.total_amount}
-            totalLabel="Total to pay"
-            totalVariant="pill"
+            totalLabel={`Total (${order.payment_method === 'card' ? 'Card' : 'COD'})`}
+            totalVariant="row"
           />
         </View>
 
@@ -292,7 +276,7 @@ export default function OrderTracking({
               {speedLabel(existingSpeed) ? (
                 <View style={styles.reviewSpeedPill}>
                   <Text style={styles.reviewSpeedPillText}>
-                    Rated delivery: {speedLabel(existingSpeed)}
+                    Speed: {speedLabel(existingSpeed)}
                   </Text>
                 </View>
               ) : null}
@@ -438,28 +422,8 @@ const styles = StyleSheet.create({
   },
   newOrderBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
-  // Safety check result
-  safetyCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-    ...shadows.card,
-  },
-  safetyLabel: { ...typography.label, color: colors.primaryDark, marginBottom: spacing.xs },
-  safetyCheckCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // Safety check result (only shown when the rider reported an issue)
   safetyItemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: 2 },
-  safetyItemText: { fontSize: 14, color: colors.text },
   safetyCardWarn: {
     backgroundColor: colors.amberTint,
     borderRadius: radii.md,
@@ -474,57 +438,21 @@ const styles = StyleSheet.create({
 
   // Section
   section: { marginBottom: spacing.lg, zIndex: 1 },
-  sectionLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
 
-  // Provider contact card
-  providerCard: {
+  // Open live map button (below the provider card)
+  mapBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 52,
+    marginTop: spacing.md,
     borderRadius: radii.md,
-    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    ...shadows.card,
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
   },
-  providerInfo: { flex: 1 },
-  providerName: { ...typography.cardTitle, color: colors.text },
-  providerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  providerBusiness: { ...typography.caption, color: colors.textSecondary },
-  providerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  actionOutline: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.primaryTintBorder,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionPrimary: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chatBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  chatBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
+  mapBtnText: { fontSize: 16, fontWeight: '600', color: colors.primary },
 
   // Pinned bottom bar
   bottomBar: {
