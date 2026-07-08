@@ -153,6 +153,7 @@ export default function OrderTrackingScreen() {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const orderRef = useRef<Order | null>(null);   // latest order, for detecting reverts in realtime
   const revertRedirectRef = useRef(false);        // guard: only redirect once on a provider-cancel revert
+  const expiredAlertRef = useRef(false);          // guard: only show the expiry alert once
 
   // Keep orderRef in sync so the realtime handler can read the *previous* order.
   useEffect(() => { orderRef.current = order; }, [order]);
@@ -215,6 +216,16 @@ export default function OrderTrackingScreen() {
               if (pollIntervalRef.current) {
                 clearInterval(pollIntervalRef.current);
                 pollIntervalRef.current = null;
+              }
+              // System expiry only (not the customer's own manual cancel, which
+              // has its own alert). Fire once, then bounce to home.
+              if (newRow.cancelled_by === 'system' && !expiredAlertRef.current) {
+                expiredAlertRef.current = true;
+                Alert.alert(
+                  'Order Expired',
+                  'No provider accepted your order.',
+                  [{ text: 'OK', onPress: () => router.replace('/(customer)/') }],
+                );
               }
             }
           }

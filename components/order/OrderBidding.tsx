@@ -289,24 +289,12 @@ function ProviderCard({
           ) : (
             <Text style={styles.ratingNew}>New</Text>
           )}
-          {isExpress ? (
+          {acceptance.avgDeliveryMinutes !== null && (
             <>
               <Text style={styles.ratingDot}>·</Text>
-              <Feather name="zap" size={12} color={colors.amberDark} />
-              <Text style={styles.expressText}>
-                {acceptance.avgDeliveryMinutes !== null
-                  ? `~${acceptance.avgDeliveryMinutes} min · Express`
-                  : 'Express'}
-              </Text>
+              <Feather name="clock" size={12} color={colors.textMuted} />
+              <Text style={styles.etaText}>~{acceptance.avgDeliveryMinutes} min</Text>
             </>
-          ) : (
-            acceptance.avgDeliveryMinutes !== null && (
-              <>
-                <Text style={styles.ratingDot}>·</Text>
-                <Feather name="clock" size={12} color={colors.textMuted} />
-                <Text style={styles.etaText}>~{acceptance.avgDeliveryMinutes} min</Text>
-              </>
-            )
           )}
         </View>
       </View>
@@ -314,11 +302,6 @@ function ProviderCard({
         <Text style={[styles.providerPrice, acceptance.provider_total <= 0 && styles.providerPriceMuted]}>
           {acceptance.provider_total > 0 ? `₱${acceptance.provider_total.toLocaleString()}` : '—'}
         </Text>
-        {selected && (
-          <View style={styles.selectedCheck}>
-            <Feather name="check" size={12} color="#fff" />
-          </View>
-        )}
       </View>
     </TouchableOpacity>
   );
@@ -429,21 +412,12 @@ const styles = StyleSheet.create({
   ratingCount: { fontSize: 11, fontWeight: '400', color: colors.textMuted },
   ratingNew: { fontSize: 12, color: colors.textMuted },
   ratingDot: { fontSize: 12, color: colors.border },
-  expressText: { fontSize: 11, fontWeight: '600', color: colors.amberDark },
   etaText: { fontSize: 11, color: colors.textMuted },
 
   // Price + selected check
   providerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: spacing.sm },
   providerPrice: { ...typography.price, color: colors.primary },
   providerPriceMuted: { color: colors.textMuted },
-  selectedCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   // Internal Select button (host screens without their own CTA)
   selectButtonWrap: { marginTop: spacing.xs },

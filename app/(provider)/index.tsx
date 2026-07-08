@@ -37,6 +37,7 @@ type IncomingOrder = {
   created_at: string;
   customerName: string;
   itemSummary: string;
+  sizeSummary: string | null;
   alreadyAccepted: boolean;
 };
 
@@ -51,7 +52,7 @@ type ActiveOrder = {
 
 const ACTIVE_STATUS_LABEL: Record<ActiveOrder['status'], string> = {
   in_transit: 'On the Way',
-  awaiting_confirmation: 'Delivered?',
+  awaiting_confirmation: 'Awaiting',
 };
 
 const H_PADDING = 20;
@@ -288,7 +289,7 @@ export default function ProviderIncomingOrdersScreen() {
     // 5. Fetch item summaries for filtered orders
     const { data: itemRows } = await supabase
       .from('order_items')
-      .select('order_id, quantity, product:products(name)')
+      .select('order_id, quantity, product:products(name, size_kg)')
       .in('order_id', orderIds);
 
     // 6. Fetch provider's acceptances
@@ -302,12 +303,18 @@ export default function ProviderIncomingOrdersScreen() {
     const acceptedSet = new Set((acceptanceRows ?? []).map((a) => a.order_id));
 
     const summaryByOrder: Record<string, string> = {};
+    const sizeByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
-      const name = (row.product as { name: string } | null)?.name ?? 'LPG Gas';
+      const product = row.product as { name: string; size_kg: number } | null;
+      const name = product?.name ?? 'LPG Gas';
       const part = `${name} x${row.quantity}`;
       summaryByOrder[row.order_id] = summaryByOrder[row.order_id]
         ? `${summaryByOrder[row.order_id]}, ${part}`
         : part;
+      // Representative cylinder size for the card's size tag (first sized item).
+      if (!sizeByOrder[row.order_id] && product?.size_kg != null) {
+        sizeByOrder[row.order_id] = `${product.size_kg}kg`;
+      }
     }
 
     setOrders(
@@ -322,6 +329,7 @@ export default function ProviderIncomingOrdersScreen() {
           created_at: o.created_at,
           customerName: customer?.full_name ?? 'New Customer',
           itemSummary: summaryByOrder[o.id] ?? 'LPG Gas',
+          sizeSummary: sizeByOrder[o.id] ?? null,
           alreadyAccepted: acceptedSet.has(o.id),
         };
       })
@@ -651,7 +659,10 @@ function OrderCard({
   return (
     <Card style={styles.orderCard}>
       <View style={styles.orderItemsRow}>
-        <Text style={styles.orderItems} numberOfLines={1}>{order.itemSummary}</Text>
+        <Text style={styles.orderItems} numberOfLines={1}>
+          {order.itemSummary}
+          {order.sizeSummary ? <Text style={styles.orderSize}> · {order.sizeSummary}</Text> : null}
+        </Text>
         {order.is_express ? (
           <StatusBadge tone="express" label="Express" />
         ) : (
@@ -760,6 +771,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   orderItems: { fontSize: 14, fontWeight: '600', color: colors.text, flex: 1 },
+  orderSize: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
   orderAddrRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: spacing.md },
   orderAddr: { fontSize: 12, color: colors.textSecondary, flex: 1 },
   orderBottomRow: {

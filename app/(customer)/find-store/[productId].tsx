@@ -120,6 +120,7 @@ export default function FindStoreScreen() {
   // Snapshot of address/coords when the picker opens, so Cancel can restore.
   const snapshotRef = useRef<{ address: string; lat: number | null; lng: number | null } | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const expiredAlertRef = useRef(false);  // guard: only show the expiry alert once
 
   // Reset all bidding-phase state to a clean form. Address is intentionally left
   // untouched so it persists across products.
@@ -221,6 +222,26 @@ export default function FindStoreScreen() {
         { event: '*', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
         (payload) => {
           console.log('[find-store bidding] orders change:', payload);
+          const newRow = payload.new as { status?: string; cancelled_by?: string | null } | undefined;
+          // System expiry only (not the customer's own manual cancel). Fire once,
+          // stop polling, then bounce to home.
+          if (
+            newRow?.status === 'cancelled' &&
+            newRow.cancelled_by === 'system' &&
+            !expiredAlertRef.current
+          ) {
+            expiredAlertRef.current = true;
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            Alert.alert(
+              'Order Expired',
+              'No provider accepted your order.',
+              [{ text: 'OK', onPress: () => router.replace('/(customer)/') }],
+            );
+            return;
+          }
           fetchOrderAcceptances();
         }
       )
@@ -738,12 +759,6 @@ export default function FindStoreScreen() {
               <Feather name="package" size={15} color={colors.textMuted} style={styles.summaryIcon} />
               <Text style={styles.summaryText} numberOfLines={1}>{summaryProduct}</Text>
             </View>
-            {isExpress && (
-              <View style={styles.summaryRow}>
-                <Feather name="zap" size={15} color={colors.amberDark} style={styles.summaryIcon} />
-                <Text style={[styles.summaryText, { color: colors.amberText }]}>Express delivery</Text>
-              </View>
-            )}
           </Card>
         )}
 
