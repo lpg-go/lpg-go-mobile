@@ -62,38 +62,6 @@ export default function CustomerOrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchOrders().then(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      channel = supabase
-        .channel(`customer-orders-${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
-          (payload) => {
-            const updated = payload.new as { id: string; status: OrderStatus };
-            setOrders((prev) =>
-              prev.map((o) => o.id === updated.id ? { ...o, status: updated.status } : o)
-            );
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
-          () => { fetchOrders(); }
-        )
-        .subscribe();
-    });
-
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, [fetchOrders]);
-
   const fetchOrders = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -145,6 +113,38 @@ export default function CustomerOrdersScreen() {
       })
     );
   }, []);
+
+  useEffect(() => {
+    fetchOrders().then(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      channel = supabase
+        .channel(`customer-orders-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
+          (payload) => {
+            const updated = payload.new as { id: string; status: OrderStatus };
+            setOrders((prev) =>
+              prev.map((o) => o.id === updated.id ? { ...o, status: updated.status } : o)
+            );
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
+          () => { fetchOrders(); }
+        )
+        .subscribe();
+    });
+
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, [fetchOrders]);
 
   async function handleRefresh() {
     setRefreshing(true);

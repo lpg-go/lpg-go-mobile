@@ -38,27 +38,6 @@ export default function CustomerHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchOrders().then(() => setLoading(false));
-  }, [fetchOrders]);
-
-  // Refresh when an order transitions into a terminal state.
-  useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      channel = supabase
-        .channel(`customer-history-${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
-          () => { fetchOrders(); }
-        )
-        .subscribe();
-    });
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, [fetchOrders]);
-
   const fetchOrders = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -103,6 +82,27 @@ export default function CustomerHistoryScreen() {
       })
     );
   }, []);
+
+  useEffect(() => {
+    fetchOrders().then(() => setLoading(false));
+  }, [fetchOrders]);
+
+  // Refresh when an order transitions into a terminal state.
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      channel = supabase
+        .channel(`customer-history-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
+          () => { fetchOrders(); }
+        )
+        .subscribe();
+    });
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, [fetchOrders]);
 
   async function handleRefresh() {
     setRefreshing(true);
