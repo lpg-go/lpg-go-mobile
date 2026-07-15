@@ -3,5 +3,21 @@
   "compilerOptions": {
     "strict": true,
     "types": ["nativewind/types"]
-  }
+  },
+  // `exclude` REPLACES the one inherited from expo/tsconfig.base (it does not merge),
+  // so every entry the base declared is repeated here on purpose. Only the last entry
+  // is new.
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js",
+    "android",
+    "ios",
+    // Supabase edge functions target the Deno runtime, not React Native: they import
+    // from https:// URLs, use the `Deno` global, and use .ts import extensions. All
+    // valid for Deno and meaningless under this config — they are never bundled into
+    // the app, so this config does not typecheck them.
+    "supabase/functions"
+  ]
 }
