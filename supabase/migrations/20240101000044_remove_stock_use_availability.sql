@@ -18,8 +18,8 @@
 -- ------------------------
 --   1. Backfills is_available from the current stock value (preserve cutover
 --      behavior: only currently-stocked listings stay available).
---   2. Updates select_provider_for_order() to drop the stock >= quantity
---      validation while keeping reprice + listing-existence + price checks.
+--   2. (removed — see section 2. Formerly redefined select_provider_for_order();
+--      that function is owned by migration 085 and must not be touched here.)
 --   3. Updates the three auto-assign functions to stop writing `stock` and to
 --      seed new listings as is_available = false (provider must opt in).
 --   4. Drops the stock-deduction RPC deduct_provider_stock().
@@ -57,89 +57,25 @@ UPDATE public.provider_products
   SET is_available = (stock > 0 AND price > 0);
 
 
--- ── 2. select_provider_for_order(): drop stock validation, keep reprice ─────
--- Removed: the `stock >= quantity` check (v_stock variable + insufficient-stock
---          exception).
--- Kept:    listing-existence check (v_price IS NULL), price-set check
---          (v_price <= 0), reprice of order_items, order total + status update.
--- The price lookup still requires is_available = true, which is now the
--- availability gate (the analog of the old stock>0 re-check at selection time).
-create or replace function public.select_provider_for_order(
-  p_order_id uuid,
-  p_provider_id uuid
-)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_order   public.orders%rowtype;
-  v_item    record;
-  v_price   numeric(10,2);
-  v_total   numeric(12,2) := 0;
-begin
-  select * into v_order from public.orders where id = p_order_id;
-  if not found then
-    raise exception 'Order not found';
-  end if;
-  if v_order.customer_id <> auth.uid() then
-    raise exception 'Not authorized for this order';
-  end if;
-
-  if v_order.status <> 'awaiting_dealer_selection'
-     or v_order.selected_provider_id is not null then
-    raise exception 'Order is not open for provider selection';
-  end if;
-
-  if not exists (
-    select 1 from public.order_acceptances
-    where order_id = p_order_id
-      and provider_id = p_provider_id
-      and withdrawn_at is null
-  ) then
-    raise exception 'Selected provider has not accepted this order';
-  end if;
-
-  for v_item in
-    select id, product_id, quantity from public.order_items
-    where order_id = p_order_id
-  loop
-    -- Existence + price validation only (no stock check).
-    select price into v_price
-    from public.provider_products
-    where provider_id = p_provider_id
-      and product_id  = v_item.product_id
-      and is_available = true;
-
-    if v_price is null then
-      raise exception 'Selected provider does not offer one of the ordered products';
-    end if;
-    if v_price <= 0 then
-      raise exception 'Selected provider has not set a price for one of the ordered products';
-    end if;
-
-    update public.order_items
-      set unit_price = v_price,
-          subtotal   = v_price * v_item.quantity,
-          provider_product_id = (
-            select id from public.provider_products
-            where provider_id = p_provider_id and product_id = v_item.product_id
-          )
-    where id = v_item.id;
-
-    v_total := v_total + (v_price * v_item.quantity);
-  end loop;
-
-  update public.orders
-    set selected_provider_id = p_provider_id,
-        total_amount = v_total,
-        status = 'in_transit'
-  where id = p_order_id;
-end;
-$$;
-
-grant execute on function public.select_provider_for_order(uuid, uuid) to authenticated;
+-- ── 2. (removed — intentionally left blank) ─────────────────────────────────
+-- This section used to redefine select_provider_for_order() to drop its
+-- `stock >= quantity` validation. It was deleted before this migration was
+-- applied, for two reasons:
+--
+--   * STALE. Migrations 052/061/083 already removed the stock check from that
+--     function, so the section had no remaining purpose.
+--   * DANGEROUS. It declared the OLD 2-arg signature (p_order_id, p_provider_id).
+--     The live function is the 4-arg form (061 added the express-fee args; 083
+--     added the provider-approval gate). A differing argument list makes
+--     `create or replace` an OVERLOAD, not a replace — applying it would have
+--     ADDED a granted, authenticated-callable 2-arg sibling that prices from the
+--     live provider_products row (re-opening the price TOCTOU that 085 closes),
+--     skips 083's approval gate, takes no `for update` row lock, and derives no
+--     express fee.
+--
+-- select_provider_for_order() is owned by migration 085
+-- (20240101000085_snapshot_provider_quote_on_accept.sql) and is defined
+-- correctly there. This migration must not touch it.
 
 
 -- ── 3. Auto-assign functions: stop writing stock; seed is_available = false ─
@@ -157,7 +93,7 @@ BEGIN
   WHERE p.is_active = true
   ON CONFLICT (provider_id, product_id) DO NOTHING;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 3b. New-product trigger function (fires AFTER INSERT ON products).
 CREATE OR REPLACE FUNCTION public.assign_new_product_to_all_providers()
@@ -171,7 +107,7 @@ BEGIN
   ON CONFLICT (provider_id, product_id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 3c. On-approval trigger function (fires AFTER UPDATE ON profiles, false->true).
 CREATE OR REPLACE FUNCTION public.assign_products_on_approval()
@@ -186,7 +122,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 -- ── 4. Drop the stock-deduction RPC ─────────────────────────────────────────
