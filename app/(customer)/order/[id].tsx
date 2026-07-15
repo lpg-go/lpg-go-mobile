@@ -441,7 +441,7 @@ export default function OrderTrackingScreen() {
   async function fetchOrderAcceptances() {
     const { data: acceptanceRows } = await supabase
       .from('order_acceptances')
-      .select('id, provider_id, accepted_at, provider:profiles(full_name, business_name, phone, avatar_url)')
+      .select('id, provider_id, accepted_at, quoted_total, provider:profiles(full_name, business_name, phone, avatar_url)')
       .eq('order_id', id)
       .is('withdrawn_at', null);
     console.log('[fetchOrderAcceptances] data:', acceptanceRows);
@@ -451,21 +451,7 @@ export default function OrderTrackingScreen() {
       return;
     }
 
-    // Fetch order items with product_id for price calculation
-    const { data: orderItemRows } = await supabase
-      .from('order_items')
-      .select('product_id, quantity')
-      .eq('order_id', id);
-
-    const productIds = (orderItemRows ?? []).map((i) => i.product_id);
     const providerIds = acceptanceRows.map((a) => a.provider_id);
-
-    // Fetch provider_products for all providers × all products in this order
-    const { data: providerProductRows } = await supabase
-      .from('provider_products')
-      .select('provider_id, product_id, price')
-      .in('provider_id', providerIds)
-      .in('product_id', productIds);
 
     // Fetch reviews for all providers to compute avg rating
     const { data: reviewRows } = await supabase
@@ -492,26 +478,17 @@ export default function OrderTrackingScreen() {
       reviewStats[r.provider_id].count += 1;
     }
 
-    // Build price lookup: providerPrices[provider_id][product_id] = price
-    const providerPrices: Record<string, Record<string, number>> = {};
-    for (const pp of providerProductRows ?? []) {
-      if (!providerPrices[pp.provider_id]) providerPrices[pp.provider_id] = {};
-      providerPrices[pp.provider_id][pp.product_id] = Number(pp.price);
-    }
-
     const result: Acceptance[] = acceptanceRows.map((row) => {
-      let provider_total = 0;
-      for (const item of orderItemRows ?? []) {
-        const price = providerPrices[row.provider_id]?.[item.product_id];
-        if (price !== undefined) provider_total += price * item.quantity;
-      }
       const stats = reviewStats[row.provider_id];
       return {
         id: row.id,
         provider_id: row.provider_id,
         accepted_at: row.accepted_at,
         provider: row.provider as Acceptance['provider'],
-        provider_total,
+        // Price shown MUST be the accept-time quote the RPC will charge from —
+        // never recomputed from live provider_products (the two can disagree
+        // the moment a provider edits their price).
+        provider_total: Number(row.quoted_total ?? 0),
         avgRating: stats ? stats.sum / stats.count : null,
         reviewCount: stats?.count ?? 0,
         avgDeliveryMinutes: deliveryStats[row.provider_id] ?? null,
