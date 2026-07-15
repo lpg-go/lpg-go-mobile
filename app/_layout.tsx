@@ -4,7 +4,7 @@ import { Session } from '@supabase/supabase-js';
 import * as Notifications from 'expo-notifications';
 import { router, Slot } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 
 import { registerForPushNotificationsAsync } from '../lib/notifications';
 import { fetchProviderDocRequired } from '../lib/settings';
@@ -116,7 +116,16 @@ export default function RootLayout() {
         router.replace('/(provider)');
       }
     } else if (profile.role === 'admin') {
-      router.replace('/(admin)');
+      // Admins have no screens here, and this layout is the auth gate: routing
+      // them anywhere while the session survives just re-runs this branch, so a
+      // redirect alone would loop. Signing out clears the session and fires
+      // onAuthStateChange, which sends them to login through the !session path.
+      Alert.alert(
+        'Admin account',
+        'Admin accounts are managed from the web dashboard and cannot be used in the mobile app. You will be signed out.',
+        [{ text: 'OK', onPress: async () => { await supabase.auth.signOut(); } }],
+        { cancelable: false }
+      );
     } else {
       router.replace('/(auth)/complete-profile');
     }
