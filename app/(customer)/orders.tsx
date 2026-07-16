@@ -89,7 +89,7 @@ export default function CustomerOrdersScreen() {
     const itemsByOrder: Record<string, string[]> = {};
     const firstProductIdByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
-      const name = (row.product as { name: string } | null)?.name ?? 'Item';
+      const name = row.product?.name ?? 'Item';
       if (!itemsByOrder[row.order_id]) itemsByOrder[row.order_id] = [];
       itemsByOrder[row.order_id].push(name);
       if (!firstProductIdByOrder[row.order_id] && row.product_id) {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import supabase from './supabase';
 
-const ACTIVE_STATUSES = ['awaiting_dealer_selection', 'in_transit', 'awaiting_confirmation'];
+const ACTIVE_STATUSES = ['awaiting_dealer_selection', 'in_transit', 'awaiting_confirmation'] as const;
 
 // Live count of the current customer's active orders (for header / nav badges).
 // Self-contained: owns its own count query + realtime channel, takes no args.

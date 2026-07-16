@@ -43,7 +43,8 @@ type Order = {
   selected_provider_id: string | null;
   cancelled_by: string | null;
   // Passed through by the parent screen; used only for the payment label.
-  payment_method?: string;
+  // Nullable: orders are created before the customer picks a payment method.
+  payment_method?: string | null;
 };
 
 type OrderItem = {

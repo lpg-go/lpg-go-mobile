@@ -197,8 +197,7 @@ export default function ActiveDeliveryScreen() {
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
-          const customer = data.customer as { full_name: string } | null;
-          setCustomerReview({ rating: data.rating, comment: data.comment, delivery_speed: data.delivery_speed ?? null, customerName: customer?.full_name ?? null });
+          setCustomerReview({ rating: data.rating, comment: data.comment, delivery_speed: data.delivery_speed ?? null, customerName: data.customer?.full_name ?? null });
         }
       });
 
@@ -249,7 +248,7 @@ export default function ActiveDeliveryScreen() {
       .eq('id', id)
       .single();
     if (!data) return;
-    setOrder(data as unknown as Order);
+    setOrder(data);
   }
 
   async function fetchItems() {
@@ -257,7 +256,7 @@ export default function ActiveDeliveryScreen() {
       .from('order_items')
       .select('id, quantity, subtotal, product:products(name)')
       .eq('order_id', id);
-    if (data) setItems(data as unknown as OrderItem[]);
+    if (data) setItems(data);
   }
 
   // ── Realtime ──────────────────────────────────────────────────────────────

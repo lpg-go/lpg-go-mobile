@@ -177,7 +177,7 @@ export default function FindStoreScreen() {
     if (item) {
       setQuantity(item.quantity);
       setResumeUnitPrice(Number(item.unit_price));
-      setResumeName((item.product as { name: string } | null)?.name ?? 'Product');
+      setResumeName(item.product?.name ?? 'Product');
     }
   }
 
@@ -345,7 +345,7 @@ export default function FindStoreScreen() {
         id: row.id,
         provider_id: row.provider_id,
         accepted_at: row.accepted_at,
-        provider: row.provider as Acceptance['provider'],
+        provider: row.provider,
         // Price shown MUST be the accept-time quote the RPC will charge from —
         // never recomputed from live provider_products (the two can disagree
         // the moment a provider edits their price).
@@ -535,6 +535,14 @@ export default function FindStoreScreen() {
 
     if (!address.trim()) {
       setError('Please enter a delivery address.');
+      return;
+    }
+
+    // place_order requires real coordinates. The button is disabled while lat is
+    // null, but lng is never checked there and both are restored from a snapshot
+    // that may hold nulls — so re-validate here rather than send null to the RPC.
+    if (lat === null || lng === null) {
+      setError('Please pin your delivery location on the map.');
       return;
     }
 

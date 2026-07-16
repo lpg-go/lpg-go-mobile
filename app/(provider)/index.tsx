@@ -305,7 +305,7 @@ export default function ProviderIncomingOrdersScreen() {
     const summaryByOrder: Record<string, string> = {};
     const sizeByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
-      const product = row.product as { name: string; size_kg: number } | null;
+      const product = row.product;
       const name = product?.name ?? 'LPG Gas';
       const part = `${name} x${row.quantity}`;
       summaryByOrder[row.order_id] = summaryByOrder[row.order_id]
@@ -319,7 +319,7 @@ export default function ProviderIncomingOrdersScreen() {
 
     setOrders(
       filteredOrders.map((o) => {
-        const customer = o.customer as { full_name: string } | null;
+        const customer = o.customer;
         return {
           id: o.id,
           status: o.status as IncomingOrder['status'],
@@ -351,8 +351,8 @@ export default function ProviderIncomingOrdersScreen() {
 
     setActiveOrders(
       data.map((row) => {
-        const customer = row.customer as { full_name: string } | null;
-        const rawItems = (row.order_items ?? []) as { quantity: number; product: { name: string } | null }[];
+        const customer = row.customer;
+        const rawItems = row.order_items ?? [];
         const itemSummary = rawItems
           .map((i) => `${i.product?.name ?? 'Item'} x${i.quantity}`)
           .join(', ');
@@ -402,6 +402,10 @@ export default function ProviderIncomingOrdersScreen() {
   }
 
   async function acceptOrder(orderId: string) {
+    // handleAccept guards on providerId before opening the confirm modal, but this
+    // runs from the modal's onConfirm and is not covered by that check.
+    if (!providerId) return;
+
     setConfirmOrderId(null);
     setAccepting(orderId);
 

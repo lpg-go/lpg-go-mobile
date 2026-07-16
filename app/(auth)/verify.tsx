@@ -11,7 +11,16 @@ import {
   View,
 } from 'react-native';
 
+import { Database } from '../../lib/database.types';
 import supabase from '../../lib/supabase';
+
+type ProviderType = Database['public']['Enums']['provider_type'];
+
+// `provider_type` arrives as a raw string from the navigation params, so it is
+// not guaranteed to be a valid enum member. Narrow it before writing the column.
+function isProviderType(value: string | undefined): value is ProviderType {
+  return value === 'dealer' || value === 'rider';
+}
 
 type Params = {
   phone?: string;
@@ -71,13 +80,13 @@ export default function VerifyScreen() {
 
     // After register OTP flow: upsert profile then navigate
     if (from === 'register' && userId) {
-      const profileRow: Record<string, unknown> = {
+      const profileRow: Database['public']['Tables']['profiles']['Insert'] = {
         id: userId,
         full_name: full_name ?? '',
         phone: phone ?? '',
         updated_at: new Date().toISOString(),
       };
-      if (provider_type) profileRow.provider_type = provider_type;
+      if (isProviderType(provider_type)) profileRow.provider_type = provider_type;
       if (business_name) profileRow.business_name = business_name;
 
       const { error: profileError } = await supabase.from('profiles').upsert(profileRow);

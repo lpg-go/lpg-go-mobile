@@ -17,6 +17,7 @@ import OrderBidding from '../../../components/order/OrderBidding';
 import OrderTracking from '../../../components/order/OrderTracking';
 import DetailHeader from '../../../components/ui/DetailHeader';
 import StatusBadge from '../../../components/ui/StatusBadge';
+import { Database } from '../../../lib/database.types';
 import { colors, radii, spacing } from '../../../lib/theme';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
@@ -34,7 +35,9 @@ type OrderStatus =
 type Order = {
   id: string;
   status: OrderStatus;
-  payment_method: string;
+  // Nullable in the schema: place_order leaves it unset until the customer picks
+  // a provider (select_provider_for_order sets it), so a pending order has none.
+  payment_method: Database['public']['Enums']['payment_method'] | null;
   delivery_address: string;
   delivery_lat: number | null;
   delivery_lng: number | null;
@@ -427,7 +430,7 @@ export default function OrderTrackingScreen() {
       .select('id, status, payment_method, delivery_address, delivery_lat, delivery_lng, total_amount, admin_fee, is_express, express_fee, eta_minutes, eta_deadline, selected_provider_id, created_at, expires_at, cancelled_by, cancel_reason')
       .eq('id', id)
       .single();
-    if (data) setOrder(data as Order);
+    if (data) setOrder(data);
   }
 
   async function fetchItems() {
@@ -435,7 +438,7 @@ export default function OrderTrackingScreen() {
       .from('order_items')
       .select('id, quantity, unit_price, subtotal, product:products(name)')
       .eq('order_id', id);
-    if (data) setItems(data as unknown as OrderItem[]);
+    if (data) setItems(data);
   }
 
   async function fetchOrderAcceptances() {
@@ -484,7 +487,7 @@ export default function OrderTrackingScreen() {
         id: row.id,
         provider_id: row.provider_id,
         accepted_at: row.accepted_at,
-        provider: row.provider as Acceptance['provider'],
+        provider: row.provider,
         // Price shown MUST be the accept-time quote the RPC will charge from —
         // never recomputed from live provider_products (the two can disagree
         // the moment a provider edits their price).

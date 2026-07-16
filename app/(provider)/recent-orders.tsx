@@ -65,7 +65,7 @@ export default function ProviderRecentOrdersScreen() {
 
     const summaryByOrder: Record<string, string> = {};
     for (const row of itemRows ?? []) {
-      const name = (row.product as { name: string } | null)?.name ?? 'Item';
+      const name = row.product?.name ?? 'Item';
       const part = `${name} x${row.quantity}`;
       summaryByOrder[row.order_id] = summaryByOrder[row.order_id]
         ? `${summaryByOrder[row.order_id]}, ${part}`
