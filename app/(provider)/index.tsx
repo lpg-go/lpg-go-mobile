@@ -124,14 +124,21 @@ export default function ProviderIncomingOrdersScreen() {
   // poll every 12s while online + focused. fetchOrders filters
   // selected_provider_id IS NULL, so any order taken by someone else drops out on
   // the next tick. Interval is cleared on blur/unmount/going offline.
+  //
+  // Gate on the providerId *state*, not providerIdRef: the first focus fires on
+  // mount while boot() is still awaiting getUser(), so the id is not there yet.
+  // A ref read would bail and never retry — refs don't re-render, so nothing
+  // would re-run this effect and the poll would never start for a provider whose
+  // profile is already offline (isOnline never changes, so that dep never fires).
+  // The state dep makes the effect re-run when the id lands.
   useFocusEffect(
     useCallback(() => {
-      if (!providerIdRef.current) return;
+      if (!providerId) return;
       fetchOrders();
       if (!isOnline) return;
       const interval = setInterval(() => { fetchOrders(); }, 12000);
       return () => clearInterval(interval);
-    }, [isOnline])
+    }, [providerId, isOnline])
   );
 
   // Realtime subscription (mount/unmount only)
