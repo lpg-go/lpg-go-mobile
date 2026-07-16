@@ -1,7 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { decode } from 'base64-arraybuffer';
 import { router } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -24,6 +22,7 @@ import { confirmSignOut } from '../../lib/auth';
 import { formatPhoneForDisplay } from '../../lib/format';
 import { colors, radii, spacing, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
+import { useAvatarUpload } from '../../lib/useAvatarUpload';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +47,9 @@ export default function CustomerProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const { pickAvatar, isUploading } = useAvatarUpload((url) =>
+    setProfile((prev) => prev ? { ...prev, avatar_url: url } : prev)
+  );
 
   useEffect(() => {
     fetchProfile();
@@ -69,50 +70,6 @@ export default function CustomerProfileScreen() {
       setEditName(data.full_name);
     }
     setLoading(false);
-  }
-
-  async function handlePickAvatar() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Please allow access to your photo library.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (result.canceled || !result.assets[0]?.base64) return;
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    setUploadingAvatar(true);
-    try {
-      const path = `avatars/${user.id}/profile.jpg`;
-      const { error } = await supabase.storage
-        .from('images')
-        .upload(path, decode(result.assets[0].base64), {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
-
-      if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
-      const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
-
-      await supabase.from('profiles').update({ avatar_url: cacheBustedUrl }).eq('id', user.id);
-      setProfile((prev) => prev ? { ...prev, avatar_url: cacheBustedUrl } : prev);
-    } catch (err) {
-      Alert.alert('Upload failed', String(err));
-    } finally {
-      setUploadingAvatar(false);
-    }
   }
 
   function startEditing() {
@@ -171,9 +128,9 @@ export default function CustomerProfileScreen() {
         </View>
 
         <View style={styles.profileBlock}>
-          <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
+          <TouchableOpacity onPress={pickAvatar} disabled={isUploading} activeOpacity={0.8}>
             <View style={styles.avatarWrap}>
-              {uploadingAvatar ? (
+              {isUploading ? (
                 <View style={[styles.avatar, styles.avatarFallback]}>
                   <ActivityIndicator color="#fff" />
                 </View>
