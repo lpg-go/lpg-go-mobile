@@ -1,24 +1,6 @@
 # What's Open
 
-Snapshot as of 2026-07-16. The review-panel backlog is cleared except the one blocked item below.
-
----
-
-## 1. `app/(auth)/complete-profile.tsx` — BLOCKED on a product decision
-
-**Blocked: where does `phone` come from for this flow?**
-
-This screen is genuinely broken, not just untyped. It carries the **only remaining `tsc` error** (`complete-profile.tsx:71`), left standing deliberately — typing the payload would make a broken screen compile cleanly, which is worse than the error.
-
-Three independent defects on one path:
-
-1. **`phone` is omitted from the upsert** but is `not null unique` on `profiles`. `app/_layout.tsx:96` routes here **only when the profiles row is absent** (`if (!profile)`), so the upsert is always an INSERT — exactly the path where the NOT NULL violation fires.
-2. **`provider_type` is written**, but migration `20240101000057_lock_profiles_columns.sql` does **not** grant UPDATE on that column (grants cover `full_name, phone, business_name, avatar_url, document_url, is_online, updated_at, rejected_at, rejection_reason, expo_push_token`). The ON CONFLICT DO UPDATE path would be rejected.
-3. **`role` is collected and validated but never written**, despite `role` driving all downstream routing.
-
-**Reachability:** narrow. `handle_new_user` normally creates the profiles row at signup, so `!profile` only occurs if that trigger failed or the row was deleted. But when it does occur, the recovery screen doesn't recover.
-
-**Needs before it can be fixed:** a decision on where `phone` comes from here (the auth user's phone? a form field? the session metadata?), and — if `provider_type` must be settable on this path — a migration granting UPDATE on it.
+Snapshot as of 2026-07-16. **The entire review-panel backlog is cleared, and `tsc` is at 0.** The only remaining item is the pre-launch prod check below — nothing else is outstanding.
 
 ---
 
@@ -39,7 +21,9 @@ Three independent defects on one path:
 
 ## Done — the full 2026-07-16 review sweep
 
-Twenty commits, `0512fec..8519bbf`, all on `main`. The dry-checker / security-reviewer / api-checker / general-code-reviewer panel findings are all addressed except item 1 above.
+All on `main`. Every dry-checker / security-reviewer / api-checker / general-code-reviewer panel finding is addressed. `tsc` is at **0** (was 49).
+
+- **`complete-profile.tsx` removed** (`3413c48`) — it was orphaned from the pre-C5 client-`signUp` flow: `register.tsx` + `verify-otp` now own signup entirely, and the columns it wrote (`role`, `provider_type`) were deliberately locked from client writes by C3 / migration 057, so it could never work. Its only entry (`!profile`) now signs out with an explanation (mirroring the admin branch), which is the real recovery since a client can't rebuild a locked profile — a re-register recreates it server-side.
 
 **Security & correctness**
 - **Price TOCTOU closed** — provider's quote frozen into `order_acceptances.quoted_prices`/`quoted_total` at accept time; BOTH bidding surfaces (`order/[id].tsx` and `find-store/[productId].tsx`) display it. Codex found the second surface that four in-house reviewers missed; APPROVE on round 2.
