@@ -23,6 +23,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import StatusToggle from '../../components/ui/StatusToggle';
 import { sendOrderNotification } from '../../lib/notifications';
+import { OrderStatus, statusLabel } from '../../lib/orderStatus';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing } from '../../lib/theme';
 
@@ -30,7 +31,7 @@ import { colors, radii, spacing } from '../../lib/theme';
 
 type IncomingOrder = {
   id: string;
-  status: 'pending' | 'awaiting_dealer_selection';
+  status: Extract<OrderStatus, 'pending' | 'awaiting_dealer_selection'>;
   delivery_address: string;
   total_amount: number;
   is_express: boolean;
@@ -43,16 +44,11 @@ type IncomingOrder = {
 
 type ActiveOrder = {
   id: string;
-  status: 'in_transit' | 'awaiting_confirmation';
+  status: Extract<OrderStatus, 'in_transit' | 'awaiting_confirmation'>;
   delivery_address: string;
   total_amount: number;
   customerName: string;
   itemSummary: string;
-};
-
-const ACTIVE_STATUS_LABEL: Record<ActiveOrder['status'], string> = {
-  in_transit: 'On the Way',
-  awaiting_confirmation: 'Awaiting',
 };
 
 const H_PADDING = 20;
@@ -570,7 +566,7 @@ export default function ProviderIncomingOrdersScreen() {
               <ActiveDeliveryCard
                 key={order.id}
                 itemSummary={order.itemSummary}
-                statusLabel={ACTIVE_STATUS_LABEL[order.status]}
+                statusLabel={statusLabel(order.status, 'provider')}
                 address={order.delivery_address}
                 onPress={() => router.push({ pathname: '/(provider)/active/[id]', params: { id: order.id } })}
               />

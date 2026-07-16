@@ -13,26 +13,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActiveDeliveryCard from '../../components/order/ActiveDeliveryCard';
 import EmptyState from '../../components/ui/EmptyState';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
+import { OrderStatus, STATUS_CONFIG } from '../../lib/orderStatus';
 import { colors, spacing, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
 import { useActiveOrderCount } from '../../lib/useActiveOrderCount';
-
-type OrderStatus =
-  | 'pending'
-  | 'awaiting_dealer_selection'
-  | 'in_transit'
-  | 'awaiting_confirmation'
-  | 'delivered'
-  | 'cancelled';
-
-const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
-  pending:                   { label: 'Select Provider',  color: '#16A34A', bg: '#F0FDF4' },
-  awaiting_dealer_selection: { label: 'Finding Provider', color: '#16A34A', bg: '#F0FDF4' },
-  in_transit:                { label: 'On the Way',      color: '#16A34A', bg: '#F0FDF4' },
-  awaiting_confirmation:     { label: 'Awaiting Confirmation', color: '#16A34A', bg: '#F0FDF4' },
-  delivered:                 { label: 'Delivered',        color: '#FFFFFF', bg: '#16A34A' },
-  cancelled:                 { label: 'Cancelled',        color: '#FFFFFF', bg: '#DC2626' },
-};
 
 type OrderRow = {
   id: string;

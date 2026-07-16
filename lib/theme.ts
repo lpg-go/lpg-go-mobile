@@ -1,4 +1,5 @@
 export const colors = {
+  white: '#FFFFFF',
   bg: '#FAFAF9', card: '#FFFFFF', cardBorder: '#F0F0EF',
   headerBg: '#052e16', headerText: '#FFFFFF', headerSubtext: '#86efac', headerAccent: '#4ade80',
   headerSurface: 'rgba(255,255,255,0.08)', headerSurfaceBorder: 'rgba(255,255,255,0.15)',

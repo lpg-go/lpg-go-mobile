@@ -27,20 +27,13 @@ import PartyCard from '../../../components/ui/PartyCard';
 import PrimaryButton from '../../../components/ui/PrimaryButton';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { sendOrderNotification } from '../../../lib/notifications';
+import { OrderStatus, statusLabel } from '../../../lib/orderStatus';
 import { speedLabel } from '../../../lib/reviewSpeed';
 import { SAFETY_ITEMS } from '../../../lib/safety';
 import supabase from '../../../lib/supabase';
 import { colors, radii, shadows, spacing, typography } from '../../../lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type OrderStatus =
-  | 'pending'
-  | 'awaiting_dealer_selection'
-  | 'in_transit'
-  | 'awaiting_confirmation'
-  | 'delivered'
-  | 'cancelled';
 
 type Order = {
   id: string;
@@ -68,17 +61,6 @@ type OrderItem = {
 };
 
 type LatLng = { lat: number; lng: number };
-
-// ─── Status config ────────────────────────────────────────────────────────────
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: 'Waiting...',
-  awaiting_dealer_selection: 'Finding Provider',
-  in_transit: 'On the Way',
-  awaiting_confirmation: 'Awaiting Confirmation',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-};
 
 const H_PADDING = 20;
 
@@ -496,7 +478,7 @@ export default function ActiveDeliveryScreen() {
     <View style={styles.screen}>
       <DetailHeader
         title={`Order #${shortId}`}
-        subtitle={STATUS_LABEL[order.status]}
+        subtitle={statusLabel(order.status, 'provider')}
         onBack={handleBack}
         right={order.is_express ? <StatusBadge label="Express" tone="express" /> : undefined}
       />

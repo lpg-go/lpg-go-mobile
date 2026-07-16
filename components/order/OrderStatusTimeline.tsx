@@ -2,17 +2,10 @@ import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { OrderStatus } from '../../lib/orderStatus';
 import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-type OrderStatus =
-  | 'pending'
-  | 'awaiting_dealer_selection'
-  | 'in_transit'
-  | 'awaiting_confirmation'
-  | 'delivered'
-  | 'cancelled';
 
 export type OrderStatusTimelineProps = {
   status: OrderStatus;

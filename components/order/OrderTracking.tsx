@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { OrderStatus } from '../../lib/orderStatus';
 import { DELIVERY_SPEED_OPTIONS, speedLabel } from '../../lib/reviewSpeed';
 import { colors, radii, spacing, typography, shadows } from '../../lib/theme';
 import LiveMap from '../LiveMap';
@@ -22,14 +23,6 @@ import OrderStatusTimeline from './OrderStatusTimeline';
 import PartyCard from '../ui/PartyCard';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-type OrderStatus =
-  | 'pending'
-  | 'awaiting_dealer_selection'
-  | 'in_transit'
-  | 'awaiting_confirmation'
-  | 'delivered'
-  | 'cancelled';
 
 type Order = {
   id: string;

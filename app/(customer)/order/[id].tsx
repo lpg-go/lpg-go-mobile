@@ -18,19 +18,12 @@ import OrderTracking from '../../../components/order/OrderTracking';
 import DetailHeader from '../../../components/ui/DetailHeader';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { Database } from '../../../lib/database.types';
+import { OrderStatus, STATUS_CONFIG } from '../../../lib/orderStatus';
 import { colors, radii, spacing } from '../../../lib/theme';
 import { sendOrderNotification } from '../../../lib/notifications';
 import supabase from '../../../lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-type OrderStatus =
-  | 'pending'
-  | 'awaiting_dealer_selection'
-  | 'in_transit'
-  | 'awaiting_confirmation'
-  | 'delivered'
-  | 'cancelled';
 
 type Order = {
   id: string;
@@ -88,21 +81,6 @@ type ProviderProfile = {
 };
 
 type LatLng = { lat: number; lng: number };
-
-// ─── Status config ───────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<
-  OrderStatus,
-  { label: string; color: string; bg: string }
-> = {
-  pending:                   { label: 'Select Provider',   color: colors.primary, bg: colors.primaryTint },
-  awaiting_dealer_selection: { label: 'Finding Provider',  color: colors.primary, bg: colors.primaryTint },
-  in_transit:                { label: 'On the Way',       color: colors.primary, bg: colors.primaryTint },
-  awaiting_confirmation:     { label: 'Awaiting Confirmation', color: colors.primary, bg: colors.primaryTint },
-  delivered:                 { label: 'Delivered',         color: '#FFFFFF', bg: colors.primary },
-  cancelled:                 { label: 'Cancelled',         color: '#FFFFFF', bg: colors.danger },
-};
-
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
