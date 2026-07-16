@@ -103,8 +103,8 @@ export default function ProviderProductsScreen() {
     if (error) { Alert.alert('Error', error.message); return; }
 
     const rows: ProviderProduct[] = (data ?? [])
-      .filter((row: any) => row.product && row.product.brand)
-      .map((row: any) => ({
+      .filter((row) => row.product && row.product.brand)
+      .map((row) => ({
         id: row.id,
         product_id: row.product_id,
         product_name: row.product.name,

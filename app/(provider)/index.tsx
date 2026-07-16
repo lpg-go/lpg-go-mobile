@@ -25,6 +25,7 @@ import StatusToggle from '../../components/ui/StatusToggle';
 import { timeAgo } from '../../lib/format';
 import { sendOrderNotification } from '../../lib/notifications';
 import { OrderStatus, statusLabel } from '../../lib/orderStatus';
+import { Database } from '../../lib/database.types';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing } from '../../lib/theme';
 
@@ -130,28 +131,30 @@ export default function ProviderIncomingOrdersScreen() {
   useEffect(() => {
     const channel = supabase
       .channel('incoming-orders')
-      .on(
+      .on<Database['public']['Tables']['orders']['Row']>(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
           const isDelete = payload.eventType === 'DELETE';
-          const isCancelled = payload.eventType === 'UPDATE' && (payload.new as any)?.status === 'cancelled';
-          const isAssigned = payload.eventType === 'UPDATE' && (payload.new as any)?.selected_provider_id !== null;
+          // On DELETE `payload.new` is `{}`; otherwise it is the full orders row.
+          const newRow = payload.eventType !== 'DELETE' ? payload.new : undefined;
+          const isCancelled = payload.eventType === 'UPDATE' && newRow?.status === 'cancelled';
+          const isAssigned = payload.eventType === 'UPDATE' && newRow?.selected_provider_id !== null;
 
           if (isDelete || isCancelled || isAssigned) {
-            const removedId = isDelete ? (payload.old as any).id : (payload.new as any).id;
+            // DELETE carries the id only on `payload.old` (replica identity); others on `newRow`.
+            const removedId = payload.eventType === 'DELETE' ? payload.old.id : newRow?.id;
             setOrders((prev) => prev.filter((o) => o.id !== removedId));
             // If this provider was the one selected, refresh active orders immediately
-            if (isAssigned && (payload.new as any)?.selected_provider_id === providerIdRef.current) {
+            if (isAssigned && newRow?.selected_provider_id === providerIdRef.current) {
               fetchActiveOrders();
             }
             return;
           }
 
-          const updated = payload.new as { status?: string; selected_provider_id?: string } | undefined;
           if (
-            updated?.status === 'delivered' &&
-            updated?.selected_provider_id === providerIdRef.current
+            newRow?.status === 'delivered' &&
+            newRow?.selected_provider_id === providerIdRef.current
           ) {
             Alert.alert('Order Completed!', 'The customer confirmed delivery. Your balance has been updated.');
             const uid = providerIdRef.current;
