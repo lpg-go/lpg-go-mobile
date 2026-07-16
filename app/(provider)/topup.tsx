@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '../../components/ui/Card';
 import DetailHeader from '../../components/ui/DetailHeader';
 import PrimaryButton from '../../components/ui/PrimaryButton';
+import { peso } from '../../lib/format';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing } from '../../lib/theme';
 
@@ -142,7 +143,7 @@ export default function TopUpScreen() {
           <Card style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Current balance</Text>
             <Text style={styles.balanceValue}>
-              {balance != null ? `₱${balance.toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '—'}
+              {balance != null ? peso(balance) : '—'}
             </Text>
           </Card>
 
@@ -158,7 +159,7 @@ export default function TopUpScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.presetText, selectedPreset === preset && styles.presetTextSelected]}>
-                    ₱{preset.toLocaleString('en-PH')}
+                    {peso(preset)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -215,7 +216,7 @@ export default function TopUpScreen() {
         {/* Bottom bar */}
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
           <PrimaryButton
-            label={isValidAmount ? `Request ₱${amount!.toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : 'Request Top-Up'}
+            label={isValidAmount ? `Request ${peso(amount!)}` : 'Request Top-Up'}
             onPress={handleProceed}
             disabled={!isValidAmount}
             loading={processing}

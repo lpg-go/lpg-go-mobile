@@ -1,3 +1,7 @@
+import { Alert } from 'react-native';
+
+import supabase from './supabase';
+
 /**
  * Converts a 10-digit Philippine number (9XXXXXXXXX) to E.164 format (+63XXXXXXXXXX).
  */
@@ -14,4 +18,19 @@ export function formatPhone(phone: string): string {
 export function formatPhoneAsEmail(phone: string): string {
   const digits = phone.replace(/^\+/, '');
   return `${digits}@lpggo.app`;
+}
+
+/**
+ * Shows the standard "Sign Out" confirmation alert, signing out via Supabase on
+ * confirm. Shared by the customer and provider profile screens.
+ */
+export function confirmSignOut(): void {
+  Alert.alert(
+    'Sign Out',
+    'Are you sure you want to sign out?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]
+  );
 }

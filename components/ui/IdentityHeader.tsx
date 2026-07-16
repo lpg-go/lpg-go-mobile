@@ -25,17 +25,6 @@ function timeGreeting(): string {
   return 'Good evening';
 }
 
-function getInitials(name: string): string {
-  return (
-    name
-      .split(' ')
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0].toUpperCase())
-      .join('') || '?'
-  );
-}
-
 // The dark-green home header shared by provider + customer home screens: an
 // identity row (avatar + name + subtitle) with an optional right slot and a
 // children slot below (address bar / stat cards). Rounded bottom corners.

@@ -8,15 +8,6 @@ import Avatar from './ui/Avatar';
 
 const PRIMARY = '#16A34A';
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
-}
-
 type Props = {
   href: '/(customer)/profile' | '/(provider)/profile';
   // When provided, a status dot is shown (green = online, grey = offline).
@@ -51,8 +42,6 @@ export default function HeaderAvatar({ href, online, active = false }: Props) {
     return () => { alive = false; };
   }, []);
 
-  const initials = fullName ? getInitials(fullName) : '';
-
   return (
     <TouchableOpacity
       onPress={() => router.push(href)}
@@ -78,22 +67,10 @@ export default function HeaderAvatar({ href, online, active = false }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { position: 'relative' },
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-  },
   avatarActive: {
     borderWidth: 2,
     borderColor: PRIMARY,
   },
-  fallback: {
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  initials: { fontSize: 13, fontWeight: '700', color: PRIMARY },
   statusDot: {
     position: 'absolute',
     bottom: -1,

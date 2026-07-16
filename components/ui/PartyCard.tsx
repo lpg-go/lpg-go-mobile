@@ -32,11 +32,6 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-function initials(name: string): string {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
-}
-
 // Role-neutral "other party" card: avatar + name + optional rating/meta + optional
 // call/chat buttons. Modeled on LiveMap's provider row; customer screens pass the
 // provider, provider screens pass the customer. Uses the shared Card as surface.

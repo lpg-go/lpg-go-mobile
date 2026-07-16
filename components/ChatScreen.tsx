@@ -155,14 +155,6 @@ export default function ChatScreen({
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const initials = otherUserName
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-
   return (
     <KeyboardAvoidingView
       style={styles.container}

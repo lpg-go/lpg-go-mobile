@@ -20,6 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../../components/ui/Avatar';
 import PrimaryButton from '../../components/ui/PrimaryButton';
 import Card from '../../components/ui/Card';
+import { confirmSignOut } from '../../lib/auth';
+import { formatPhoneForDisplay } from '../../lib/format';
 import { colors, radii, spacing, typography } from '../../lib/theme';
 import supabase from '../../lib/supabase';
 
@@ -35,25 +37,6 @@ type Profile = {
 };
 
 const H_PADDING = 20;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
-}
-
-function formatPhone(phone: string): string {
-  const d = phone.replace(/\D/g, '');
-  if (d.startsWith('63') && d.length === 12) {
-    return `+63 ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
-  }
-  return phone;
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -155,17 +138,6 @@ export default function CustomerProfileScreen() {
 
     setProfile({ ...profile, full_name: editName.trim() });
     setEditing(false);
-  }
-
-  function confirmSignOut() {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => supabase.auth.signOut() },
-      ]
-    );
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -272,7 +244,7 @@ export default function CustomerProfileScreen() {
           <View style={styles.row}>
             <View style={styles.rowBody}>
               <Text style={styles.rowLabel}>Phone</Text>
-              <Text style={styles.rowValueMuted}>{formatPhone(profile?.phone ?? '')}</Text>
+              <Text style={styles.rowValueMuted}>{formatPhoneForDisplay(profile?.phone ?? '')}</Text>
             </View>
           </View>
 

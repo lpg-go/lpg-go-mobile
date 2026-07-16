@@ -253,13 +253,6 @@ function ProviderCard({
 }) {
   const provider = acceptance.provider;
   const name = provider?.business_name || provider?.full_name || 'Provider';
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
 
   return (
     <TouchableOpacity

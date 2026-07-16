@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Image, ImageStyle, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
+import { getInitials } from '../../lib/format';
 import { colors } from '../../lib/theme';
 
 type Props = {
@@ -11,16 +12,6 @@ type Props = {
   textColor?: string;
   style?: StyleProp<ViewStyle>;
 };
-
-// Initials from the first + last word of the name, uppercased, max 2 chars.
-// Falls back to "?" when there's no usable name.
-function getInitials(name?: string): string {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  const first = parts[0][0] ?? '';
-  const last = parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '';
-  return (first + last).toUpperCase() || '?';
-}
 
 // Shared circular avatar. Renders the remote image when a url is present, and
 // falls back to initials both when there's no url AND when the image fails to

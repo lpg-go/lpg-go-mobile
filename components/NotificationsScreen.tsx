@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { timeAgo } from '../lib/format';
 import { Notification, useNotifications } from '../lib/notificationsStore';
 import { colors, radii, spacing, typography } from '../lib/theme';
 
@@ -136,7 +137,7 @@ export default function NotificationsScreen({ homeHref }: Props) {
                   <Text style={styles.cardBody} numberOfLines={3}>
                     {item.body}
                   </Text>
-                  <Text style={styles.cardTime}>{timeAgo(item.created_at)}</Text>
+                  <Text style={styles.cardTime}>{timeAgo(item.created_at, 'long')}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -145,20 +146,6 @@ export default function NotificationsScreen({ homeHref }: Props) {
       )}
     </View>
   );
-}
-
-function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 5) return 'just now';
-  if (diff < 60) return `${diff} seconds ago`;
-  if (diff < 120) return '1 minute ago';
-  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
-  if (diff < 7200) return '1 hour ago';
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-  if (diff < 172800) return '1 day ago';
-  if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
-  if (diff < 5184000) return '1 month ago';
-  return `${Math.floor(diff / 2592000)} months ago`;
 }
 
 const styles = StyleSheet.create({

@@ -22,6 +22,7 @@ import StatCard from '../../components/ui/StatCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import StatusToggle from '../../components/ui/StatusToggle';
+import { timeAgo } from '../../lib/format';
 import { sendOrderNotification } from '../../lib/notifications';
 import { OrderStatus, statusLabel } from '../../lib/orderStatus';
 import supabase from '../../lib/supabase';
@@ -52,18 +53,6 @@ type ActiveOrder = {
 };
 
 const H_PADDING = 20;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function timeAgo(iso: string): string {
-  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (secs < 60) return 'just now';
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -680,7 +669,7 @@ function OrderCard({
       <View style={styles.orderAddrRow}>
         <Feather name="map-pin" size={13} color={colors.textMuted} />
         <Text style={styles.orderAddr} numberOfLines={2}>{order.delivery_address}</Text>
-        <Text style={styles.timeAgo}>{timeAgo(order.created_at)}</Text>
+        <Text style={styles.timeAgo}>{timeAgo(order.created_at, 'short')}</Text>
       </View>
 
       <View style={styles.orderBottomRow}>

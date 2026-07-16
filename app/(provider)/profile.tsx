@@ -21,6 +21,8 @@ import Avatar from '../../components/ui/Avatar';
 import Card from '../../components/ui/Card';
 import DetailHeader from '../../components/ui/DetailHeader';
 import PrimaryButton from '../../components/ui/PrimaryButton';
+import { confirmSignOut } from '../../lib/auth';
+import { formatPhoneForDisplay } from '../../lib/format';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing, typography } from '../../lib/theme';
 
@@ -49,25 +51,6 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 const H_PADDING = 20;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
-}
-
-function formatPhone(phone: string): string {
-  const d = phone.replace(/\D/g, '');
-  if (d.startsWith('63') && d.length === 12) {
-    return `+63 ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
-  }
-  return phone;
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -224,17 +207,6 @@ export default function ProviderProfileScreen() {
     setEditing(false);
   }
 
-  function confirmSignOut() {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => supabase.auth.signOut() },
-      ]
-    );
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -368,7 +340,7 @@ export default function ProviderProfileScreen() {
           <View style={styles.row}>
             <View style={styles.rowBody}>
               <Text style={styles.rowLabel}>Phone</Text>
-              <Text style={styles.rowValueMuted}>{formatPhone(profile?.phone ?? '')}</Text>
+              <Text style={styles.rowValueMuted}>{formatPhoneForDisplay(profile?.phone ?? '')}</Text>
             </View>
           </View>
 

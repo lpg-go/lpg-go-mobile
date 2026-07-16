@@ -14,6 +14,7 @@ import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
 import FloatingPillNav from '../../components/ui/FloatingPillNav';
 import StatCard from '../../components/ui/StatCard';
+import { peso } from '../../lib/format';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing } from '../../lib/theme';
 
@@ -157,8 +158,6 @@ export default function ProviderEarningsScreen() {
     .filter((t) => t.type === 'fee_deduction')
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  const peso = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -279,14 +278,10 @@ function TransactionRow({ tx, isLast }: { tx: Transaction; isLast: boolean }) {
         <Text style={styles.txDate}>{shortRef ? `#${shortRef} · ` : ''}{date}</Text>
       </View>
       <Text style={[styles.txAmount, { color: isCredit ? colors.primary : colors.danger }]}>
-        {isCredit ? '+' : '-'}{peso0(tx.amount)}
+        {isCredit ? '+' : '-'}{peso(tx.amount)}
       </Text>
     </View>
   );
-}
-
-function peso0(n: number): string {
-  return `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
