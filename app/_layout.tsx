@@ -86,6 +86,19 @@ export default function RootLayout() {
     }
   }
 
+  // This layout is the auth gate holding the session. Redirecting to login while
+  // the session survives just re-runs redirectByRole and loops on the same branch,
+  // so recovery has to clear the session: signOut fires onAuthStateChange, and the
+  // !session path routes to login exactly once. Same reasoning as the admin branch.
+  function signOutWithMessage(title: string, body: string) {
+    Alert.alert(
+      title,
+      body,
+      [{ text: 'OK', onPress: async () => { await supabase.auth.signOut(); } }],
+      { cancelable: false }
+    );
+  }
+
   async function redirectByRole(userId: string) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -94,7 +107,10 @@ export default function RootLayout() {
       .single();
 
     if (!profile) {
-      router.replace('/(auth)/complete-profile');
+      signOutWithMessage(
+        "Couldn't load your profile",
+        "We couldn't load your profile. You'll be signed out so you can sign in again."
+      );
       return;
     }
 
@@ -127,7 +143,10 @@ export default function RootLayout() {
         { cancelable: false }
       );
     } else {
-      router.replace('/(auth)/complete-profile');
+      signOutWithMessage(
+        "Couldn't load your account",
+        "We couldn't load your account. You'll be signed out so you can sign in again."
+      );
     }
   }
 
