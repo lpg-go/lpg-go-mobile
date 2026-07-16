@@ -26,8 +26,13 @@ export function useActiveOrderCount(): number {
     fetchCount();
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    // getUser() is async: if we unmount before it resolves, cleanup would run
+    // while channel is still null and the later subscribe would leak a channel
+    // nobody removes. The flag makes cleanup win that race.
+    let cancelled = false;
+
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (cancelled || !user) return;
       channel = supabase
         .channel(`customer-active-orders-badge-${user.id}`)
         .on(
@@ -38,7 +43,10 @@ export function useActiveOrderCount(): number {
         .subscribe();
     });
 
-    return () => { if (channel) supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [fetchCount]);
 
   return count;

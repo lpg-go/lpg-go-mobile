@@ -106,6 +106,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
       userIdRef.current = user.id;
       await fetchNotifications(user.id);
+      // Re-check: the fetch above is a second await, so an unmount during it
+      // would otherwise let us subscribe a channel cleanup has already missed.
+      if (cancelled) return;
       setLoading(false);
 
       channel = supabase

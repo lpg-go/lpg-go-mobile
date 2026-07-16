@@ -129,7 +129,12 @@ export default function ActiveDeliveryScreen() {
   useEffect(() => {
     fetchAll();
     subscribeToOrder();
-    return () => { channelRef.current?.unsubscribe(); };
+    return () => {
+      // removeChannel (not unsubscribe) — unsubscribe leaves the channel in the
+      // client registry, so it accumulates across navigations.
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    };
   }, [id]);
 
   useEffect(() => {

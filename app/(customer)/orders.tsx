@@ -120,9 +120,12 @@ export default function CustomerOrdersScreen() {
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    // Guards the unmount-before-getUser-resolves race: without it, cleanup sees
+    // a null channel and the late subscribe leaks one that is never removed.
+    let cancelled = false;
 
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (cancelled || !user) return;
       channel = supabase
         .channel(`customer-orders-${user.id}`)
         .on(
@@ -143,7 +146,10 @@ export default function CustomerOrdersScreen() {
         .subscribe();
     });
 
-    return () => { if (channel) supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [fetchOrders]);
 
   async function handleRefresh() {
