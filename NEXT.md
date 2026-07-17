@@ -1,6 +1,6 @@
 # What's Open
 
-Snapshot as of 2026-07-16. **The entire review-panel backlog is cleared, and `tsc` is at 0.** The only remaining item is the pre-launch prod check below — nothing else is outstanding.
+Snapshot as of 2026-07-17. **The review-panel backlog is cleared and `tsc` is at 0**, but **two items remain open**: (1) **Mobile app QA** — the Phase C flows (`quoted_total` render, provider accept, missing-profile signout) have been verified only by typecheck and code-tracing; nobody has watched them run in the app. This is a real verification gap, closed by exercising the flows via `expo start`. (2) The **pre-launch prod check** below.
 
 ---
 
