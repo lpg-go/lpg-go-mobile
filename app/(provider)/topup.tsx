@@ -97,8 +97,9 @@ export default function TopUpScreen() {
       Alert.alert('Invalid Amount', `Minimum top-up amount is ${peso(min)}.`);
       return;
     }
-    if (amount > (settings?.max ?? MAX_FALLBACK)) {
-      Alert.alert('Invalid Amount', `Maximum top-up amount is ${peso(settings!.max)}.`);
+    const max = settings?.max ?? MAX_FALLBACK;
+    if (amount > max) {
+      Alert.alert('Invalid Amount', `Maximum top-up amount is ${peso(max)}.`);
       return;
     }
     setProcessing(true);

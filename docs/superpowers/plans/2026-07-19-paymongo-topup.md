@@ -495,11 +495,16 @@ serve(async (req) => {
   const header = req.headers.get('Paymongo-Signature') ?? '';
   const parts = Object.fromEntries(header.split(',').map((p) => p.split('=')) as [string, string][]);
   const t = parts['t'];
-  const expected = parts['te'];               // test-mode signature (use 'li' for live)
-  if (!t || !expected) return new Response('Bad signature header', { status: 401 });
+  const te = parts['te'];                      // test-mode signature component
+  const li = parts['li'];                      // live-mode signature component
+  if (!t || (!te && !li)) return new Response('Bad signature header', { status: 401 });
 
+  // PayMongo signs test events into `te` and live events into `li`, each with the
+  // mode's own secret. We hold one secret per environment, so accept a match on
+  // whichever component is present — verifies in BOTH test and live, no go-live edit.
   const computed = await hmacHex(WEBHOOK_SECRET, `${t}.${raw}`);
-  if (!timingSafeEqual(computed, expected)) return new Response('Bad signature', { status: 401 });
+  const ok = (!!te && timingSafeEqual(computed, te)) || (!!li && timingSafeEqual(computed, li));
+  if (!ok) return new Response('Bad signature', { status: 401 });
 
   let event: any;
   try { event = JSON.parse(raw); } catch { return new Response('Bad body', { status: 400 }); }
@@ -511,7 +516,9 @@ serve(async (req) => {
 
   const cs = event?.data?.attributes?.data;                 // the checkout_session resource
   const sessionId: string | undefined = cs?.id;             // cs_...  (top-level id)
-  const payment = cs?.attributes?.payments?.[0];            // first payment
+  // payments[] can hold earlier FAILED attempts too — pick the paid one, not [0].
+  const payments: any[] = cs?.attributes?.payments ?? [];
+  const payment = payments.find((p) => p?.attributes?.status === 'paid') ?? payments[0];
   const paymentId: string | undefined = payment?.id;        // pay_...  (top-level id)
   const attr = payment?.attributes ?? {};
   const paidPesos = typeof attr.amount === 'number' ? attr.amount / 100 : null;
@@ -519,8 +526,10 @@ serve(async (req) => {
   const status = attr.status;
 
   if (!sessionId || !paymentId || paidPesos === null) {
-    console.error('[paymongo-webhook] unexpected payload shape', JSON.stringify(event));
-    return new Response('ok', { status: 200 });   // acked; loud log is the alert
+    // Log IDS ONLY — full payload can carry billing PII. 500 = retryable so a real
+    // paid event isn't silently dropped.
+    console.error('[paymongo-webhook] paid event missing fields', { sessionId, paymentId, hasAmount: paidPesos !== null });
+    return new Response('unprocessable', { status: 500 });
   }
 
   const { data: result, error } = await supabase.rpc('confirm_topup', {
@@ -729,8 +738,9 @@ async function handleProceed() {
     Alert.alert('Invalid Amount', `Minimum top-up amount is ${peso(min)}.`);
     return;
   }
-  if (amount > (settings?.max ?? MAX_FALLBACK)) {
-    Alert.alert('Invalid Amount', `Maximum top-up amount is ${peso(settings!.max)}.`);
+  const max = settings?.max ?? MAX_FALLBACK;
+  if (amount > max) {
+    Alert.alert('Invalid Amount', `Maximum top-up amount is ${peso(max)}.`);
     return;
   }
   setProcessing(true);
