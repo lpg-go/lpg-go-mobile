@@ -139,7 +139,9 @@ BEGIN
   -- the drift is detectable instead of silent. (We still credit base — the
   -- provider was promised it — but this must be watched and the rate corrected.)
   IF p_net_amount IS NOT NULL AND p_net_amount < v_topup.base_amount THEN
-    RAISE WARNING 'confirm_topup: net (%%) < base (%%) for topup %% — fee rate under-configured (VAT?)',
+    -- NOTE: single % is the RAISE value placeholder; %% would be a literal
+    -- percent and consume no argument (→ "too many parameters" error here).
+    RAISE WARNING 'confirm_topup: net (%) < base (%) for topup % — fee rate under-configured (VAT?)',
       p_net_amount, v_topup.base_amount, v_topup.id;
   END IF;
 
@@ -224,9 +226,10 @@ Response field paths (confirmed): session id at **`data.id`** (`cs_…`), hosted
 
 **Signature verification is mandatory and first.** Without it, anyone who knows the URL could POST a forged `paid` event and mint balance. PayMongo sends `Paymongo-Signature: t=<ts>,te=<test_sig>,li=<live_sig>`. Compute `HMAC-SHA256(key = PAYMONGO_WEBHOOK_SECRET, msg = "<ts>.<rawBody>")` using Deno's Web Crypto, and constant-time compare against the environment's signature component (**`te` for test, `li` for live**). Mismatch → `401`, no side effects. Verify against the **raw** request body (parse JSON only after the check). The signing secret is prefixed **`whsk_`**.
 
-**On `checkout_session.payment.paid`** (pin to the **v1** envelope — confirm against one real delivered event before parsing):
-- Checkout session id: `data.attributes.data.id` (`cs_…`).
-- Payment: `data.attributes.data.attributes.payments[0].attributes.{id, net_amount, fee, amount, status}` (all **centavos**).
+**On `checkout_session.payment.paid`** (pin to the **v1** envelope — ⚠️ **mandatory**: capture one real delivered test event and confirm these exact paths before writing the parser; they are load-bearing for crediting):
+- Checkout session id: `data.attributes.data.id` (`cs_…`) — resource `id` is **top-level**, a sibling of `attributes`.
+- Payment id: `data.attributes.data.attributes.payments[0].id` (`pay_…`) — likewise **top-level on the payment object**, NOT under its `attributes`.
+- Payment money/status: `data.attributes.data.attributes.payments[0].attributes.{net_amount, fee, amount, status}` (all **centavos**).
 - Call `confirm_topup(session_id, payment_id, net_amount_in_pesos)` via the service-role client (convert centavos → pesos at this boundary).
 - Return `200` on success **and** on idempotent duplicates (so PayMongo stops retrying).
 
@@ -242,9 +245,9 @@ Response field paths (confirmed): session id at **`data.id`** (`cs_…`), hosted
 
 `supabase/functions/topup-return/index.ts` — **public** (no JWT). PayMongo requires `http(s)` redirect URLs and does not support custom schemes (§2c), so this tiny function is the `success_url`/`cancel_url` target. It returns a minimal **HTML page that immediately redirects to the app scheme**, which lets `WebBrowser.openAuthSessionAsync` auto-close:
 
-- `GET /functions/v1/topup-return?status=success|cancelled` → `200 text/html` whose body redirects to `lpg-go://topup?status=<status>` (a `<meta http-equiv="refresh">` + `window.location` + a manual "Return to app" link as fallback).
-- Pass through only a whitelisted `status` (`success`/`cancelled`) — never reflect arbitrary query params into the page (avoid an open-redirect / injection surface).
-- No secrets, no DB access — it is pure presentation. Credit still happens exclusively via the webhook; this page is UX-only.
+- `GET /functions/v1/topup-return?status=success|cancelled` → **`302` with `Location: lpg-go://topup?status=<status>`**. A `302` to the callback scheme is what `ASWebAuthenticationSession` / Android Custom Tabs intercept most reliably; a client-side `window.location`/`<meta refresh>` to a custom scheme is the part most likely to be gesture-blocked. Include an HTML body too (JS redirect **+ a prominent manual "Return to app" link**) as the fallback for clients that don't follow the 302 to a custom scheme.
+- Pass through only a whitelisted `status` (`success`/`cancelled`) — never reflect arbitrary query params into the page or the `Location` header (avoid an open-redirect / injection surface).
+- No secrets, no DB access — it is pure presentation. Credit still happens exclusively via the webhook; this page is UX-only, so a blocked redirect never loses money (the client poll below still confirms).
 
 ---
 
@@ -257,7 +260,7 @@ Response field paths (confirmed): session id at **`data.id`** (`cs_…`), hosted
 - **`handleProceed`** (replaces the `processTopUp` "coming soon" stub):
   1. `POST` to `https://<ref>.supabase.co/functions/v1/create-topup-checkout` with the session's `Authorization: Bearer` header and `{ base_amount, method }` (raw `fetch`, matching the existing `send-otp` call convention — the app does **not** use `supabase.functions.invoke`).
   2. `WebBrowser.openAuthSessionAsync(checkout_url, 'lpg-go://topup')`.
-  3. On return, enter a **"Confirming payment…"** state; refresh `balance` and **poll the `topups` row** (its own RLS-visible row) until `status = 'paid'` (or a short timeout), because the credit is webhook-driven and may lag 1–2s. On `paid`, show success and the new balance. `cancelled`/dismiss → back to the form. (The Earnings screen already subscribes to `transactions` realtime, so its history updates on its own.)
+  3. **On ANY return type (`success`, `cancel`, or `dismiss`), enter "Confirming payment…" and poll the `topups` row.** Do **not** gate the poll on the result type: a *successful* payment can still resolve as `dismiss` when the bounce page's custom-scheme redirect is gesture-blocked and the provider closes the sheet manually (§5b) — treating `dismiss` as "cancelled" would show a paid top-up as failed. Poll the row (its own RLS-visible record) until `status = 'paid'` → show success + new balance; only conclude "not paid" after the poll **times out** still `pending` (credit is webhook-driven and may lag 1–2s). The `topups.status` in the DB — never the `openAuthSessionAsync` result type or the URL `status` param — is the source of truth for whether the top-up succeeded. (The Earnings screen already subscribes to `transactions` realtime, so its history updates on its own.)
 - **Remove** the amber "coming soon" banner.
 - **Package:** add `expo-web-browser` via `npx expo install expo-web-browser`. (`expo-linking` ~8 is already installed; app `scheme` is `lpg-go`.)
 
