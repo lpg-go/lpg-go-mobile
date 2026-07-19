@@ -861,6 +861,12 @@ git add app/(provider)/topup.tsx package.json package-lock.json
 git commit -m "feat(topup): wire topup screen to PayMongo checkout (gcash/maya/card) with poll"
 ```
 
+> **Post-implementation deviations (2026-07-19, all committed on `feat/paymongo-topup`).** The shipped code diverged from the code shown above through in-session UX refinement and review fixes — **the shipped files are authoritative**, not the snippets here:
+> - Charge rounds **up to a whole peso** (not exact-to-centavo); PayMongo line shows only **Total due** (`show_line_items`/`show_description` false, item name "Balance top-up").
+> - Presets are **[500, 1000, 5000]** (₱2,000 dropped); tapping a preset **auto-fills** the amount box.
+> - The **"Current balance" card was removed** (with `balance` state, `fetchBalance`, and the orphaned `userId` guard) — balance lives on the Earnings screen; the success path is a "Top-up successful" alert.
+> - Codex/PR-gate fixes: webhook matches **`te` OR `li`**, selects the **paid** payment, logs **ids only** + returns **500** on unprocessable; PayMongo error logs **status+code only**; `verify_jwt=false` **pinned** in `config.toml`.
+
 ---
 
 ## Task 6: Finish the branch
