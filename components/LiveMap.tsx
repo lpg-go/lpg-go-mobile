@@ -3,20 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 
-import { decodePolyline } from '../lib/decodePolyline';
+import { computeRoute, RouteInfo } from '../lib/computeRoute';
 import { colors, radii, spacing, typography, shadows } from '../lib/theme';
 import Avatar from './ui/Avatar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LatLng = { lat: number; lng: number };
-type Coord = { latitude: number; longitude: number };
-
-type RouteInfo = {
-  distanceText: string;
-  durationText: string;
-  coords: Coord[];
-};
 
 type Props = {
   providerLocation: LatLng | null;
@@ -84,6 +77,13 @@ export default function LiveMap({
 
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const routeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Invalidation epoch: bumped by clearRouteTimer on teardown or coordinate
+  // change. A request captures the epoch when it starts and only setRoute if it
+  // still matches — so a request for stale coordinates (or one resolving after
+  // unmount) is dropped. A normal poll tick for the SAME coordinates does NOT
+  // bump the epoch, so a slow-but-still-valid response is never discarded
+  // (both results are valid; last write wins).
+  const routeEpochRef = useRef(0);
 
   // ── Customer pulse animation ──────────────────────────────────────────────
 
@@ -167,6 +167,10 @@ export default function LiveMap({
   ]);
 
   function clearRouteTimer() {
+    // Bump the epoch so any in-flight request resolving after teardown
+    // (effect cleanup on unmount or coordinate change) is ignored. This is the
+    // ONLY place the epoch advances — poll ticks do not touch it.
+    routeEpochRef.current += 1;
     if (routeTimerRef.current) {
       clearInterval(routeTimerRef.current);
       routeTimerRef.current = null;
@@ -175,26 +179,15 @@ export default function LiveMap({
 
   async function fetchRoute(origin: LatLng, destination: LatLng) {
     if (!GMAPS_KEY) return;
-    try {
-      const url =
-        `https://maps.googleapis.com/maps/api/directions/json` +
-        `?origin=${origin.lat},${origin.lng}` +
-        `&destination=${destination.lat},${destination.lng}` +
-        `&mode=driving` +
-        `&key=${GMAPS_KEY}`;
-      const res  = await fetch(url);
-      const json = await res.json();
-      if (json.status !== 'OK' || !json.routes?.length) return;
-
-      const leg = json.routes[0].legs[0];
-      setRoute({
-        distanceText: leg.distance.text,
-        durationText: leg.duration.text,
-        coords: decodePolyline(json.routes[0].overview_polyline.points),
-      });
-    } catch {
-      // keep existing route on network error
-    }
+    const epoch = routeEpochRef.current;
+    const info = await computeRoute(origin, destination, GMAPS_KEY);
+    // Drop the result only if the epoch advanced while awaiting — i.e. the
+    // coordinates changed or the effect tore down (clearRouteTimer). A
+    // concurrent poll for the SAME coordinates does not bump the epoch, so a
+    // slow-but-still-valid response is never discarded. computeRoute returns
+    // null on any failure, so "keep last route" holds by only setting on a
+    // non-null result.
+    if (info && epoch === routeEpochRef.current) setRoute(info);
   }
 
   // ── Empty state ───────────────────────────────────────────────────────────
