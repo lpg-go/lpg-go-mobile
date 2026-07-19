@@ -34,7 +34,6 @@ export default function TopUpScreen() {
   const insets = useSafeAreaInsets();
 
   const [userId, setUserId] = useState<string | null>(null);
-  const [balance, setBalance] = useState<number | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('gcash');
@@ -55,16 +54,7 @@ export default function TopUpScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUserId(user.id);
-    await Promise.all([fetchBalance(user.id), fetchSettings()]);
-  }
-
-  async function fetchBalance(uid: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('balance')
-      .eq('id', uid)
-      .single();
-    if (data) setBalance(Number(data.balance));
+    await fetchSettings();
   }
 
   async function fetchSettings() {
@@ -148,7 +138,6 @@ export default function TopUpScreen() {
         .eq('id', topupId)
         .single();
       if (data?.status === 'paid') {
-        await fetchBalance(userId);
         Alert.alert('Top-up successful', 'Your balance has been updated.');
         return;
       }
@@ -192,14 +181,6 @@ export default function TopUpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Current balance */}
-          <Card style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Current balance</Text>
-            <Text style={styles.balanceValue}>
-              {balance != null ? peso(balance) : '—'}
-            </Text>
-          </Card>
-
           {/* Amount selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Select Amount</Text>
@@ -331,10 +312,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
 
-  // Current balance card
-  balanceCard: { padding: spacing.lg, marginBottom: spacing.xl, alignItems: 'flex-start' },
-  balanceLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
-  balanceValue: { fontSize: 24, fontWeight: '800', color: colors.text, marginTop: 4 },
 
   // Section
   section: { marginBottom: spacing.xl },
