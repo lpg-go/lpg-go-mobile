@@ -75,9 +75,23 @@ ALTER TABLE public.platform_settings
   ADD COLUMN IF NOT EXISTS allow_card_topup  boolean        NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS topup_min_amount  numeric(10,2)  NOT NULL DEFAULT 300,
   ADD COLUMN IF NOT EXISTS topup_max_amount  numeric(10,2)  NOT NULL DEFAULT 50000;
+
+-- Sanity constraints — these are admin-editable MONEY parameters, so make an
+-- unsafe value impossible at the DB level (a rate >= 1 would break 1 - rate;
+-- a min > max would reject every amount). Named so they can be dropped/altered.
+ALTER TABLE public.platform_settings
+  ADD CONSTRAINT topup_fee_rates_valid CHECK (
+    fee_rate_gcash >= 0 AND fee_rate_gcash < 1 AND
+    fee_rate_maya  >= 0 AND fee_rate_maya  < 1 AND
+    fee_rate_card  >= 0 AND fee_rate_card  < 1
+  ),
+  ADD CONSTRAINT topup_fee_fixed_valid CHECK (fee_fixed_card >= 0),
+  ADD CONSTRAINT topup_amounts_valid   CHECK (
+    topup_min_amount > 0 AND topup_max_amount >= topup_min_amount
+  );
 ```
 
-> Defaults are the **effective (VAT-inclusive) rates** — PayMongo's VAT-exclusive pricing (2.23% / 1.79% / 3.125% + ₱13.39) ×1.12 ≈ these values (see §2c). They are **confirmed empirically** by the 4 test probes in the §9 investigate step before go-live; the `fee` field PayMongo returns is already VAT-inclusive, so the derived rate drops straight into these columns. All rate columns are admin-editable.
+> Defaults are the **effective (VAT-inclusive) rates** — PayMongo's VAT-exclusive pricing (2.23% / 1.79% / 3.125% + ₱13.39) ×1.12 ≈ these values (see §2c). ⚠️ **They are still ESTIMATES, not measured** — the 4 test probes in the §9 investigate step confirm them empirically before go-live (the `fee` field PayMongo returns is already VAT-inclusive, so the derived rate drops straight into these columns). All rate columns are admin-editable, but only within the CHECK bounds above.
 >
 > **Naming:** `'paymaya'` is the correct PayMongo `payment_method_types` identifier and is used as the DB `method` value; the column is `fee_rate_maya` and the UI label is "Maya". The `'paymaya' → fee_rate_maya` lookup is a deliberate mapping, not a string match — write it explicitly.
 
@@ -111,12 +125,16 @@ ALTER TABLE public.topups ENABLE ROW LEVEL SECURITY;
 
 Mirrors the existing credit pattern (`handle_order_delivered` in migration 024, `grant_signup_promo` in 048): bump balance + insert a `transactions` row, atomically, with a pinned `search_path`.
 
+The function **validates the paid amount and status** before crediting (a signed event is authentic but its *contents* must still match what we created — guard against underpaid/partial/mismatched sessions), and **returns an explicit result** so the webhook can act on `unknown`/`mismatch` instead of silently 200-ing.
+
 ```sql
 CREATE OR REPLACE FUNCTION public.confirm_topup(
-  p_session_id text,
-  p_payment_id text,
-  p_net_amount numeric  -- actual settled amount from PayMongo (fee already deducted)
-) RETURNS void
+  p_session_id   text,
+  p_payment_id   text,
+  p_paid_amount  numeric,  -- payments[0].attributes.amount, converted to pesos
+  p_net_amount   numeric,  -- payments[0].attributes.net_amount, pesos (fee already deducted)
+  p_status       text      -- payments[0].attributes.status
+) RETURNS text             -- 'processed' | 'duplicate' | 'unknown' | 'not_paid' | 'amount_mismatch'
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -124,20 +142,37 @@ AS $$
 DECLARE
   v_topup public.topups%ROWTYPE;
 BEGIN
-  -- Lock the row; idempotent no-op if missing or already terminal.
+  -- Lock the row; distinguish "unknown session" from "already processed".
   SELECT * INTO v_topup FROM public.topups
     WHERE checkout_session_id = p_session_id
     FOR UPDATE;
 
-  IF NOT FOUND OR v_topup.status <> 'pending' THEN
-    RETURN;  -- unknown session or already processed → no double-credit
+  IF NOT FOUND THEN
+    RETURN 'unknown';                       -- no row for this session (see webhook handling)
+  END IF;
+  IF v_topup.status <> 'pending' THEN
+    RETURN 'duplicate';                      -- already terminal → no double-credit
+  END IF;
+
+  -- Content validation on the (already signature-verified) event.
+  IF p_status IS DISTINCT FROM 'paid' THEN
+    RETURN 'not_paid';                       -- event we don't credit on; leave pending
+  END IF;
+  -- The charged amount is fixed by us at session creation, so the paid amount
+  -- MUST equal charge_amount. A mismatch means tampering or a wrong path — do
+  -- NOT credit; mark failed and let it be investigated.
+  IF p_paid_amount IS DISTINCT FROM v_topup.charge_amount THEN
+    UPDATE public.topups SET status = 'failed' WHERE id = v_topup.id;
+    RAISE WARNING 'confirm_topup: paid (%) <> charge (%) for topup % — not credited',
+      p_paid_amount, v_topup.charge_amount, v_topup.id;
+    RETURN 'amount_mismatch';
   END IF;
 
   -- Reconciliation guard: if PayMongo settled LESS than the base we're about to
   -- credit, the configured fee rate under-estimated the real (VAT-inclusive)
   -- rate and the platform is eating the gap. Persist net_amount and log it so
-  -- the drift is detectable instead of silent. (We still credit base — the
-  -- provider was promised it — but this must be watched and the rate corrected.)
+  -- the drift is detectable. (We still credit base — the provider was promised
+  -- it, and the charge matched — but this must be watched and the rate fixed.)
   IF p_net_amount IS NOT NULL AND p_net_amount < v_topup.base_amount THEN
     -- NOTE: single % is the RAISE value placeholder; %% would be a literal
     -- percent and consume no argument (→ "too many parameters" error here).
@@ -155,14 +190,16 @@ BEGIN
 
   INSERT INTO public.transactions (provider_id, type, amount, reference_id)
     VALUES (v_topup.provider_id, 'topup', v_topup.base_amount, p_payment_id);
+
+  RETURN 'processed';
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.confirm_topup(text, text, numeric) FROM public, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.confirm_topup(text, text, numeric) TO service_role;  -- explicit; the webhook is the only caller
+REVOKE EXECUTE ON FUNCTION public.confirm_topup(text, text, numeric, numeric, text) FROM public, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.confirm_topup(text, text, numeric, numeric, text) TO service_role;  -- explicit; the webhook is the only caller
 ```
 
-- **Credit = `base_amount`** (deterministic — method known at charge time). `p_net_amount` is now **persisted** to `topups.net_amount` and compared against base for drift detection — it is not used to compute the credit.
+- **Credit = `base_amount`** (deterministic — method known at charge time), and only after `status = 'paid'` **and** `paid_amount = charge_amount`. `p_net_amount` is persisted to `topups.net_amount` and compared against base for drift detection — it is not used to compute the credit.
 - `transaction_type` already has the `'topup'` value (initial schema) — **no enum change needed**.
 - `transactions.reference_id` (existing `text` column) holds the PayMongo `payment_id`.
 
@@ -190,15 +227,17 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public.profiles FROM anon;
 
 **Server-side validation (authoritative — never trust the client for money):**
 1. `method` is one of the three literals **and** its `allow_*_topup` flag is `true`.
-2. `base_amount` is a positive number, `>= topup_min_amount`, `<= topup_max_amount`.
+2. `base_amount` is **finite** (reject `NaN`/`Infinity`), `> 0`, and has **no sub-centavo precision** — i.e. `base_centavos = Math.round(base_amount * 100)` must satisfy `base_centavos / 100 === base_amount` (reject e.g. `300.005`). Then bound-check `base_centavos` against `topup_min_amount`/`topup_max_amount` (in centavos).
+3. Load the fee settings and **guard them before use**: even though `088` adds CHECK constraints, defensively reject `rate < 0 || rate >= 1` and `fixed < 0` before computing `(1 - rate)` (a bad settings row should fail the request loudly, not divide-by-zero or produce a negative charge).
 
-**Charge computation (server-side, in centavos):**
+**Charge computation (server-side, entirely in integer centavos):**
 ```
-rate  = fee_rate_gcash | fee_rate_maya | fee_rate_card   (per method)
-fixed = (method === 'card') ? fee_fixed_card : 0
-charge = ceil((base + fixed) / (1 - rate))   // pesos, ceil to the centavo
-fee    = charge - base
+rate          = fee_rate_gcash | fee_rate_maya | fee_rate_card    (per method)
+fixed_centavos = (method === 'card') ? round(fee_fixed_card * 100) : 0
+charge_centavos = ceil((base_centavos + fixed_centavos) / (1 - rate))   // integer
+fee_centavos    = charge_centavos - base_centavos
 ```
+Convert back to pesos (`/100`) only when writing the `topups` row (`numeric(10,2)`); `line_items.amount` is sent as `charge_centavos` directly.
 
 **Pre-generate the topup id.** `reference_number` / `metadata.topup_id` must reference the row's id, but the session is created before the row is inserted — so the edge function generates the uuid itself (`crypto.randomUUID()`) and inserts the `topups` row with an **explicit `id`**, rather than relying on the table's `DEFAULT gen_random_uuid()`. (The credit path keys off `checkout_session_id`, so `metadata`/`reference_number` are convenience/traceability only — but they still need a real id.)
 
@@ -230,8 +269,11 @@ Response field paths (confirmed): session id at **`data.id`** (`cs_…`), hosted
 - Checkout session id: `data.attributes.data.id` (`cs_…`) — resource `id` is **top-level**, a sibling of `attributes`.
 - Payment id: `data.attributes.data.attributes.payments[0].id` (`pay_…`) — likewise **top-level on the payment object**, NOT under its `attributes`.
 - Payment money/status: `data.attributes.data.attributes.payments[0].attributes.{net_amount, fee, amount, status}` (all **centavos**).
-- Call `confirm_topup(session_id, payment_id, net_amount_in_pesos)` via the service-role client (convert centavos → pesos at this boundary).
-- Return `200` on success **and** on idempotent duplicates (so PayMongo stops retrying).
+- Call `confirm_topup(session_id, payment_id, paid_amount_pesos, net_amount_pesos, status)` via the service-role client (convert centavos → pesos at this boundary; pass the payment `amount` and `status` so the RPC can validate them, not just credit blindly).
+- Act on the returned result:
+  - `processed` / `duplicate` → `200` (credited, or already-credited — PayMongo stops retrying).
+  - `not_paid` / `amount_mismatch` → `200` **+ `console.error` (loud, alertable)** — a signed event whose contents we refuse to credit; retrying won't change it, so ack it but surface it.
+  - `unknown` (no `topups` row for a paid session) → **`console.error` loudly and return `200`.** This should be effectively impossible (the row is committed before the `checkout_url` is ever returned to the client — see §4 ordering — so a real top-up always has a row long before payment completes). Returning `200` avoids a retry-storm on foreign/test events for sessions we didn't create; the loud error log is the alerting hook if it ever fires. *(Trade-off noted: a non-200 would let PayMongo retry a genuine race, but our ordering rules that race out and foreign events would retry-storm — so we log-and-ack rather than retry.)*
 
 **Other event types:** acknowledge with `200` (ignored). Unparseable body → `400`. Bad signature → `401`.
 
@@ -269,7 +311,7 @@ Response field paths (confirmed): session id at **`data.id`** (`cs_…`), hosted
 ## 7. Security invariants (the whole point)
 
 1. **Charge and fee are computed server-side only.** The client sends `base_amount` + `method`; both are re-validated and the charge is recomputed in the edge function.
-2. **Balance is credited only by `confirm_topup`, called only by the webhook, only after signature verification.** `profiles.balance` is already client-write-locked (migration 057); `topups` writes are service-role only.
+2. **Balance is credited only by `confirm_topup`, called only by the webhook, only after signature verification — and only when `status = 'paid'` AND the paid `amount` equals the stored `charge_amount`.** A mismatch marks the row `failed` and credits nothing. `profiles.balance` is client-write-locked (057); `topups` writes are service-role only.
 3. **Idempotent by construction:** `confirm_topup`'s `status = 'pending'` guard under `FOR UPDATE` + `UNIQUE(topups.checkout_session_id)` → a replayed or duplicated webhook credits exactly once.
 4. **Webhook signature verification is non-optional** and runs before any parsing or side effect.
 5. **No secrets in the repo.** `PAYMONGO_SECRET_KEY` / `PAYMONGO_WEBHOOK_SECRET` live in Supabase function secrets. Build against **test keys on the dev project** first; swap to live at launch.
@@ -286,7 +328,9 @@ Per `stack.md`, "tests green" means `tsc` at 0 + a real app walk-through. In Pay
 4. **Fee math:** charged amount matches `ceil((base + fixed)/(1 − rate))` for each method; credited amount equals `base`.
 5. **Flag isolation:** toggling `allow_card_payment` (customer flag) does **not** change provider card-top-up availability; only `allow_card_topup` does.
 6. **Net-vs-base reconciliation:** after a real test top-up, confirm `topups.net_amount` was persisted and that `net_amount >= base_amount` (i.e. the configured effective rate covers PayMongo's real cut). A `net < base` case must surface the `RAISE WARNING` — check the function logs.
-7. `tsc --noEmit` at 0 (regenerate `lib/database.types.ts` after the migration so `topups` + the new settings columns are typed).
+7. **Amount-mismatch guard:** call `confirm_topup` with a `paid_amount` ≠ the row's `charge_amount` (or `status <> 'paid'`) → returns `amount_mismatch`/`not_paid`, marks the row `failed`/leaves `pending`, credits **nothing**. And a bad settings row (`fee_rate_card = 1`) is rejected — by the CHECK constraint on write, and by `create-topup-checkout`'s guard before `(1 - rate)`.
+8. **Sub-centavo input:** `create-topup-checkout` rejects `base_amount = 300.005` (and `NaN`/`Infinity`) before creating a session.
+9. `tsc --noEmit` at 0 (regenerate `lib/database.types.ts` after the migration so `topups` + the new settings columns are typed).
 
 ---
 
