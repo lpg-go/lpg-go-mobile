@@ -25,7 +25,7 @@ import { colors, radii, spacing } from '../../lib/theme';
 type PaymentMethod = 'gcash' | 'paymaya' | 'card';
 
 const H_PADDING = 20;
-const PRESETS = [500, 1000, 2000, 5000];
+const PRESETS = [500, 1000, 5000];
 const MIN_FALLBACK = 300;
 const MAX_FALLBACK = 50000;
 const FUNCTIONS_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1';

@@ -27,7 +27,7 @@ These were settled during brainstorming. Do not relitigate:
 ### 2a. Amounts, minimum, presets (revised)
 
 - **Minimum top-up: ₱300** (not ₱50). At ₱50 the card fixed fee is ~30% of the charge and it doesn't clear `min_balance` anyway.
-- **Presets: ₱500 / ₱1,000 / ₱2,000 / ₱5,000** (drop ₱100 and ₱200 from the current `PRESETS`).
+- **Presets: ₱500 / ₱1,000 / ₱5,000** (dropped ₱100/₱200, and later ₱2,000 per UX).
 - Min/max are stored as `topup_min_amount` (default 300) and `topup_max_amount` (sanity ceiling) in `platform_settings`; the client reads them (with a hardcoded fallback) and the edge function **re-validates authoritatively**.
 
 ### 2b. Provider top-up method flags are SEPARATE from customer payment flags (revised)
@@ -301,7 +301,7 @@ Response field paths (confirmed): session id at **`data.id`** (`cs_…`), hosted
 ## 6. Mobile: `app/(provider)/topup.tsx`
 
 - **Method type:** `type PaymentMethod = 'gcash' | 'paymaya' | 'card'`. Add a **Maya** option to the picker. GCash always shown; Maya gated by `allow_maya_topup`; Card gated by **`allow_card_topup`** (not `allow_card_payment`).
-- **Presets:** `[500, 1000, 2000, 5000]`. **Minimum:** ₱300 (read `topup_min_amount`/`topup_max_amount` from settings, fallback 300 / 50000). Update the "Minimum top-up" copy.
+- **Presets:** `[500, 1000, 5000]`. **Minimum:** ₱300 (read `topup_min_amount`/`topup_max_amount` from settings, fallback 300 / 50000). Update the "Minimum top-up" copy.
 - **`fetchSettings`** also selects the fee-rate columns + the three `allow_*_topup` flags + min/max.
 - **Charge summary (display only):** compute the charge client-side with the fetched rates and show *"You'll pay ₱X (₱base + ₱fee fee)"* under the amount. The edge function recomputes authoritatively — the client number is a preview.
 - **`handleProceed`** (replaces the `processTopUp` "coming soon" stub):
