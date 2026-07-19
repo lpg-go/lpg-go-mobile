@@ -18,7 +18,7 @@ Non-goals (this spec): withdrawals/payouts, refunds, customer-side online paymen
 
 These were settled during brainstorming. Do not relitigate:
 
-1. **Gross-credit, per-method fee.** Provider is charged `base + fee`; the full `base` lands in balance. Because the method is chosen in-app, the fee is deterministic at charge time. **`charge = ceil((base + fixed) / (1 − rate))`**, **`credit = base` exactly**. Ceil rounding means any rounding drift is a sub-centavo platform surplus, never a loss — the platform is fee-neutral.
+1. **Gross-credit, per-method fee.** Provider is charged `base + fee`; the full `base` lands in balance. Because the method is chosen in-app, the fee is deterministic at charge time. **`charge = ceil((base + fixed) / (1 − rate))`** (shorthand — the authoritative computation is done in **integer centavos**, see §4), **`credit = base` exactly**. Ceil rounding means any rounding drift is a sub-centavo platform surplus, never a loss — the platform is fee-neutral.
 2. **Hosted Checkout Session, one method per session.** Provider picks GCash / Maya / Card in-app; we create a PayMongo Checkout Session locked to that single method (`payment_method_types: [method]`) and open it with `expo-web-browser`. No card data touches the app (PayMongo handles PCI, OTP, 3DS).
 3. **Fee rates live in `platform_settings`** (admin-editable), consistent with the existing `allow_card_payment` precedent.
 4. **Amounts stored in pesos** (`numeric(10,2)`, matching `transactions.amount`); converted to **centavos** only at the PayMongo API boundary.
@@ -78,7 +78,12 @@ ALTER TABLE public.platform_settings
 
 -- Sanity constraints — these are admin-editable MONEY parameters, so make an
 -- unsafe value impossible at the DB level (a rate >= 1 would break 1 - rate;
--- a min > max would reject every amount). Named so they can be dropped/altered.
+-- a min > max would reject every amount). DROP-IF-EXISTS first so a partial
+-- manual re-apply is safe (ADD CONSTRAINT has no IF NOT EXISTS form).
+ALTER TABLE public.platform_settings
+  DROP CONSTRAINT IF EXISTS topup_fee_rates_valid,
+  DROP CONSTRAINT IF EXISTS topup_fee_fixed_valid,
+  DROP CONSTRAINT IF EXISTS topup_amounts_valid;
 ALTER TABLE public.platform_settings
   ADD CONSTRAINT topup_fee_rates_valid CHECK (
     fee_rate_gcash >= 0 AND fee_rate_gcash < 1 AND
@@ -325,7 +330,7 @@ Per `stack.md`, "tests green" means `tsc` at 0 + a real app walk-through. In Pay
 1. **Happy path:** provider tops up ₱500 via GCash test flow → returns to app → `topups.status` flips to `paid` → balance increases by exactly ₱500 → one `topup` transaction row with the PayMongo `payment_id` as `reference_id`.
 2. **Idempotency:** re-deliver the same webhook (PayMongo dashboard "resend", or replay the captured payload) → balance does **not** change a second time.
 3. **Forgery:** POST an unsigned / wrong-signature body to the webhook → `401`, no `topups`/balance change.
-4. **Fee math:** charged amount matches `ceil((base + fixed)/(1 − rate))` for each method; credited amount equals `base`.
+4. **Fee math:** charged amount matches the integer-centavo `ceil((base_centavos + fixed_centavos)/(1 − rate))` (§4) for each method; credited amount equals `base`.
 5. **Flag isolation:** toggling `allow_card_payment` (customer flag) does **not** change provider card-top-up availability; only `allow_card_topup` does.
 6. **Net-vs-base reconciliation:** after a real test top-up, confirm `topups.net_amount` was persisted and that `net_amount >= base_amount` (i.e. the configured effective rate covers PayMongo's real cut). A `net < base` case must surface the `RAISE WARNING` — check the function logs.
 7. **Amount-mismatch guard:** call `confirm_topup` with a `paid_amount` ≠ the row's `charge_amount` (or `status <> 'paid'`) → returns `amount_mismatch`/`not_paid`, marks the row `failed`/leaves `pending`, credits **nothing**. And a bad settings row (`fee_rate_card = 1`) is rejected — by the CHECK constraint on write, and by `create-topup-checkout`'s guard before `(1 - rate)`.
