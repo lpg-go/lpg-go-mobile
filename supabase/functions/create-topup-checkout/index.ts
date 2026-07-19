@@ -68,7 +68,11 @@ serve(async (req) => {
   if (!(rate >= 0 && rate < 1) || fixedCentavos < 0) return bad('Fee settings misconfigured', 500);
 
   // --- charge math, integer centavos ---
-  const chargeCentavos = Math.ceil((baseCentavos + fixedCentavos) / (1 - rate));
+  // Round the charge UP to a whole peso for cleaner totals. The provider still
+  // gets exactly `base` credited; the sub-peso rounding is a tiny platform
+  // surplus, never a loss (ceil only ever increases the charge).
+  const rawChargeCentavos = (baseCentavos + fixedCentavos) / (1 - rate);
+  const chargeCentavos = Math.ceil(rawChargeCentavos / 100) * 100;
   const feeCentavos = chargeCentavos - baseCentavos;
 
   // --- create PayMongo checkout session (v1) ---
@@ -79,11 +83,11 @@ serve(async (req) => {
     headers: { Authorization: auth, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       data: { attributes: {
-        line_items: [{ name: 'LPG Go balance top-up', amount: chargeCentavos, currency: 'PHP', quantity: 1 }],
+        line_items: [{ name: `LPG Go top-up: ₱${base} credit + ₱${feeCentavos / 100} fee`, amount: chargeCentavos, currency: 'PHP', quantity: 1 }],
         payment_method_types: [method],
         success_url: `${RETURN_BASE}?status=success`,
         cancel_url: `${RETURN_BASE}?status=cancelled`,
-        description: `Top-up ₱${base}`,
+        description: `₱${base} balance top-up (you pay ₱${chargeCentavos / 100}, incl. ₱${feeCentavos / 100} fee)`,
         reference_number: topupId,
         send_email_receipt: false,
         metadata: { topup_id: topupId, provider_id: user.id },

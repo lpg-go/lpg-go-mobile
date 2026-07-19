@@ -18,7 +18,7 @@ Non-goals (this spec): withdrawals/payouts, refunds, customer-side online paymen
 
 These were settled during brainstorming. Do not relitigate:
 
-1. **Gross-credit, per-method fee.** Provider is charged `base + fee`; the full `base` lands in balance. Because the method is chosen in-app, the fee is deterministic at charge time. **`charge = ceil((base + fixed) / (1 − rate))`** (shorthand — the authoritative computation is done in **integer centavos**, see §4), **`credit = base` exactly**. Ceil rounding means any rounding drift is a sub-centavo platform surplus, never a loss — the platform is fee-neutral.
+1. **Gross-credit, per-method fee.** Provider is charged `base + fee`; the full `base` lands in balance. Because the method is chosen in-app, the fee is deterministic at charge time. **`charge = ceil((base + fixed) / (1 − rate))` rounded UP to a whole peso** (shorthand — the authoritative computation is done in **integer centavos**, see §4), **`credit = base` exactly**. Rounding up means any drift is a platform surplus (sub-peso), never a loss — the platform is fee-neutral. *(Whole-peso rounding chosen 2026-07-19 for cleaner totals, e.g. ₱513 not ₱512.83; the provider overpays at most ~₱0.99 vs the exact fee, which the platform keeps.)*
 2. **Hosted Checkout Session, one method per session.** Provider picks GCash / Maya / Card in-app; we create a PayMongo Checkout Session locked to that single method (`payment_method_types: [method]`) and open it with `expo-web-browser`. No card data touches the app (PayMongo handles PCI, OTP, 3DS).
 3. **Fee rates live in `platform_settings`** (admin-editable), consistent with the existing `allow_card_payment` precedent.
 4. **Amounts stored in pesos** (`numeric(10,2)`, matching `transactions.amount`); converted to **centavos** only at the PayMongo API boundary.
@@ -239,7 +239,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public.profiles FROM anon;
 ```
 rate          = fee_rate_gcash | fee_rate_maya | fee_rate_card    (per method)
 fixed_centavos = (method === 'card') ? round(fee_fixed_card * 100) : 0
-charge_centavos = ceil((base_centavos + fixed_centavos) / (1 - rate))   // integer
+charge_centavos = ceil( ((base_centavos + fixed_centavos) / (1 - rate)) / 100 ) * 100   // round UP to whole peso
 fee_centavos    = charge_centavos - base_centavos
 ```
 Convert back to pesos (`/100`) only when writing the `topups` row (`numeric(10,2)`); `line_items.amount` is sent as `charge_centavos` directly.
