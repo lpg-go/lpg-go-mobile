@@ -1,7 +1,7 @@
 # PayMongo Provider Top-Up — Design Spec
 
-**Date:** 2026-07-18
-**Status:** Approved for implementation (pending investigate-first pass)
+**Date:** 2026-07-18 (investigation folded in 2026-07-19)
+**Status:** Approved; investigate-first pass mostly complete (pending only: empirical fee rates from 4 test probes, and the `profiles` RLS-policy read).
 **Feature:** Wire the provider "Top Up Balance" screen to real online payments via PayMongo (GCash, Maya, and card/debit), replacing the current "coming soon" stub.
 
 ---
@@ -42,11 +42,25 @@ These were settled during brainstorming. Do not relitigate:
 
 GCash/Maya/Card top-up availability is now controlled independently of the customer order-payment settings.
 
+### 2c. Investigation results (dev DB + PayMongo docs, 2026-07-19)
+
+Confirmed against the live **dev** DB and official PayMongo docs:
+
+- **`088` is free** — migration ledger is stuck at `…029` (stale, as `NEXT.md` warned); `to_regclass('public.topups')` is null and no `confirm_topup` exists. Object-collision check, not ledger trust.
+- **Schema assumptions hold** — `platform_settings` is single-row `id=1` and has none of the new columns; `transactions` has `reference_id text` + nullable `order_id`; `transaction_type` already has `topup`; `profiles.is_approved` exists and is `NOT NULL`.
+- **`allow_card_payment` is currently `false`; `min_balance` is ₱200.** ⚠️ **Behavior change on apply:** since `allow_card_topup` defaults `true`, provider card top-up goes live *independently* of the (currently-off) customer card flag — this is the intended decoupling, called out so it isn't a surprise. ₱300 min clears the ₱200 `min_balance`.
+- **PayMongo method identifiers confirmed:** `gcash`, `paymaya`, `card`. Amounts in **centavos**. `metadata` values must be **strings**.
+- **Fee/VAT resolved:** PayMongo pricing is **VAT-exclusive** (GCash 2.23%, Maya 1.79%, card 3.125% + ₱13.39); the payment resource's **`fee` field is VAT-inclusive** (`taxes[].inclusive:true`) and **`net_amount = amount − fee`**. Headline ×1.12 → **~2.5% / ~2.0% / ~3.5% + ₱15**, matching the spec defaults. Empirical confirmation via the 4 probes is still pending.
+- **Redirect scheme (decided): Option A — https bounce page.** PayMongo does **not** document custom-scheme (`lpg-go://`) redirect URLs; the documented mobile pattern is https + WebView interception. We use an **https bounce page** (see §5b) instead. (WebView/native-dep and no-auto-return were rejected.)
+- **Webhook facts corrected:** signing-secret prefix is **`whsk_`** (not `whsec_`); pin to **`/v1/checkout_sessions`** (its webhook envelope matches our assumed paths; v2's is flatter).
+
+**Open security item (pre-existing, pending decision):** dev grants show **`anon` still holds table-level `UPDATE`/`DELETE`/`TRUNCATE` on `profiles`** (migration 057 revoked those from `authenticated` only). `authenticated` correctly has **no** `UPDATE` on `balance`, so the feature's core premise holds — but the anon grant is a latent second write-path on the very column we're about to start crediting. This migration adds a defensive `REVOKE … FROM anon` (see §3.4); the `profiles` RLS-policy read that decides whether this is exploitable-now vs defense-in-depth is still pending.
+
 ---
 
 ## 3. Migration `088` (single file, applied manually)
 
-`supabase/migrations/20240101000088_paymongo_topup.sql`. **Before applying, eyeball the live DB** to confirm `088` is unused (file union across mobile+admin says highest applied is `087`; the ledger is stale and not authoritative).
+`supabase/migrations/20240101000088_paymongo_topup.sql`. **`088` confirmed free** (see §2c — no `topups`/`confirm_topup` objects; ledger stale at `029` and not authoritative).
 
 ### 3.1 `platform_settings` columns (single row, `id = 1`)
 
@@ -63,7 +77,7 @@ ALTER TABLE public.platform_settings
   ADD COLUMN IF NOT EXISTS topup_max_amount  numeric(10,2)  NOT NULL DEFAULT 50000;
 ```
 
-> Default rates are placeholders reflecting PayMongo's *headline* rates at design time. **These must be replaced with the effective (VAT-inclusive, as-settled) rates before go-live** — PayMongo (PH) adds 12% VAT on the fee, so the settled rate is higher than the headline (see the VAT caveat under §3.3). All rate columns are admin-editable.
+> Defaults are the **effective (VAT-inclusive) rates** — PayMongo's VAT-exclusive pricing (2.23% / 1.79% / 3.125% + ₱13.39) ×1.12 ≈ these values (see §2c). They are **confirmed empirically** by the 4 test probes in the §9 investigate step before go-live; the `fee` field PayMongo returns is already VAT-inclusive, so the derived rate drops straight into these columns. All rate columns are admin-editable.
 >
 > **Naming:** `'paymaya'` is the correct PayMongo `payment_method_types` identifier and is used as the DB `method` value; the column is `fee_rate_maya` and the UI label is "Maya". The `'paymaya' → fee_rate_maya` lookup is a deliberate mapping, not a string match — write it explicitly.
 
@@ -150,7 +164,17 @@ GRANT  EXECUTE ON FUNCTION public.confirm_topup(text, text, numeric) TO service_
 - `transaction_type` already has the `'topup'` value (initial schema) — **no enum change needed**.
 - `transactions.reference_id` (existing `text` column) holds the PayMongo `payment_id`.
 
-> **VAT caveat (fee-neutrality depends on this).** PayMongo (PH) adds **12% VAT on the processing fee**, so a headline 2.5% settles as ~2.8% effective. The `fee_rate_*` columns must therefore hold the **effective (VAT-inclusive, as-settled) rate**, not the headline rate — otherwise `net < base` on every top-up and the platform silently absorbs the difference. The exact effective rates are **confirmed against a real PayMongo test transaction in the §9 investigate step** before go-live; `net_amount` persistence above is the safety net that makes any residual drift visible.
+> **VAT caveat (fee-neutrality depends on this).** PayMongo's pricing is VAT-**exclusive**, but the **`fee` field on the payment resource is VAT-inclusive** (`taxes[].inclusive:true`), and `net_amount = amount − fee`. So the `fee_rate_*` columns must hold the **effective VAT-inclusive rate** (the spec defaults already do). If a rate is under-configured, `net < base` on that top-up and the platform silently absorbs the gap — the `net_amount` persistence + `RAISE WARNING` above is the safety net that makes that visible.
+
+### 3.4 Defensive hardening — revoke leftover `anon` writes on `profiles`
+
+Migration 057 revoked `UPDATE/DELETE/TRUNCATE` on `profiles` from `authenticated` only; the dev DB shows **`anon` still holds those table-level grants** (§2c), including on `balance`. `authenticated` is correctly locked, so the feature's premise holds — but since `088` starts crediting real money into `balance`, close the second write-path at the grant level too (RLS is the primary boundary; this is defense-in-depth, mirroring 057):
+
+```sql
+REVOKE UPDATE, DELETE, TRUNCATE ON public.profiles FROM anon;
+```
+
+> Exploitability (is any `profiles` RLS policy actually open to `anon` UPDATE?) is being confirmed by a pending `pg_policies` read. The `REVOKE` is safe and correct regardless — a client never legitimately writes `profiles` as `anon`.
 
 ---
 
@@ -176,13 +200,15 @@ fee    = charge - base
 
 **Pre-generate the topup id.** `reference_number` / `metadata.topup_id` must reference the row's id, but the session is created before the row is inserted — so the edge function generates the uuid itself (`crypto.randomUUID()`) and inserts the `topups` row with an **explicit `id`**, rather than relying on the table's `DEFAULT gen_random_uuid()`. (The credit path keys off `checkout_session_id`, so `metadata`/`reference_number` are convenience/traceability only — but they still need a real id.)
 
-**Create the PayMongo Checkout Session** (`POST https://api.paymongo.com/v1/checkout_sessions`, HTTP Basic auth with `PAYMONGO_SECRET_KEY`):
-- `line_items: [{ amount: charge_centavos, currency: 'PHP', name: 'LPG Go balance top-up', quantity: 1 }]`
+**Create the PayMongo Checkout Session** (`POST https://api.paymongo.com/v1/checkout_sessions`, HTTP Basic auth `-u sk_...:` — secret as username, empty password), body under `data.attributes`:
+- `line_items: [{ amount: charge_centavos, currency: 'PHP', name: 'LPG Go balance top-up', quantity: 1 }]` (amount in **centavos**, integer)
 - `payment_method_types: [method]` (locks the page to the chosen method)
-- `success_url: 'lpg-go://topup?status=success'`, `cancel_url: 'lpg-go://topup?status=cancelled'` — **see §5 redirect-URL caveat; if PayMongo rejects custom schemes, an https bounce page is needed.**
-- `description`, `reference_number: <pre-generated topup id>`, `metadata: { topup_id, provider_id }`
+- `success_url`/`cancel_url` → the **https bounce page** (§5b), e.g. `https://<ref>.supabase.co/functions/v1/topup-return?status=success` / `?status=cancelled` (custom schemes are not supported — §2c).
+- `description`, `reference_number: <pre-generated topup id>`, `metadata: { topup_id, provider_id }` (**metadata values must be strings**)
 
-**Then** insert the `pending` `topups` row (explicit `id`, `checkout_session_id` = returned `cs_...`, plus `base_amount`/`fee_amount`/`charge_amount`/`method`/`provider_id`) and return `{ checkout_url }`.
+Response field paths (confirmed): session id at **`data.id`** (`cs_…`), hosted URL at **`data.attributes.checkout_url`**.
+
+**Then** insert the `pending` `topups` row (explicit `id`, `checkout_session_id` = `data.id`, plus `base_amount`/`fee_amount`/`charge_amount`/`method`/`provider_id`) and return `{ checkout_url }`.
 
 > **Ordering / failure handling.** If the PayMongo call fails, no row is written (nothing to clean up). If the row insert fails *after* the session is created, the session is simply abandoned (never paid → no credit); log and return an error to the client. Never insert the row before we have a `checkout_session_id`.
 
@@ -196,20 +222,29 @@ fee    = charge - base
 
 `supabase/functions/paymongo-webhook/index.ts` — **public** (no JWT; PayMongo calls it).
 
-**Signature verification is mandatory and first.** Without it, anyone who knows the URL could POST a forged `paid` event and mint balance. PayMongo sends `Paymongo-Signature: t=<ts>,te=<test_sig>,li=<live_sig>`. Compute `HMAC-SHA256(key = PAYMONGO_WEBHOOK_SECRET, msg = "<t>.<rawBody>")` using Deno's Web Crypto, and constant-time compare against the environment's signature component (`te` for test keys, `li` for live). Mismatch → `401`, no side effects. Verify against the **raw** request body (parse JSON only after the check).
+**Signature verification is mandatory and first.** Without it, anyone who knows the URL could POST a forged `paid` event and mint balance. PayMongo sends `Paymongo-Signature: t=<ts>,te=<test_sig>,li=<live_sig>`. Compute `HMAC-SHA256(key = PAYMONGO_WEBHOOK_SECRET, msg = "<ts>.<rawBody>")` using Deno's Web Crypto, and constant-time compare against the environment's signature component (**`te` for test, `li` for live**). Mismatch → `401`, no side effects. Verify against the **raw** request body (parse JSON only after the check). The signing secret is prefixed **`whsk_`**.
 
-**On `checkout_session.payment.paid`:**
-- Extract the checkout session id, the `payment_id`, and the payment's `net_amount` from the event payload.
-- Call `confirm_topup(session_id, payment_id, net_amount)` via the service-role client.
+**On `checkout_session.payment.paid`** (pin to the **v1** envelope — confirm against one real delivered event before parsing):
+- Checkout session id: `data.attributes.data.id` (`cs_…`).
+- Payment: `data.attributes.data.attributes.payments[0].attributes.{id, net_amount, fee, amount, status}` (all **centavos**).
+- Call `confirm_topup(session_id, payment_id, net_amount_in_pesos)` via the service-role client (convert centavos → pesos at this boundary).
 - Return `200` on success **and** on idempotent duplicates (so PayMongo stops retrying).
 
 **Other event types:** acknowledge with `200` (ignored). Unparseable body → `400`. Bad signature → `401`.
 
-**Registration:** register the deployed function URL as a PayMongo webhook for `checkout_session.payment.paid`. Store the returned signing secret as `PAYMONGO_WEBHOOK_SECRET`.
-
-> **Redirect-URL caveat (confirm in §9).** Some hosted-checkout providers require `http(s)` `success_url`/`cancel_url` and reject custom schemes like `lpg-go://`. If PayMongo does, an `https` **bounce page** (universal/App Link) that then deep-links into the app is required — real extra work to scope. Mitigating factor: the flow does **not** trust the browser return anyway (it polls the `topups` row), so even a non-working deep-link degrades to "provider closes the browser manually; the poll still credits once the webhook lands." Confirm PayMongo's accepted redirect-URL schemes in the investigate step before building the deep-link path.
+**Registration:** register the deployed function URL as a PayMongo webhook for `checkout_session.payment.paid` (dashboard, once). Store the returned `whsk_…` signing secret as `PAYMONGO_WEBHOOK_SECRET`.
 
 > **Abandoned / expired sessions (forward-note).** Only `checkout_session.payment.paid` is handled, so a session the provider abandons stays `pending` forever. This is **not** a money risk (never credited) and the client poll times out cleanly — but `topups` accumulates stale rows. Follow-up (not in this slice): a periodic sweep that marks old `pending` rows `expired`, or handle a PayMongo expiry event if one exists.
+
+---
+
+## 5b. Edge function: `topup-return` (https bounce page)
+
+`supabase/functions/topup-return/index.ts` — **public** (no JWT). PayMongo requires `http(s)` redirect URLs and does not support custom schemes (§2c), so this tiny function is the `success_url`/`cancel_url` target. It returns a minimal **HTML page that immediately redirects to the app scheme**, which lets `WebBrowser.openAuthSessionAsync` auto-close:
+
+- `GET /functions/v1/topup-return?status=success|cancelled` → `200 text/html` whose body redirects to `lpg-go://topup?status=<status>` (a `<meta http-equiv="refresh">` + `window.location` + a manual "Return to app" link as fallback).
+- Pass through only a whitelisted `status` (`success`/`cancelled`) — never reflect arbitrary query params into the page (avoid an open-redirect / injection surface).
+- No secrets, no DB access — it is pure presentation. Credit still happens exclusively via the webhook; this page is UX-only.
 
 ---
 
@@ -254,13 +289,13 @@ Per `stack.md`, "tests green" means `tsc` at 0 + a real app walk-through. In Pay
 
 ## 9. Implementation order (investigate-first)
 
-1. **Investigate** before writing anything:
-   - Confirm `088` is free (both repos + eyeball the live DB) and re-confirm the `platform_settings` / `transactions` shape.
-   - **PayMongo effective rates:** run a real test-mode transaction per method and read the resulting `payment.fee` / `net_amount` to derive the true VAT-inclusive rate — that's what goes in `fee_rate_*`, not the headline number.
-   - **Redirect scheme:** confirm PayMongo Checkout Sessions accept a custom-scheme `success_url`/`cancel_url` (`lpg-go://…`). If not, scope the `https` bounce-page fallback (§5 caveat).
-   - Confirm the Checkout Session response/webhook payload field paths (`checkout_session_id`, `payments[].id`, `payments[].net_amount`) against PayMongo's current API docs.
-2. Migration `088` (settings columns incl. effective rates, `topups` with `net_amount`, `confirm_topup`) — write the file; apply manually via SQL Editor; regenerate `database.types.ts`.
+1. **Investigate** before writing anything — mostly done (§2c). Remaining:
+   - ✅ `088` free; schema/enum/`is_approved` confirmed; method ids, VAT semantics, field paths, `whsk_`, v1 pin confirmed; redirect resolved to the §5b bounce page.
+   - ⬜ **Empirical fee rates** — run one test-mode payment per method (GCash/Maya @ ₱1,000; card @ ₱500 and ₱2,000), read `payments[0].attributes.{amount,fee,net_amount}`, and set `fee_rate_*` / `fee_fixed_card` from the realized VAT-inclusive `fee`.
+   - ⬜ **`profiles` RLS read** (`pg_policies`) — decide whether the `anon` write grant is exploitable-now vs defense-in-depth. `088` revokes it either way (§3.4).
+2. Migration `088` (settings columns incl. effective rates, `topups` with `net_amount`, `confirm_topup`, **§3.4 `anon` REVOKE**) — write the file; apply manually via SQL Editor; regenerate `database.types.ts`.
 3. `create-topup-checkout` edge function (pre-generates the topup id; deployed `verify_jwt=false`).
 4. `paymongo-webhook` edge function (signature-verify first; persists `net_amount`); register it in PayMongo; set both secrets; deploy `verify_jwt=false`.
-5. `topup.tsx` rewrite (method picker + Maya, presets/min, charge summary, checkout launch, confirming/poll state).
-6. Verify per §8; then `/codex-review` before finishing the branch (per the workflow rule).
+5. `topup-return` bounce edge function (§5b; `verify_jwt=false`).
+6. `topup.tsx` rewrite (method picker + Maya, presets/min, charge summary, checkout launch, confirming/poll state).
+7. Verify per §8; then `/codex-review` before finishing the branch (per the workflow rule).
