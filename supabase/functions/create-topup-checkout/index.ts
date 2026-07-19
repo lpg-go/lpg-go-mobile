@@ -83,11 +83,18 @@ serve(async (req) => {
     headers: { Authorization: auth, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       data: { attributes: {
-        line_items: [{ name: `LPG Go top-up: ₱${base} credit + ₱${feeCentavos / 100} fee`, amount: chargeCentavos, currency: 'PHP', quantity: 1 }],
+        // Two line items so the fee shows as its own line (Balance top-up + Processing
+        // fee), summing to chargeCentavos. Fee line omitted if the fee is zero.
+        line_items: [
+          { name: 'Balance top-up', amount: baseCentavos, currency: 'PHP', quantity: 1 },
+          ...(feeCentavos > 0
+            ? [{ name: 'Processing fee', amount: feeCentavos, currency: 'PHP', quantity: 1 }]
+            : []),
+        ],
         payment_method_types: [method],
         success_url: `${RETURN_BASE}?status=success`,
         cancel_url: `${RETURN_BASE}?status=cancelled`,
-        description: `₱${base} balance top-up (you pay ₱${chargeCentavos / 100}, incl. ₱${feeCentavos / 100} fee)`,
+        description: `₱${base} balance top-up`,
         reference_number: topupId,
         send_email_receipt: false,
         metadata: { topup_id: topupId, provider_id: user.id },
