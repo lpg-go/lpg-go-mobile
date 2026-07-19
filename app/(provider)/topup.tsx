@@ -92,7 +92,7 @@ export default function TopUpScreen() {
 
   function handlePresetPress(amount: number) {
     setSelectedPreset(amount);
-    setCustomAmount('');
+    setCustomAmount(String(amount)); // auto-fill the amount box with the selected preset
   }
 
   function handleCustomAmountChange(text: string) {
