@@ -45,7 +45,7 @@ Mirrors the existing `lib/decodePolyline.ts` style (small, focused, camelCase ve
     - `routingPreference: "TRAFFIC_AWARE"` (balanced tier — not the pricier `TRAFFIC_AWARE_OPTIMAL`)
     - `units: "METRIC"` — defensive only. It affects Google's *display* fields (localized text), **not** the raw `distanceMeters` / `duration` we consume, since we format those ourselves. Harmless to send; not load-bearing.
   - Headers: `Content-Type: application/json`, `X-Goog-Api-Key: apiKey`, `X-Goog-FieldMask: routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline`
-  - Returns `null` on non-OK response, missing `routes`, or a thrown error. Never throws to the caller.
+  - Returns `null` on non-OK response, a missing/non-object first `route`, a missing encoded polyline, a malformed `duration`, a missing/non-finite/negative `distanceMeters`, or a thrown error. Never throws to the caller. (`distanceMeters` drives the "X km away" text, so a bad value fails clean instead of rendering a false "0 m".)
   - Decodes `routes[0].polyline.encodedPolyline` via the existing `decodePolyline`.
 - Private formatters (replace the text the legacy API used to hand us):
   - `formatDuration(duration)` → `"15 mins"`. Round to nearest minute, floor of "1 min"; over an hour → `"1 hr 5 mins"`. The Routes `duration` is a protobuf Duration string that can carry a fractional part (e.g. `"870s"` or `"3.5s"`), so parse it as `parseFloat(duration)` after asserting the trailing `s` (regex `^(\d+(?:\.\d+)?)s$`); a value that doesn't match returns `null` from `computeRoute` (fail clean rather than render `NaN`). `parseInt` is avoided — it would silently truncate and mask a malformed value.
@@ -53,16 +53,18 @@ Mirrors the existing `lib/decodePolyline.ts` style (small, focused, camelCase ve
 
 ### Edit: `components/LiveMap.tsx`
 
-- `fetchRoute` collapses to an awaited `computeRoute` call, but **guards against stale resolutions**. The current code already has a latent race — a fetch started for one set of coordinates can resolve *after* the locations changed (polling every 30s) or after the component unmounted, and would then `setRoute` with stale data or warn on an unmounted setState. The rewrite closes it with a monotonic request sequence:
+- `fetchRoute` collapses to an awaited `computeRoute` call, but **guards against stale resolutions**. The current code already has a latent race — a fetch started for one set of coordinates can resolve *after* the locations changed (polling every 30s) or after the component unmounted, and would then `setRoute` with stale data or warn on an unmounted setState. The rewrite closes it with an **invalidation epoch** that advances only on teardown / coordinate change — deliberately *not* on every poll tick, so a slow-but-still-valid same-coordinate response isn't thrown away:
   ```ts
-  const reqSeqRef = useRef(0);
+  const routeEpochRef = useRef(0);
+  // clearRouteTimer (the effect cleanup + the no-locations branch) bumps it:
+  routeEpochRef.current += 1;
   // inside fetchRoute:
-  const seq = ++reqSeqRef.current;
+  const epoch = routeEpochRef.current;
   const info = await computeRoute(origin, destination, GMAPS_KEY);
-  if (info && seq === reqSeqRef.current) setRoute(info);
+  if (info && epoch === routeEpochRef.current) setRoute(info);
   ```
-  Any newer call (from a coordinate change or the next poll tick) bumps `reqSeqRef`, so a late-resolving older request is dropped. The polling `useEffect` cleanup increments the ref too, so an in-flight request that resolves after the effect tears down is ignored (covers unmount and dependency change).
-  Preserves: the `if (!GMAPS_KEY) return` guard, the 30s polling interval, and "keep last route on failure" (only `setRoute` when non-null *and* current).
+  On a coordinate change React runs the effect cleanup (`clearRouteTimer`) before the next effect body, bumping the epoch, so an older-coordinate request that resolves late is dropped; on unmount the same cleanup prevents a setState-after-unmount. Two concurrent polls for the *same* coordinates share an epoch and are both valid — last write wins — which is why the epoch is bumped only in `clearRouteTimer`, never per call. (A per-call monotonic sequence was rejected: it would discard a valid in-flight result the moment the next 30s tick fired, so under consistently-slow responses the route could never render.)
+  Preserves: the `if (!GMAPS_KEY) return` guard, the 30s polling interval, and "keep last route on failure" (only `setRoute` when non-null *and* still-current).
 - Remove the local `RouteInfo` type declaration and the now-unused `decodePolyline` import (both live in the module now); import `RouteInfo` and `computeRoute` from `lib/computeRoute`.
 - No JSX, style, or UI changes. `route.durationText` / `route.distanceText` render exactly as today ("Arriving in ~15 mins", "3.2 km away").
 

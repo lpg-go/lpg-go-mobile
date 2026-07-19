@@ -4,7 +4,7 @@
 
 **Goal:** Replace the single legacy Google Directions API call in `components/LiveMap.tsx` with the Google Routes API (`directions/v2:computeRoutes`), with traffic-aware ETAs, by extracting the network/parse/format logic into a new `lib/computeRoute.ts` module.
 
-**Architecture:** A new pure module `lib/computeRoute.ts` owns all Google-specific request/response handling and exposes `computeRoute(origin, destination, apiKey): Promise<RouteInfo | null>` plus the `RouteInfo` type. `LiveMap.tsx` becomes a thin consumer: it calls `computeRoute` from its existing 30s polling effect, guards against stale resolutions with a request-sequence ref, and renders the returned text/coords exactly as today. No UI, JSX, or style changes.
+**Architecture:** A new pure module `lib/computeRoute.ts` owns all Google-specific request/response handling and exposes `computeRoute(origin, destination, apiKey): Promise<RouteInfo | null>` plus the `RouteInfo` type. `LiveMap.tsx` becomes a thin consumer: it calls `computeRoute` from its existing 30s polling effect, guards against stale resolutions with an invalidation-epoch ref (bumped only on teardown / coordinate change), and renders the returned text/coords exactly as today. No UI, JSX, or style changes.
 
 **Tech Stack:** TypeScript (strict), React Native + Expo SDK 54, React 19, `fetch` (global in RN), existing `lib/decodePolyline.ts`.
 
@@ -130,16 +130,27 @@ function firstRoute(json: unknown): ParsedRoute | null {
   if (typeof json !== 'object' || json === null) return null;
   const routes = (json as { routes?: unknown }).routes;
   if (!Array.isArray(routes) || routes.length === 0) return null;
-  const route = routes[0] as {
+
+  const first: unknown = routes[0];
+  if (typeof first !== 'object' || first === null) return null;
+  const route = first as {
     duration?: unknown;
     distanceMeters?: unknown;
     polyline?: { encodedPolyline?: unknown };
   };
+
   const encoded = route.polyline?.encodedPolyline;
   if (typeof encoded !== 'string') return null;
+
+  // distanceMeters is requested in the field mask and drives the "X km away"
+  // text; a missing/NaN/negative value must fail clean rather than render a
+  // false "0 m".
+  const meters = route.distanceMeters;
+  if (typeof meters !== 'number' || !Number.isFinite(meters) || meters < 0) return null;
+
   return {
     duration: route.duration,
-    distanceMeters: typeof route.distanceMeters === 'number' ? route.distanceMeters : 0,
+    distanceMeters: meters,
     polyline: { encodedPolyline: encoded },
   };
 }
@@ -239,7 +250,7 @@ Remove lines 13–19 (the `Coord` type and the local `RouteInfo` type — both n
 type LatLng = { lat: number; lng: number };
 ```
 
-- [ ] **Step 3: Add the request-sequence ref**
+- [ ] **Step 3: Add the invalidation-epoch ref**
 
 Immediately after the existing `routeTimerRef` declaration (currently line 86):
 
@@ -250,9 +261,13 @@ const routeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 add:
 
 ```ts
-// Monotonic guard: only the newest computeRoute call may setRoute, so a
-// late-resolving old poll can't overwrite fresher data or fire after unmount.
-const reqSeqRef = useRef(0);
+// Invalidation epoch: bumped by clearRouteTimer on teardown or coordinate
+// change. A request captures the epoch when it starts and only setRoute if it
+// still matches — so a request for stale coordinates (or one resolving after
+// unmount) is dropped. A normal poll tick for the SAME coordinates does NOT
+// bump the epoch, so a slow-but-still-valid response is never discarded
+// (both results are valid; last write wins).
+const routeEpochRef = useRef(0);
 ```
 
 - [ ] **Step 4: Rewrite `clearRouteTimer` to invalidate in-flight requests**
@@ -272,9 +287,10 @@ with:
 
 ```ts
 function clearRouteTimer() {
-  // Bump the sequence so any in-flight request resolving after teardown
-  // (effect cleanup on unmount or dependency change) is ignored.
-  reqSeqRef.current += 1;
+  // Bump the epoch so any in-flight request resolving after teardown
+  // (effect cleanup on unmount or coordinate change) is ignored. This is the
+  // ONLY place the epoch advances — poll ticks do not touch it.
+  routeEpochRef.current += 1;
   if (routeTimerRef.current) {
     clearInterval(routeTimerRef.current);
     routeTimerRef.current = null;
@@ -317,12 +333,15 @@ with:
 ```ts
 async function fetchRoute(origin: LatLng, destination: LatLng) {
   if (!GMAPS_KEY) return;
-  const seq = ++reqSeqRef.current;
+  const epoch = routeEpochRef.current;
   const info = await computeRoute(origin, destination, GMAPS_KEY);
-  // Drop the result if a newer request (poll tick, coord change, teardown)
-  // has since started; computeRoute already returns null on any failure,
-  // so "keep last route" is preserved by only setting on a non-null result.
-  if (info && seq === reqSeqRef.current) setRoute(info);
+  // Drop the result only if the epoch advanced while awaiting — i.e. the
+  // coordinates changed or the effect tore down (clearRouteTimer). A
+  // concurrent poll for the SAME coordinates does not bump the epoch, so a
+  // slow-but-still-valid response is never discarded. computeRoute returns
+  // null on any failure, so "keep last route" holds by only setting on a
+  // non-null result.
+  if (info && epoch === routeEpochRef.current) setRoute(info);
 }
 ```
 
@@ -346,9 +365,10 @@ feat(map): use Routes API for live route + ETA
 - Point LiveMap at the new lib/computeRoute module and delete the inline
   legacy Directions API call, its local RouteInfo/Coord types, and the
   now-unused decodePolyline import
-- Guard the polling effect with a request-sequence ref so a stale in-flight
-  route can't overwrite fresher data or setState after unmount — a latent
-  race in the previous inline version
+- Guard the polling effect with an invalidation-epoch ref (bumped only on
+  teardown / coordinate change) so a stale in-flight route can't overwrite
+  fresher data or setState after unmount — a latent race in the previous
+  inline version — without discarding a valid same-coordinate poll result
 - ETAs are now traffic-aware; render output ("~15 mins", "3.2 km away") is
   unchanged
 EOF
