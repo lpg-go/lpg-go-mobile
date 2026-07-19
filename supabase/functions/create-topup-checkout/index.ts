@@ -83,14 +83,15 @@ serve(async (req) => {
     headers: { Authorization: auth, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       data: { attributes: {
-        // Single line item; the breakdown is hidden (show_line_items: false) so the
-        // checkout page shows only the Total due. Amount is the full charge.
-        line_items: [{ name: `₱${base} balance top-up`, amount: chargeCentavos, currency: 'PHP', quantity: 1 }],
+        // Single line item; breakdown AND description hidden so the checkout page
+        // shows only the Total due. Item name carries no peso/amount.
+        line_items: [{ name: 'Balance top-up', amount: chargeCentavos, currency: 'PHP', quantity: 1 }],
         show_line_items: false,
+        show_description: false,
         payment_method_types: [method],
         success_url: `${RETURN_BASE}?status=success`,
         cancel_url: `${RETURN_BASE}?status=cancelled`,
-        description: `₱${base} balance top-up`,
+        description: 'Balance top-up',
         reference_number: topupId,
         send_email_receipt: false,
         metadata: { topup_id: topupId, provider_id: user.id },
