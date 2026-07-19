@@ -94,7 +94,7 @@ function firstRoute(json: unknown): ParsedRoute | null {
   };
 
   const encoded = route.polyline?.encodedPolyline;
-  if (typeof encoded !== 'string') return null;
+  if (typeof encoded !== 'string' || encoded.length === 0) return null;
 
   // distanceMeters is requested in the field mask and drives the "X km away"
   // text; a missing/NaN/negative value must fail clean rather than render a
