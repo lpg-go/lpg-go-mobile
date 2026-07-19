@@ -83,14 +83,10 @@ serve(async (req) => {
     headers: { Authorization: auth, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       data: { attributes: {
-        // Two line items so the fee shows as its own line (Balance top-up + Processing
-        // fee), summing to chargeCentavos. Fee line omitted if the fee is zero.
-        line_items: [
-          { name: 'Balance top-up', amount: baseCentavos, currency: 'PHP', quantity: 1 },
-          ...(feeCentavos > 0
-            ? [{ name: 'Processing fee', amount: feeCentavos, currency: 'PHP', quantity: 1 }]
-            : []),
-        ],
+        // Single line item; the breakdown is hidden (show_line_items: false) so the
+        // checkout page shows only the Total due. Amount is the full charge.
+        line_items: [{ name: `₱${base} balance top-up`, amount: chargeCentavos, currency: 'PHP', quantity: 1 }],
+        show_line_items: false,
         payment_method_types: [method],
         success_url: `${RETURN_BASE}?status=success`,
         cancel_url: `${RETURN_BASE}?status=cancelled`,
