@@ -100,7 +100,7 @@ serve(async (req) => {
   });
   const pmJson = await pmRes.json();
   if (!pmRes.ok) {
-    console.error('[create-topup-checkout] paymongo error:', pmRes.status, JSON.stringify(pmJson));
+    console.error('[create-topup-checkout] paymongo error:', pmRes.status, pmJson?.errors?.[0]?.code ?? 'unknown');
     return bad('Payment provider error', 502);
   }
   const sessionId: string | undefined = pmJson?.data?.id;

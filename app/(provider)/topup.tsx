@@ -33,7 +33,6 @@ const FUNCTIONS_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1';
 export default function TopUpScreen() {
   const insets = useSafeAreaInsets();
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('gcash');
@@ -53,7 +52,6 @@ export default function TopUpScreen() {
   async function boot() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    setUserId(user.id);
     await fetchSettings();
   }
 
@@ -131,7 +129,6 @@ export default function TopUpScreen() {
   }
 
   async function pollForCredit(topupId: string) {
-    if (!userId) return;
     for (let i = 0; i < 10; i++) {          // ~10 × 1.5s = 15s
       const { data } = await supabase
         .from('topups')
@@ -312,7 +309,6 @@ const styles = StyleSheet.create({
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
-
 
   // Section
   section: { marginBottom: spacing.xl },
