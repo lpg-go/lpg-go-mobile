@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
 
 import Card from '../../components/ui/Card';
 import DetailHeader from '../../components/ui/DetailHeader';
@@ -21,20 +22,27 @@ import { peso } from '../../lib/format';
 import supabase from '../../lib/supabase';
 import { colors, radii, spacing } from '../../lib/theme';
 
-type PaymentMethod = 'gcash' | 'card';
+type PaymentMethod = 'gcash' | 'paymaya' | 'card';
 
 const H_PADDING = 20;
-const PRESETS = [100, 200, 500, 1000, 2000, 5000];
+const PRESETS = [500, 1000, 5000];
+const MIN_FALLBACK = 300;
+const MAX_FALLBACK = 50000;
+const FUNCTIONS_URL = 'https://rgqwaiassatyruptsgbs.supabase.co/functions/v1';
 
 export default function TopUpScreen() {
   const insets = useSafeAreaInsets();
 
-  const [userId, setUserId] = useState<string | null>(null);
-  const [balance, setBalance] = useState<number | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('gcash');
-  const [allowCard, setAllowCard] = useState(false);
+  const [settings, setSettings] = useState<{
+    feeRate: Record<PaymentMethod, number>;
+    feeFixedCard: number;
+    allow: Record<PaymentMethod, boolean>;
+    min: number;
+    max: number;
+  } | null>(null);
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
@@ -44,25 +52,22 @@ export default function TopUpScreen() {
   async function boot() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    setUserId(user.id);
-    await Promise.all([fetchBalance(user.id), fetchSettings()]);
-  }
-
-  async function fetchBalance(uid: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('balance')
-      .eq('id', uid)
-      .single();
-    if (data) setBalance(Number(data.balance));
+    await fetchSettings();
   }
 
   async function fetchSettings() {
     const { data } = await supabase
       .from('platform_settings')
-      .select('allow_card_payment')
+      .select('fee_rate_gcash, fee_rate_maya, fee_rate_card, fee_fixed_card, allow_gcash_topup, allow_maya_topup, allow_card_topup, topup_min_amount, topup_max_amount')
       .single();
-    if (data) setAllowCard(Boolean(data.allow_card_payment));
+    if (!data) return;
+    setSettings({
+      feeRate: { gcash: Number(data.fee_rate_gcash), paymaya: Number(data.fee_rate_maya), card: Number(data.fee_rate_card) },
+      feeFixedCard: Number(data.fee_fixed_card),
+      allow: { gcash: data.allow_gcash_topup, paymaya: data.allow_maya_topup, card: data.allow_card_topup },
+      min: Number(data.topup_min_amount) || MIN_FALLBACK,
+      max: Number(data.topup_max_amount) || MAX_FALLBACK,
+    });
   }
 
   function getAmount(): number | null {
@@ -75,7 +80,7 @@ export default function TopUpScreen() {
 
   function handlePresetPress(amount: number) {
     setSelectedPreset(amount);
-    setCustomAmount('');
+    setCustomAmount(String(amount)); // auto-fill the amount box with the selected preset
   }
 
   function handleCustomAmountChange(text: string) {
@@ -85,33 +90,77 @@ export default function TopUpScreen() {
 
   async function handleProceed() {
     const amount = getAmount();
-
-    if (!amount || amount < 50) {
-      Alert.alert('Invalid Amount', 'Minimum top-up amount is 50.');
+    const min = settings?.min ?? MIN_FALLBACK;
+    if (!amount || amount < min) {
+      Alert.alert('Invalid Amount', `Minimum top-up amount is ${peso(min)}.`);
       return;
     }
+    const max = settings?.max ?? MAX_FALLBACK;
+    if (amount > max) {
+      Alert.alert('Invalid Amount', `Maximum top-up amount is ${peso(max)}.`);
+      return;
+    }
+    setProcessing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { Alert.alert('Session expired', 'Please log in again.'); return; }
 
-    if (!userId) return;
+      const res = await fetch(`${FUNCTIONS_URL}/create-topup-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ base_amount: amount, method: paymentMethod }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.checkout_url || !json.topup_id) {
+        Alert.alert('Top-up failed', json.error ?? 'Could not start payment.');
+        return;
+      }
 
-    processTopUp(amount);
+      await WebBrowser.openAuthSessionAsync(json.checkout_url, 'lpg-go://topup');
+
+      // Regardless of the result type (success/cancel/dismiss), the DB status is
+      // the source of truth — a paid top-up can return as 'dismiss'. Poll THIS row.
+      await pollForCredit(json.topup_id);
+    } catch (e) {
+      Alert.alert('Top-up failed', 'Network error. If you completed payment, your balance will update shortly.');
+    } finally {
+      setProcessing(false);
+    }
   }
 
-  // Online top-up is not wired to a payment processor yet (PayMongo integration
-  // pending). Until then we must NOT credit the balance — doing so would let a
-  // provider give themselves free balance. Show a "coming soon" notice instead.
-  // The amount/method UI above is kept intact so PayMongo can be wired in here
-  // later: create a payment/checkout, then credit the balance only after the
-  // payment webhook confirms.
-  async function processTopUp(_amount: number) {
-    Alert.alert(
-      'Coming Soon',
-      'Online top-up is coming soon. Please contact admin to add balance.',
-      [{ text: 'OK' }]
-    );
+  async function pollForCredit(topupId: string) {
+    for (let i = 0; i < 10; i++) {          // ~10 × 1.5s = 15s
+      const { data } = await supabase
+        .from('topups')
+        .select('status')
+        .eq('id', topupId)
+        .single();
+      if (data?.status === 'paid') {
+        Alert.alert('Top-up successful', 'Your balance has been updated.');
+        return;
+      }
+      if (data?.status === 'failed') {
+        Alert.alert('Top-up failed', 'The payment could not be verified. You were not charged for credit.');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    Alert.alert('Still confirming', 'If you completed payment, your balance will update shortly.');
+  }
+
+  function computeCharge(base: number, method: PaymentMethod): { charge: number; fee: number } | null {
+    if (!settings) return null;
+    const baseC = Math.round(base * 100);
+    if (baseC / 100 !== base) return null;
+    const fixedC = method === 'card' ? Math.round(settings.feeFixedCard * 100) : 0;
+    const rate = settings.feeRate[method];
+    if (!(rate >= 0 && rate < 1)) return null;
+    const chargeC = Math.ceil((baseC + fixedC) / (1 - rate) / 100) * 100;  // round UP to whole peso (mirror server)
+    return { charge: chargeC / 100, fee: (chargeC - baseC) / 100 };
   }
 
   const amount = getAmount();
-  const isValidAmount = amount !== null && amount >= 50;
+  const isValidAmount = amount !== null && amount >= (settings?.min ?? MIN_FALLBACK);
 
   return (
     <KeyboardAvoidingView
@@ -130,23 +179,6 @@ export default function TopUpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Coming soon banner — honest state, no dead-end */}
-          <View style={styles.comingSoon}>
-            <Feather name="clock" size={18} color={colors.amberText} />
-            <View style={styles.comingSoonText}>
-              <Text style={styles.comingSoonTitle}>Online top-up is coming soon</Text>
-              <Text style={styles.comingSoonSub}>Contact admin to add balance to your account for now.</Text>
-            </View>
-          </View>
-
-          {/* Current balance */}
-          <Card style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Current balance</Text>
-            <Text style={styles.balanceValue}>
-              {balance != null ? peso(balance) : '—'}
-            </Text>
-          </Card>
-
           {/* Amount selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Select Amount</Text>
@@ -178,31 +210,39 @@ export default function TopUpScreen() {
                 keyboardType="decimal-pad"
               />
             </View>
-            <Text style={styles.minNote}>Minimum top-up: ₱50</Text>
+            <Text style={styles.minNote}>Minimum top-up: {peso(settings?.min ?? MIN_FALLBACK)}</Text>
           </View>
 
           {/* Payment method */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Payment Method</Text>
             <View style={styles.paymentOptions}>
-              <PaymentOption
-                label="GCash"
-                sub="Pay via GCash e-wallet"
-                icon="smartphone"
-                selected={paymentMethod === 'gcash'}
-                onPress={() => setPaymentMethod('gcash')}
-              />
-              {allowCard && (
-                <PaymentOption
-                  label="Card"
-                  sub="Visa / Mastercard"
-                  icon="credit-card"
-                  selected={paymentMethod === 'card'}
-                  onPress={() => setPaymentMethod('card')}
-                />
+              {settings?.allow.gcash !== false && (
+                <PaymentOption label="GCash" sub="Pay via GCash e-wallet" icon="smartphone"
+                  selected={paymentMethod === 'gcash'} onPress={() => setPaymentMethod('gcash')} />
+              )}
+              {settings?.allow.paymaya && (
+                <PaymentOption label="Maya" sub="Pay via Maya e-wallet" icon="smartphone"
+                  selected={paymentMethod === 'paymaya'} onPress={() => setPaymentMethod('paymaya')} />
+              )}
+              {settings?.allow.card && (
+                <PaymentOption label="Card" sub="Visa / Mastercard / debit" icon="credit-card"
+                  selected={paymentMethod === 'card'} onPress={() => setPaymentMethod('card')} />
               )}
             </View>
           </View>
+
+          {isValidAmount && settings && (() => {
+            const c = computeCharge(amount!, paymentMethod);
+            return c ? (
+              <Card style={styles.infoBox}>
+                <Feather name="info" size={14} color={colors.textSecondary} style={{ marginTop: 1 }} />
+                <Text style={styles.infoText}>
+                  You'll pay {peso(c.charge)} ({peso(amount!)} + {peso(c.fee)} fee). ₱1 = 1 credit; the full {peso(amount!)} is added to your balance.
+                </Text>
+              </Card>
+            ) : null;
+          })()}
 
           {/* Info note */}
           <Card style={styles.infoBox}>
@@ -269,27 +309,6 @@ const styles = StyleSheet.create({
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PADDING, paddingTop: spacing.lg },
-
-  // Coming soon banner
-  comingSoon: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    backgroundColor: colors.amberTint,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  comingSoonText: { flex: 1 },
-  comingSoonTitle: { fontSize: 14, fontWeight: '700', color: colors.amberText },
-  comingSoonSub: { fontSize: 12, color: colors.amberText, marginTop: 2, lineHeight: 17 },
-
-  // Current balance card
-  balanceCard: { padding: spacing.lg, marginBottom: spacing.xl, alignItems: 'flex-start' },
-  balanceLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
-  balanceValue: { fontSize: 24, fontWeight: '800', color: colors.text, marginTop: 4 },
 
   // Section
   section: { marginBottom: spacing.xl },
