@@ -199,46 +199,48 @@ Run this whole block in the SQL Editor. It seeds a fake provider + pending top-u
 DO $$
 DECLARE
   v_provider uuid;
+  v_session  text := 'cs_harness_' || gen_random_uuid();
   v_before   numeric;
   v_after    numeric;
   v_res      text;
 BEGIN
-  -- Seed a provider with a known balance and a pending ₱500 top-up (charge ₱512.83).
-  INSERT INTO public.profiles (id, role, is_approved, balance, phone, full_name)
-    VALUES (gen_random_uuid(), 'provider', true, 1000, '+639999999999', 'Harness')
-    RETURNING id INTO v_provider;
+  -- Use an EXISTING provider (profiles.id is FK'd to auth.users, so we can't
+  -- insert a bare row). Everything below is rolled back by the final RAISE.
+  SELECT id INTO v_provider FROM public.profiles WHERE role = 'provider' LIMIT 1;
+  IF v_provider IS NULL THEN RAISE EXCEPTION 'no provider row to test with'; END IF;
+
   INSERT INTO public.topups (provider_id, method, base_amount, fee_amount, charge_amount, checkout_session_id, status)
-    VALUES (v_provider, 'gcash', 500, 12.83, 512.83, 'cs_harness', 'pending');
+    VALUES (v_provider, 'gcash', 500, 12.83, 512.83, v_session, 'pending');
 
   SELECT balance INTO v_before FROM public.profiles WHERE id = v_provider;
 
   -- (a) amount mismatch → no credit, row failed.
-  v_res := public.confirm_topup('cs_harness', 'pay_x', 999.99, 500, 'paid');
+  v_res := public.confirm_topup(v_session, 'pay_x', 999.99, 500, 'paid');
   IF v_res <> 'amount_mismatch' THEN RAISE EXCEPTION 'expected amount_mismatch, got %', v_res; END IF;
   SELECT balance INTO v_after FROM public.profiles WHERE id = v_provider;
   IF v_after <> v_before THEN RAISE EXCEPTION 'balance changed on mismatch'; END IF;
 
   -- reset row to pending for the next case
-  UPDATE public.topups SET status='pending' WHERE checkout_session_id='cs_harness';
+  UPDATE public.topups SET status = 'pending' WHERE checkout_session_id = v_session;
 
   -- (b) not paid → no credit.
-  v_res := public.confirm_topup('cs_harness', 'pay_x', 512.83, 500, 'awaiting_next_action');
+  v_res := public.confirm_topup(v_session, 'pay_x', 512.83, 500, 'awaiting_next_action');
   IF v_res <> 'not_paid' THEN RAISE EXCEPTION 'expected not_paid, got %', v_res; END IF;
 
   -- (c) happy path → credit exactly base (500), returns processed.
-  v_res := public.confirm_topup('cs_harness', 'pay_ok', 512.83, 500, 'paid');
+  v_res := public.confirm_topup(v_session, 'pay_ok', 512.83, 500, 'paid');
   IF v_res <> 'processed' THEN RAISE EXCEPTION 'expected processed, got %', v_res; END IF;
   SELECT balance INTO v_after FROM public.profiles WHERE id = v_provider;
   IF v_after <> v_before + 500 THEN RAISE EXCEPTION 'expected +500, got %', v_after - v_before; END IF;
 
   -- (d) duplicate webhook → no double credit.
-  v_res := public.confirm_topup('cs_harness', 'pay_ok', 512.83, 500, 'paid');
+  v_res := public.confirm_topup(v_session, 'pay_ok', 512.83, 500, 'paid');
   IF v_res <> 'duplicate' THEN RAISE EXCEPTION 'expected duplicate, got %', v_res; END IF;
   SELECT balance INTO v_after FROM public.profiles WHERE id = v_provider;
   IF v_after <> v_before + 500 THEN RAISE EXCEPTION 'double credit!'; END IF;
 
   -- (e) unknown session → unknown.
-  v_res := public.confirm_topup('cs_nope', 'pay_x', 1, 1, 'paid');
+  v_res := public.confirm_topup('cs_nope_' || gen_random_uuid(), 'pay_x', 1, 1, 'paid');
   IF v_res <> 'unknown' THEN RAISE EXCEPTION 'expected unknown, got %', v_res; END IF;
 
   RAISE EXCEPTION 'HARNESS OK';   -- forces rollback; all asserts passed
