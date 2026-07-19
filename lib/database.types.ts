@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       brands: {
@@ -472,7 +447,10 @@ export type Database = {
       platform_settings: {
         Row: {
           allow_card_payment: boolean
+          allow_card_topup: boolean
           allow_cash_payment: boolean
+          allow_gcash_topup: boolean
+          allow_maya_topup: boolean
           app_logo_url: string | null
           compliance_text: string | null
           compliance_version: number
@@ -481,6 +459,10 @@ export type Database = {
           express_delivery_fee: number
           express_enabled: boolean
           express_platform_cut_percent: number
+          fee_fixed_card: number
+          fee_rate_card: number
+          fee_rate_gcash: number
+          fee_rate_maya: number
           id: number
           loyalty_enabled: boolean
           max_active_orders_per_customer: number
@@ -494,11 +476,16 @@ export type Database = {
           signup_promo_count: number
           signup_promo_enabled: boolean
           signup_promo_granted: number
+          topup_max_amount: number
+          topup_min_amount: number
           updated_at: string
         }
         Insert: {
           allow_card_payment?: boolean
+          allow_card_topup?: boolean
           allow_cash_payment?: boolean
+          allow_gcash_topup?: boolean
+          allow_maya_topup?: boolean
           app_logo_url?: string | null
           compliance_text?: string | null
           compliance_version?: number
@@ -507,6 +494,10 @@ export type Database = {
           express_delivery_fee?: number
           express_enabled?: boolean
           express_platform_cut_percent?: number
+          fee_fixed_card?: number
+          fee_rate_card?: number
+          fee_rate_gcash?: number
+          fee_rate_maya?: number
           id?: number
           loyalty_enabled?: boolean
           max_active_orders_per_customer?: number
@@ -520,11 +511,16 @@ export type Database = {
           signup_promo_count?: number
           signup_promo_enabled?: boolean
           signup_promo_granted?: number
+          topup_max_amount?: number
+          topup_min_amount?: number
           updated_at?: string
         }
         Update: {
           allow_card_payment?: boolean
+          allow_card_topup?: boolean
           allow_cash_payment?: boolean
+          allow_gcash_topup?: boolean
+          allow_maya_topup?: boolean
           app_logo_url?: string | null
           compliance_text?: string | null
           compliance_version?: number
@@ -533,6 +529,10 @@ export type Database = {
           express_delivery_fee?: number
           express_enabled?: boolean
           express_platform_cut_percent?: number
+          fee_fixed_card?: number
+          fee_rate_card?: number
+          fee_rate_gcash?: number
+          fee_rate_maya?: number
           id?: number
           loyalty_enabled?: boolean
           max_active_orders_per_customer?: number
@@ -546,6 +546,8 @@ export type Database = {
           signup_promo_count?: number
           signup_promo_enabled?: boolean
           signup_promo_granted?: number
+          topup_max_amount?: number
+          topup_min_amount?: number
           updated_at?: string
         }
         Relationships: []
@@ -821,6 +823,59 @@ export type Database = {
           },
         ]
       }
+      topups: {
+        Row: {
+          base_amount: number
+          charge_amount: number
+          checkout_session_id: string
+          created_at: string
+          fee_amount: number
+          id: string
+          method: string
+          net_amount: number | null
+          paid_at: string | null
+          payment_id: string | null
+          provider_id: string
+          status: string
+        }
+        Insert: {
+          base_amount: number
+          charge_amount: number
+          checkout_session_id: string
+          created_at?: string
+          fee_amount: number
+          id?: string
+          method: string
+          net_amount?: number | null
+          paid_at?: string | null
+          payment_id?: string | null
+          provider_id: string
+          status?: string
+        }
+        Update: {
+          base_amount?: number
+          charge_amount?: number
+          checkout_session_id?: string
+          created_at?: string
+          fee_amount?: number
+          id?: string
+          method?: string
+          net_amount?: number | null
+          paid_at?: string | null
+          payment_id?: string | null
+          provider_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topups_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           amount: number
@@ -882,6 +937,16 @@ export type Database = {
       }
       cancel_order: { Args: { p_order_id: string }; Returns: undefined }
       confirm_delivery: { Args: { p_order_id: string }; Returns: undefined }
+      confirm_topup: {
+        Args: {
+          p_net_amount: number
+          p_paid_amount: number
+          p_payment_id: string
+          p_session_id: string
+          p_status: string
+        }
+        Returns: string
+      }
       consume_otp: {
         Args: { p_code: string; p_phone: string }
         Returns: string
@@ -1065,9 +1130,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       cancel_actor: ["customer", "provider", "system"],
