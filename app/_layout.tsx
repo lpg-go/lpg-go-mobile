@@ -3,12 +3,17 @@ import '../global.css';
 import { Session } from '@supabase/supabase-js';
 import * as Notifications from 'expo-notifications';
 import { router, Slot } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 
 import { registerForPushNotificationsAsync } from '../lib/notifications';
 import { fetchProviderDocRequired } from '../lib/settings';
 import supabase from '../lib/supabase';
+
+// Keep the native splash up until the first auth-based route decision is made,
+// so already-signed-in users go splash -> home with no flash of the login form.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -35,6 +40,7 @@ export default function RootLayout() {
 
     if (!session) {
       router.replace('/(auth)/login');
+      SplashScreen.hideAsync().catch(() => {});
       return;
     }
 
@@ -48,6 +54,7 @@ export default function RootLayout() {
     // so we await it before routing the deep link on top of the home screen.
     (async () => {
       await redirectByRole(session.user.id);
+      await SplashScreen.hideAsync().catch(() => {});
       const lastResponse = await Notifications.getLastNotificationResponseAsync();
       if (lastResponse) handleNotificationResponse(lastResponse);
     })();
