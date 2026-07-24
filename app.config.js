@@ -16,6 +16,12 @@ export default {
     },
     plugins: [
       'expo-router',
+      ['expo-splash-screen', {
+        image: './assets/images/splash-logo.png',
+        imageWidth: 200,
+        resizeMode: 'contain',
+        backgroundColor: '#052e16',
+      }],
       ['expo-location', {
         locationWhenInUsePermission: 'LPG Go needs your location to share it with the customer during delivery.'
       }],

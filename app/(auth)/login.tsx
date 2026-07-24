@@ -74,17 +74,13 @@ export default function LoginScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* TOP GREEN ZONE — flexible, shrinks when keyboard is up */}
+        {/* TOP WHITE ZONE — flexible, shrinks when keyboard is up */}
         <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
-          <View style={styles.logoBadge}>
-            <Image
-              source={require('../../assets/images/logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <Text style={styles.brand}>LPG Go</Text>
-          <Text style={styles.tagline}>Gas delivered to your door</Text>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
 
         {/* BOTTOM WHITE SHEET */}
@@ -184,42 +180,39 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.headerBg, overflow: 'hidden' },
+  screen: { flex: 1, backgroundColor: colors.white, overflow: 'hidden' },
   flex: { flex: 1 },
 
-  // TOP GREEN ZONE — flex:1 fills the space above the sheet; content centered.
+  // TOP WHITE ZONE — flex:1 fills the space above the sheet; content centered.
   hero: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxl,
   },
-  logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  logoImage: { width: 46, height: 46 },
-  brand: { fontSize: 26, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
-  tagline: { fontSize: 14, color: colors.headerSubtext, marginTop: spacing.xs },
+  logo: { width: '95%', height: 175 },
 
-  // BOTTOM WHITE SHEET — rounded top, overlaps the green.
+  // BOTTOM WHITE SHEET — rounded top, lifts gently over the logo area.
   sheet: {
     backgroundColor: colors.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderTopColor: colors.grey100,
     paddingHorizontal: spacing.xxl,
     paddingTop: spacing.xxl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   heading: { fontSize: 19, fontWeight: '700', color: colors.text, marginBottom: spacing.xl },
 
   // Floating-label field — position relative so the label can notch the border.
   field: {
     position: 'relative',
+    backgroundColor: colors.grey50,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
