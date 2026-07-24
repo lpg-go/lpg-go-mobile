@@ -33,6 +33,8 @@ yarn-error.*
 # local env files — cover every .env variant so no secrets can be committed
 .env
 .env*
+# …but keep the committed template (placeholders only, no secrets)
+!.env.example
 
 # local Claude Code config (rules, skills, agents) — not part of the app
 .claude/
